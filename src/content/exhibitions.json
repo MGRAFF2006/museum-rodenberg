@@ -59,6 +59,9 @@
         }
       },
       "media": {
+        "images": [
+          "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/IMG_9707.jpg"
+        ]
       },
       "image": "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/IMG_9707.jpg",
       "artifacts": ["hochzeitspaar-tracht", "taufbecken-holz", "festtagstracht-seide"],
