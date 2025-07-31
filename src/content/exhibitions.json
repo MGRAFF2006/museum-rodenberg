@@ -24,20 +24,6 @@
       "media": {
         "images": [
           "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/DSCF0219.jpg"
-        ],
-        "videos": [
-          {
-            "url": "",
-            "title": "",
-            "description": ""
-          }
-        ],
-        "audio": [
-          {
-            "url": "",
-            "title": "",
-            "description": ""
-          }
         ]
       },
       "image": "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/IMG_9707.jpg",
@@ -73,20 +59,8 @@
         }
       },
       "media": {
-        "images": [
-          "",
-          ""
-        ],
-        "videos": [],
-        "audio": [
-          {
-            "url": "",
-            "title": "a",
-            "description": "a"
-          }
-        ]
       },
-      "image": "https://images.pexels.com/photos/6069112/pexels-photo-6069112.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "image": "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/IMG_9707.jpg",
       "artifacts": ["hochzeitspaar-tracht", "taufbecken-holz", "festtagstracht-seide"],
       "dateRange": "18. Jahrhundert - 20. Jahrhundert",
       "location": "Seitensaal, Erdgeschoss",
@@ -100,7 +74,7 @@
     },
     "landwirtschaft-handwerk": {
       "id": "landwirtschaft-handwerk",
-      "qrCode": "LANDWIRTSCHAFT_RODENBERG_2024",
+      "qrCode": "LANDWIRTSCHAFT_RODENBERG",
       "translations": {
         "de": {
           "title": "Landwirtschaft und Handwerk",
