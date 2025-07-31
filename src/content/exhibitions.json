@@ -24,6 +24,20 @@
       "media": {
         "images": [
           "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/DSCF0219.jpg"
+        ],
+        "videos": [
+          {
+            "url": "",
+            "title": "",
+            "description": ""
+          }
+        ],
+        "audio": [
+          {
+            "url": "",
+            "title": "",
+            "description": ""
+          }
         ]
       },
       "image": "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/IMG_9707.jpg",
@@ -40,7 +54,7 @@
     },
     "trachten-ausstellung": {
       "id": "trachten-ausstellung",
-      "qrCode": "TRACHTEN_RODENBERG",
+      "qrCode": "TRACHTEN_RODENBERG_2024",
       "translations": {
         "de": {
           "title": "Trachten des Amtes Rodenberg",
@@ -60,10 +74,19 @@
       },
       "media": {
         "images": [
-          "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/IMG_9707.jpg"
+          "https://images.pexels.com/photos/6069112/pexels-photo-6069112.jpeg?auto=compress&cs=tinysrgb&w=800",
+          "https://images.pexels.com/photos/1692693/pexels-photo-1692693.jpeg?auto=compress&cs=tinysrgb&w=800"
+        ],
+        "videos": [],
+        "audio": [
+          {
+            "url": "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav",
+            "title": "Traditionelle Hochzeitsmusik",
+            "description": "Musik, die bei Hochzeiten in traditioneller Tracht gespielt wurde"
+          }
         ]
       },
-      "image": "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/IMG_9707.jpg",
+      "image": "https://images.pexels.com/photos/6069112/pexels-photo-6069112.jpeg?auto=compress&cs=tinysrgb&w=800",
       "artifacts": ["hochzeitspaar-tracht", "taufbecken-holz", "festtagstracht-seide"],
       "dateRange": "18. Jahrhundert - 20. Jahrhundert",
       "location": "Seitensaal, Erdgeschoss",
@@ -77,7 +100,7 @@
     },
     "landwirtschaft-handwerk": {
       "id": "landwirtschaft-handwerk",
-      "qrCode": "LANDWIRTSCHAFT_RODENBERG",
+      "qrCode": "LANDWIRTSCHAFT_RODENBERG_2024",
       "translations": {
         "de": {
           "title": "Landwirtschaft und Handwerk",
