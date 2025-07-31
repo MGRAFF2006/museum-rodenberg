@@ -3,7 +3,7 @@
   "exhibitions": {
     "stadtgeschichte-rodenberg": {
       "id": "stadtgeschichte-rodenberg",
-      "qrCode": "STADT_RODENBERG_2024",
+      "qrCode": "STADT_RODENBERG",
       "translations": {
         "de": {
           "title": "Stadtgeschichte Rodenberg",
@@ -23,25 +23,24 @@
       },
       "media": {
         "images": [
-          "https://images.pexels.com/photos/1386604/pexels-photo-1386604.jpeg?auto=compress&cs=tinysrgb&w=800",
-          "https://images.pexels.com/photos/8566476/pexels-photo-8566476.jpeg?auto=compress&cs=tinysrgb&w=800"
+          "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/DSCF0219.jpg",
         ],
         "videos": [
           {
-            "url": "https://www.w3schools.com/html/mov_bbb.mp4",
-            "title": "Geschichte der Wasserburg",
-            "description": "Ein kurzer Film über die mittelalterliche Wasserburg Rodenberg"
+            "url": "",
+            "title": "",
+            "description": ""
           }
         ],
         "audio": [
           {
-            "url": "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav",
-            "title": "Glockenläuten der Stadtkirche",
-            "description": "Historische Aufnahme der Kirchenglocken"
+            "url": "",
+            "title": "",
+            "description": ""
           }
         ]
       },
-      "image": "https://images.pexels.com/photos/1386604/pexels-photo-1386604.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "image": "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/IMG_9707.jpg",
       "artifacts": ["staendehaus-wappen", "gefaengnistuere", "stadtmauer-fragment"],
       "dateRange": "Mittelalter - 19. Jahrhundert",
       "location": "Hauptsaal, Erdgeschoss",
@@ -55,7 +54,7 @@
     },
     "trachten-ausstellung": {
       "id": "trachten-ausstellung",
-      "qrCode": "TRACHTEN_RODENBERG_2024",
+      "qrCode": "TRACHTEN_RODENBERG",
       "translations": {
         "de": {
           "title": "Trachten des Amtes Rodenberg",
@@ -75,15 +74,15 @@
       },
       "media": {
         "images": [
-          "https://images.pexels.com/photos/6069112/pexels-photo-6069112.jpeg?auto=compress&cs=tinysrgb&w=800",
-          "https://images.pexels.com/photos/1692693/pexels-photo-1692693.jpeg?auto=compress&cs=tinysrgb&w=800"
+          "",
+          ""
         ],
         "videos": [],
         "audio": [
           {
-            "url": "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav",
-            "title": "Traditionelle Hochzeitsmusik",
-            "description": "Musik, die bei Hochzeiten in traditioneller Tracht gespielt wurde"
+            "url": "",
+            "title": "",
+            "description": ""
           }
         ]
       },
