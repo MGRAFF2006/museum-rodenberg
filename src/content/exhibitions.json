@@ -23,7 +23,7 @@
       },
       "media": {
         "images": [
-          "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/DSCF0219.jpg",
+          "https://www.museumslandschaft-rodenberg.de/wp-content/uploads/2017/11/DSCF0219.jpg"
         ],
         "videos": [
           {
@@ -81,8 +81,8 @@
         "audio": [
           {
             "url": "",
-            "title": "",
-            "description": ""
+            "title": "a",
+            "description": "a"
           }
         ]
       },
