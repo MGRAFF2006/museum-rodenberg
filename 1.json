@@ -1,0 +1,8 @@
+{ 
+  "featured": "stadtgeschichte-rodenberg", 
+  "exhibitions": { 
+    "stadtgeschichte-rodenberg": { /* ... details zur Stadtgeschichte ... */ }, 
+    "geboren-in-rodenberg": { /* ... details zur Trachten-Ausstellung ... */ }, 
+    "landwirtschaft-handwerk": { /* ... details zur Landwirtschaft ... */ } // KEIN Komma 
+  } 
+}
