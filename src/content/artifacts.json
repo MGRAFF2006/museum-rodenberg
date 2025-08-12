@@ -1,8 +1,8 @@
 {
   "artifacts": {
-    "staendehaus-wappen": {
-      "id": "Coberg",
-      "qrCode":"Johann Anton Coberg",
+    "coberg": {
+      "id": "coberg",
+      "qrCode":"Johann_Anton_Coberg",
       "translations": {
         "de": {
           "title":"Johann Anton Coberg",
@@ -51,10 +51,10 @@
     },
     "Möhling": {
       "id": "Möhling",
-      "qrCode": "Christian-Wilhelm-Möhling",
+      "qrCode": "Christian_Wilhelm_Möhling",
       "translations": {
         "de": {
-          "title": "Christian-Wilhelm-Möhling",
+          "title": "Christian Wilhelm Möhling",
           "period": "19. Jahrhundert",
           "description": "Bedeutender Orgelbauer in Schaumburg",
           "significance": ""
@@ -96,7 +96,7 @@
       "qrCode": "Wilhelm_Johann_Karl_Zahn",
       "translations": {
         "de": {
-          "title": "Wilhelm_Johan_Karl_Zahn",
+          "title": "Wilhelm Johann Karl Zahn",
           "period": "1800 - 1871",
           "description": "Maler, Architekt und Pompeji Forscher.",
           "significance": ""
