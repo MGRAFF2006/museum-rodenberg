@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Translation cache hash (regenerate on demand with npm run generate-translations)
+public/translations/.hash
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

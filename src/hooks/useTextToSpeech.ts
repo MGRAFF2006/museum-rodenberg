@@ -1,12 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 export const useTextToSpeech = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
     setIsSupported('speechSynthesis' in window);
-  });
+  }, []);
 
   const speak = useCallback((text: string, language: string = 'de-DE') => {
     if (!isSupported) return;

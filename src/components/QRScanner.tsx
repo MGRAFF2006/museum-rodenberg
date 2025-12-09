@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { X, QrCode, Camera } from 'lucide-react';
+import { useLanguage } from '../hooks/useLanguage';
+import { t } from '../utils/translations';
 
 interface QRScannerProps {
   isOpen: boolean;
@@ -11,6 +13,7 @@ interface QRScannerProps {
 export const QRScanner: React.FC<QRScannerProps> = ({ isOpen, onClose, onScan }) => {
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const { currentLanguage } = useLanguage();
 
   useEffect(() => {
     if (isOpen && !scannerRef.current) {
@@ -58,7 +61,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ isOpen, onClose, onScan })
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
               <QrCode className="h-6 w-6 text-blue-800 mr-3" />
-              <h2 className="text-lg md:text-xl font-bold text-gray-900">QR-Code Scanner</h2>
+              <h2 className="text-lg md:text-xl font-bold text-gray-900">{t('qrScanner', currentLanguage)}</h2>
             </div>
             <button
               onClick={onClose}
@@ -70,12 +73,12 @@ export const QRScanner: React.FC<QRScannerProps> = ({ isOpen, onClose, onScan })
 
           <div className="mb-4">
             <p className="text-gray-600 text-sm mb-4 leading-relaxed">
-              Richten Sie Ihre Kamera auf den QR-Code eines Exponats, um direkt zu dessen Informationen zu gelangen.
+              {t('qrScannerText', currentLanguage)}
             </p>
             
             <div className="flex items-center justify-center p-6 bg-gray-50 rounded-lg mb-4">
               <Camera className="h-8 w-8 text-gray-400 mr-3" />
-              <span className="text-gray-600 text-base">Kamera wird geladen...</span>
+              <span className="text-gray-600 text-base">{t('cameraLoading', currentLanguage)}</span>
             </div>
           </div>
 
@@ -86,7 +89,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ isOpen, onClose, onScan })
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors text-sm md:text-base"
             >
-              Abbrechen
+              {t('cancel', currentLanguage)}
             </button>
           </div>
         </div>

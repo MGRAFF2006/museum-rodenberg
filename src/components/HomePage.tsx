@@ -7,13 +7,14 @@ import { t } from '../utils/translations';
 interface Exhibition {
   id: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   description: string;
   image: string;
-  dateRange: string;
-  location: string;
-  curator: string;
-  tags: string[];
+  dateRange?: string;
+  location?: string;
+  curator?: string;
+  tags?: string[];
+  [key: string]: unknown;
 }
 
 interface HomePageProps {

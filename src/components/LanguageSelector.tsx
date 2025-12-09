@@ -11,6 +11,10 @@ const languages = {
   de: { name: 'Deutsch', flag: '🇩🇪' },
   en: { name: 'English', flag: '🇬🇧' },
   fr: { name: 'Français', flag: '🇫🇷' },
+  es: { name: 'Español', flag: '🇪🇸' },
+  it: { name: 'Italiano', flag: '🇮🇹' },
+  nl: { name: 'Nederlands', flag: '🇳🇱' },
+  pl: { name: 'Polski', flag: '🇵🇱' },
 };
 
 export const LanguageSelector: React.FC<LanguageSelectorProps> = ({

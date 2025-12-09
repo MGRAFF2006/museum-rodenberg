@@ -12,14 +12,14 @@ import { useState } from 'react';
 interface Exhibition {
   id: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   description: string;
   image: string;
-  dateRange: string;
-  location: string;
-  curator: string;
-  tags: string[];
-  artifacts: string[];
+  dateRange?: string;
+  location?: string;
+  curator?: string;
+  tags?: string[];
+  artifacts?: string[];
   media?: {
     images: string[];
     videos: Array<{ url: string; title: string; description: string }>;
@@ -28,19 +28,21 @@ interface Exhibition {
   detailedContent?: {
     [key: string]: string;
   };
+  [key: string]: unknown;
 }
 
 interface Artifact {
   id: string;
   title: string;
-  period: string;
+  period?: string;
   description: string;
   image: string;
-  materials: string[];
-  dimensions: string;
-  provenance: string;
-  significance: string;
-  tags: string[];
+  materials?: string[];
+  dimensions?: string;
+  provenance?: string;
+  significance?: string;
+  tags?: string[];
+  [key: string]: unknown;
 }
 
 interface ExhibitionDetailProps {

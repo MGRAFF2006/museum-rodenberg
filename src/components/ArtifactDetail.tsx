@@ -11,22 +11,24 @@ import { useState } from 'react';
 interface Artifact {
   id: string;
   title: string;
-  period: string;
+  period?: string;
   description: string;
   image: string;
-  materials: string[];
-  dimensions: string;
-  provenance: string;
-  significance: string;
-  tags: string[];
+  materials?: string[];
+  dimensions?: string;
+  provenance?: string;
+  significance?: string;
+  tags?: string[];
   media?: {
-    images: string[];
-    videos: Array<{ url: string; title: string; description: string }>;
-    audio: Array<{ url: string; title: string; description: string }>;
+    images?: string[];
+    videos?: Array<{ url: string; title: string; description: string }>;
+    audio?: Array<{ url: string; title: string; description: string }>;
   };
   detailedContent?: {
     [key: string]: string;
   };
+  exhibition?: string;
+  [key: string]: unknown;
 }
 
 interface ArtifactDetailProps {

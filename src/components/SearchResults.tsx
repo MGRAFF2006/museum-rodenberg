@@ -2,30 +2,34 @@ import React from 'react';
 import { Search, ArrowLeft } from 'lucide-react';
 import { ExhibitionCard } from './ExhibitionCard';
 import { ArtifactCard } from './ArtifactCard';
+import { useLanguage } from '../hooks/useLanguage';
+import { t } from '../utils/translations';
 
 interface Exhibition {
   id: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   description: string;
   image: string;
-  dateRange: string;
-  location: string;
-  curator: string;
-  tags: string[];
+  dateRange?: string;
+  location?: string;
+  curator?: string;
+  tags?: string[];
+  [key: string]: unknown;
 }
 
 interface Artifact {
   id: string;
   title: string;
-  period: string;
+  period?: string;
   description: string;
   image: string;
-  materials: string[];
-  dimensions: string;
-  provenance: string;
-  significance: string;
-  tags: string[];
+  materials?: string[];
+  dimensions?: string;
+  provenance?: string;
+  significance?: string;
+  tags?: string[];
+  [key: string]: unknown;
 }
 
 interface SearchResultsProps {
@@ -46,6 +50,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   onBack,
 }) => {
   const totalResults = exhibitions.length + artifacts.length;
+  const { currentLanguage } = useLanguage();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -58,13 +63,13 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
               className="flex items-center text-blue-800 hover:text-blue-600 transition-colors"
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
-              Zurück zu den Ausstellungen
+              {t('backToExhibitions', currentLanguage)}
             </button>
             
             <div className="flex items-center text-gray-600">
               <Search className="h-5 w-5 mr-2" />
               <span className="text-sm">
-                {totalResults} Ergebnis{totalResults !== 1 ? 'se' : ''} für "{query}"
+                {totalResults} {totalResults !== 1 ? t('searchResultsPlural', currentLanguage) : t('searchResults', currentLanguage)} {t('searchFor', currentLanguage)} "{query}"
               </span>
             </div>
           </div>
@@ -76,9 +81,9 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
           <div className="text-center py-12">
             <div className="bg-white rounded-xl shadow-lg p-8 max-w-md mx-auto">
               <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">Keine Ergebnisse gefunden</h2>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">{t('noResults', currentLanguage)}</h2>
               <p className="text-gray-600 text-sm md:text-base">
-              Versuchen Sie es mit anderen Suchbegriffen oder durchstöbern Sie unsere Ausstellungen.
+                {t('noResultsText', currentLanguage)}
               </p>
             </div>
           </div>
@@ -88,7 +93,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
             {exhibitions.length > 0 && (
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  Ausstellungen ({exhibitions.length})
+                  {t('exhibitions', currentLanguage)} ({exhibitions.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {exhibitions.map((exhibition) => (
@@ -106,7 +111,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
             {artifacts.length > 0 && (
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  Exponate ({artifacts.length})
+                  {t('artifacts', currentLanguage)} ({artifacts.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {artifacts.map((artifact) => (

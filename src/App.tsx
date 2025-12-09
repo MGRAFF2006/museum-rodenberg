@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import { useState } from 'react';
+import { Routes, Route, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
 import { ExhibitionDetail } from './components/ExhibitionDetail';
@@ -9,329 +10,54 @@ import { QRScanner } from './components/QRScanner';
 import { DetailedContentPage } from './components/DetailedContentPage';
 import { MediaViewerPage } from './components/MediaViewerPage';
 import { AccessibilityPanel } from './components/AccessibilityPanel';
-import { VoiceNavigationProvider } from './components/VoiceNavigationProvider';
 import { useLanguage } from './hooks/useLanguage';
-import { useAccessibility } from './hooks/useAccessibility';
-import { getTranslatedContent } from './utils/translations';
-
-// Import content data
-import exhibitionsData from './content/exhibitions.json';
-import artifactsData from './content/artifacts.json';
-
-type ViewType = 'home' | 'exhibition' | 'artifact' | 'search' | 'detailed-content' | 'media-viewer';
-
-interface ViewState {
-  type: ViewType;
-  id?: string;
-  contentType?: 'exhibition' | 'artifact';
-  mediaType?: 'images' | 'videos' | 'audio';
-}
+import { useContentData } from './hooks/useContentData';
+import { useSearch } from './hooks/useSearch';
+import { t } from './utils/translations';
+import type { Language } from './contexts/LanguageContext';
 
 function App() {
-  const [currentView, setCurrentView] = useState<ViewState>({ type: 'home' });
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchQuery = searchParams.get('q') || '';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const { currentLanguage, changeLanguage } = useLanguage();
-  const { settings } = useAccessibility();
-
-  // Convert data to arrays
-  const exhibitions = useMemo(() => {
-    return Object.values(exhibitionsData.exhibitions).map(exhibition =>
-      getTranslatedContent(exhibition, currentLanguage)
-    );
-  }, [currentLanguage]);
+  const navigate = useNavigate();
   
-  const artifacts = useMemo(() => {
-    return Object.values(artifactsData.artifacts).map(artifact =>
-      getTranslatedContent(artifact, currentLanguage)
-    );
-  }, [currentLanguage]);
+  const {
+    exhibitions,
+    artifacts,
+    getExhibitionById,
+    getArtifactById,
+    getArtifactsByExhibition,
+    findByQRCode,
+    featuredExhibitionId,
+  } = useContentData();
+
+  const searchResults = useSearch(searchQuery, exhibitions, artifacts);
 
   // QR Code handling
   const handleQRScan = (qrCode: string) => {
-    // Find artifact or exhibition by QR code
-    const artifact = artifacts.find(a => a.qrCode === qrCode);
-    const exhibition = exhibitions.find(e => e.qrCode === qrCode);
+    const result = findByQRCode(qrCode);
     
-    if (artifact) {
-      handleArtifactClick(artifact.id);
-    } else if (exhibition) {
-      handleExhibitionClick(exhibition.id);
+    if (result.type === 'artifact' && result.item) {
+      navigate(`/artifact/${result.item.id}`);
+    } else if (result.type === 'exhibition' && result.item) {
+      navigate(`/exhibition/${result.item.id}`);
     } else {
-      // Handle unknown QR code
-      alert('QR-Code nicht erkannt. Bitte versuchen Sie es erneut.');
+      // QR code not found - TODO: Replace with toast notification
+      alert(t('qrCodeNotRecognized', currentLanguage));
     }
-  };
-
-  const handleQRScanToggle = () => {
-    setIsQRScannerOpen(!isQRScannerOpen);
-  };
-
-  // Search functionality with translated content
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return { exhibitions: [], artifacts: [] };
-
-    const query = searchQuery.toLowerCase();
-    
-    const matchingExhibitions = exhibitions.filter(ex =>
-      ex.title.toLowerCase().includes(query) ||
-      ex.description.toLowerCase().includes(query) ||
-      ex.tags.some(tag => tag.toLowerCase().includes(query)) ||
-      ex.curator.toLowerCase().includes(query)
-    );
-
-    const matchingArtifacts = artifacts.filter(art =>
-      art.title.toLowerCase().includes(query) ||
-      art.description.toLowerCase().includes(query) ||
-      art.period.toLowerCase().includes(query) ||
-      art.tags.some(tag => tag.toLowerCase().includes(query)) ||
-      art.materials.some(material => material.toLowerCase().includes(query))
-    );
-
-    return {
-      exhibitions: matchingExhibitions,
-      artifacts: matchingArtifacts
-    };
-  }, [searchQuery, exhibitions, artifacts]);
-
-  // Remove old search functionality
-  /*
-  const exhibitions = useMemo(() => 
-    Object.values(exhibitionsData.exhibitions), 
-    []
-  );
-  
-  const artifacts = useMemo(() => 
-    Object.values(artifactsData.artifacts), 
-    []
-  );
-
-  // Search functionality
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return { exhibitions: [], artifacts: [] };
-
-    const query = searchQuery.toLowerCase();
-    
-    const matchingExhibitions = exhibitions.filter(ex =>
-      ex.title.toLowerCase().includes(query) ||
-      ex.description.toLowerCase().includes(query) ||
-      ex.tags.some(tag => tag.toLowerCase().includes(query)) ||
-      ex.curator.toLowerCase().includes(query)
-    );
-
-    const matchingArtifacts = artifacts.filter(art =>
-      art.title.toLowerCase().includes(query) ||
-      art.description.toLowerCase().includes(query) ||
-      art.period.toLowerCase().includes(query) ||
-      art.tags.some(tag => tag.toLowerCase().includes(query)) ||
-      art.materials.some(material => material.toLowerCase().includes(query))
-    );
-
-    return {
-      exhibitions: matchingExhibitions,
-      artifacts: matchingArtifacts
-    };
-  }, [searchQuery, exhibitions, artifacts]);
-  */
-
-  // Navigation handlers
-  const handleHomeClick = () => {
-    setCurrentView({ type: 'home' });
-    setSearchQuery('');
-  };
-
-  const handleExhibitionClick = (id: string) => {
-    setCurrentView({ type: 'exhibition', id });
-    setSearchQuery('');
-  };
-
-  const handleArtifactClick = (id: string) => {
-    setCurrentView({ type: 'artifact', id });
-    setSearchQuery('');
+    setIsQRScannerOpen(false);
   };
 
   const handleSearchChange = (query: string) => {
-    setSearchQuery(query);
     if (query.trim()) {
-      setCurrentView({ type: 'search' });
+      setSearchParams({ q: query });
+      navigate(`/search?q=${encodeURIComponent(query)}`);
     } else {
-      setCurrentView({ type: 'home' });
-    }
-  };
-
-  const handleBackClick = () => {
-    if (currentView.type === 'detailed-content' || currentView.type === 'media-viewer') {
-      // Go back to the previous view (exhibition or artifact)
-      if (currentView.contentType === 'exhibition' && currentView.id) {
-        setCurrentView({ type: 'exhibition', id: currentView.id });
-      } else if (currentView.contentType === 'artifact' && currentView.id) {
-        setCurrentView({ type: 'artifact', id: currentView.id });
-      } else {
-        handleHomeClick();
-      }
-      return;
-    }
-    if (currentView.type === 'artifact' && currentView.id) {
-      // Find which exhibition this artifact belongs to
-      const artifact = artifacts.find(a => a.id === currentView.id);
-      if (artifact && 'exhibition' in artifact) {
-        setCurrentView({ type: 'exhibition', id: artifact.exhibition });
-        return;
-      }
-    }
-    handleHomeClick();
-  };
-
-  // Voice navigation handlers
-  const handleSearchFocus = () => {
-    const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
-    if (searchInput) {
-      searchInput.focus();
-    }
-  };
-
-  const handleReadAloud = () => {
-    const ttsButton = document.querySelector('[title="Vorlesen"], [title="Read Aloud"]') as HTMLButtonElement;
-    if (ttsButton) {
-      ttsButton.click();
-    }
-  };
-
-  const handleDetailedContentClick = (contentType: 'exhibition' | 'artifact', id: string) => {
-    setCurrentView({ 
-      type: 'detailed-content', 
-      id, 
-      contentType 
-    });
-  };
-
-  const handleMediaViewerClick = (contentType: 'exhibition' | 'artifact', id: string, mediaType?: 'images' | 'videos' | 'audio') => {
-    setCurrentView({ 
-      type: 'media-viewer', 
-      id, 
-      contentType,
-      mediaType 
-    });
-  };
-
-  // Get current exhibition and artifact data
-  const currentExhibition = currentView.id ? 
-    exhibitions.find(ex => ex.id === currentView.id) : null;
-  
-  const currentArtifact = currentView.id ? 
-    artifacts.find(art => art.id === currentView.id) : null;
-
-  const exhibitionArtifacts = currentExhibition ? 
-    artifacts.filter(art => currentExhibition.artifacts.includes(art.id)) : [];
-
-  // Render current view
-  const renderCurrentView = () => {
-    switch (currentView.type) {
-      case 'home':
-        return (
-          <HomePage
-            exhibitions={exhibitions}
-            featuredId={exhibitionsData.featured}
-            onExhibitionClick={handleExhibitionClick}
-            currentLanguage={currentLanguage}
-          />
-        );
-      
-      case 'exhibition':
-        if (!currentExhibition) return <div>Exhibition not found</div>;
-        return (
-          <ExhibitionDetail
-            exhibition={currentExhibition}
-            artifacts={exhibitionArtifacts}
-            onBack={handleBackClick}
-            onArtifactClick={handleArtifactClick}
-            onDetailedContentClick={handleDetailedContentClick}
-            onMediaViewerClick={handleMediaViewerClick}
-            currentLanguage={currentLanguage}
-          />
-        );
-      
-      case 'artifact':
-        if (!currentArtifact) return <div>Artifact not found</div>;
-        const exhibitionTitle = currentExhibition?.title;
-        return (
-          <ArtifactDetail
-            artifact={currentArtifact}
-            onBack={handleBackClick}
-            exhibitionTitle={exhibitionTitle}
-            onDetailedContentClick={handleDetailedContentClick}
-            onMediaViewerClick={handleMediaViewerClick}
-            currentLanguage={currentLanguage}
-          />
-        );
-      
-      case 'search':
-        return (
-          <SearchResults
-            query={searchQuery}
-            exhibitions={searchResults.exhibitions}
-            artifacts={searchResults.artifacts}
-            onExhibitionClick={handleExhibitionClick}
-            onArtifactClick={handleArtifactClick}
-            onBack={handleHomeClick}
-          />
-        );
-      
-      case 'detailed-content':
-        if (currentView.contentType === 'exhibition') {
-          if (!currentExhibition || !currentExhibition.detailedContent) return <div>Content not found</div>;
-          return (
-            <DetailedContentPage
-              title={currentExhibition.title}
-              content={currentExhibition.detailedContent[currentLanguage]}
-              onBack={handleBackClick}
-              onMediaClick={(type, url, title) => handleMediaViewerClick('exhibition', currentExhibition.id)}
-              currentLanguage={currentLanguage}
-            />
-          );
-        } else {
-          if (!currentArtifact || !currentArtifact.detailedContent) return <div>Content not found</div>;
-          return (
-            <DetailedContentPage
-              title={currentArtifact.title}
-              content={currentArtifact.detailedContent[currentLanguage]}
-              onBack={handleBackClick}
-              onMediaClick={(type, url, title) => handleMediaViewerClick('artifact', currentArtifact.id)}
-              currentLanguage={currentLanguage}
-            />
-          );
-        }
-      
-      case 'media-viewer':
-        if (currentView.contentType === 'exhibition') {
-          if (!currentExhibition || !currentExhibition.media) return <div>Media not found</div>;
-          return (
-            <MediaViewerPage
-              images={currentExhibition.media.images}
-              videos={currentExhibition.media.videos}
-              audio={currentExhibition.media.audio}
-              onBack={handleBackClick}
-              currentLanguage={currentLanguage}
-              initialTab={currentView.mediaType}
-            />
-          );
-        } else {
-          if (!currentArtifact || !currentArtifact.media) return <div>Media not found</div>;
-          return (
-            <MediaViewerPage
-              images={currentArtifact.media.images}
-              videos={currentArtifact.media.videos}
-              audio={currentArtifact.media.audio}
-              onBack={handleBackClick}
-              currentLanguage={currentLanguage}
-              initialTab={currentView.mediaType}
-            />
-          );
-        }
-      
-      default:
-        return null;
+      setSearchParams({});
+      navigate('/');
     }
   };
 
@@ -340,8 +66,8 @@ function App() {
       <Header
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
-        onHomeClick={handleHomeClick}
-        onQRScanToggle={handleQRScanToggle}
+        onHomeClick={() => navigate('/')}
+        onQRScanToggle={() => setIsQRScannerOpen(!isQRScannerOpen)}
         onMenuToggle={() => setIsMobileMenuOpen(true)}
         currentLanguage={currentLanguage}
         onLanguageChange={changeLanguage}
@@ -350,9 +76,15 @@ function App() {
       <MobileMenu
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
-        onHomeClick={handleHomeClick}
+        onHomeClick={() => {
+          setIsMobileMenuOpen(false);
+          navigate('/');
+        }}
         exhibitions={exhibitions}
-        onExhibitionClick={handleExhibitionClick}
+        onExhibitionClick={(id) => {
+          setIsMobileMenuOpen(false);
+          navigate(`/exhibition/${id}`);
+        }}
       />
       
       <QRScanner
@@ -361,10 +93,228 @@ function App() {
         onScan={handleQRScan}
       />
       
-      {renderCurrentView()}
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <HomePage
+              exhibitions={exhibitions}
+              featuredId={featuredExhibitionId}
+              onExhibitionClick={(id) => navigate(`/exhibition/${id}`)}
+              currentLanguage={currentLanguage}
+            />
+          }
+        />
+        
+        <Route
+          path="/exhibition/:id"
+          element={
+            <ExhibitionRoute
+              getExhibitionById={getExhibitionById}
+              getArtifactsByExhibition={getArtifactsByExhibition}
+              navigate={navigate}
+              currentLanguage={currentLanguage}
+            />
+          }
+        />
+        
+        <Route
+          path="/artifact/:id"
+          element={
+            <ArtifactRoute
+              getArtifactById={getArtifactById}
+              getExhibitionById={getExhibitionById}
+              navigate={navigate}
+              currentLanguage={currentLanguage}
+            />
+          }
+        />
+        
+        <Route
+          path="/search"
+          element={
+            <SearchResults
+              query={searchQuery}
+              exhibitions={searchResults.exhibitions}
+              artifacts={searchResults.artifacts}
+              onExhibitionClick={(id) => navigate(`/exhibition/${id}`)}
+              onArtifactClick={(id) => navigate(`/artifact/${id}`)}
+              onBack={() => navigate('/')}
+            />
+          }
+        />
+        
+        <Route
+          path="/exhibition/:id/details"
+          element={
+            <DetailedContentRoute
+              type="exhibition"
+              getExhibitionById={getExhibitionById}
+              navigate={navigate}
+              currentLanguage={currentLanguage}
+            />
+          }
+        />
+        
+        <Route
+          path="/artifact/:id/details"
+          element={
+            <DetailedContentRoute
+              type="artifact"
+              getArtifactById={getArtifactById}
+              navigate={navigate}
+              currentLanguage={currentLanguage}
+            />
+          }
+        />
+        
+        <Route
+          path="/exhibition/:id/media"
+          element={
+            <MediaViewerRoute
+              type="exhibition"
+              getExhibitionById={getExhibitionById}
+              navigate={navigate}
+              currentLanguage={currentLanguage}
+            />
+          }
+        />
+        
+        <Route
+          path="/artifact/:id/media"
+          element={
+            <MediaViewerRoute
+              type="artifact"
+              getArtifactById={getArtifactById}
+              navigate={navigate}
+              currentLanguage={currentLanguage}
+            />
+          }
+        />
+      </Routes>
       
       <AccessibilityPanel currentLanguage={currentLanguage} />
     </div>
+  );
+}
+
+// Route components
+interface ExhibitionRouteProps {
+  getExhibitionById: (id: string) => any;
+  getArtifactsByExhibition: (id: string) => any[];
+  navigate: any;
+  currentLanguage: Language;
+}
+
+function ExhibitionRoute({ getExhibitionById, getArtifactsByExhibition, navigate, currentLanguage }: ExhibitionRouteProps) {
+  const { id } = useParams();
+  if (!id) return <div>Exhibition not found</div>;
+  
+  const exhibition = getExhibitionById(id);
+  if (!exhibition) return <div>Exhibition not found</div>;
+  
+  const exhibitionArtifacts = getArtifactsByExhibition(id);
+  
+  return (
+    <ExhibitionDetail
+      exhibition={exhibition}
+      artifacts={exhibitionArtifacts}
+      onBack={() => navigate('/')}
+      onArtifactClick={(artId) => navigate(`/artifact/${artId}`)}
+      onDetailedContentClick={() => navigate(`/exhibition/${id}/details`)}
+      onMediaViewerClick={() => navigate(`/exhibition/${id}/media`)}
+      currentLanguage={currentLanguage}
+    />
+  );
+}
+
+interface ArtifactRouteProps {
+  getArtifactById: (id: string) => any;
+  getExhibitionById: (id: string) => any;
+  navigate: any;
+  currentLanguage: Language;
+}
+
+function ArtifactRoute({ getArtifactById, getExhibitionById, navigate, currentLanguage }: ArtifactRouteProps) {
+  const { id } = useParams();
+  if (!id) return <div>Artifact not found</div>;
+  
+  const artifact = getArtifactById(id);
+  if (!artifact) return <div>Artifact not found</div>;
+  
+  const exhibition = artifact.exhibition ? getExhibitionById(artifact.exhibition) : null;
+  
+  return (
+    <ArtifactDetail
+      artifact={artifact}
+      onBack={() => artifact.exhibition ? navigate(`/exhibition/${artifact.exhibition}`) : navigate('/')}
+      exhibitionTitle={exhibition?.title}
+      onDetailedContentClick={() => navigate(`/artifact/${id}/details`)}
+      onMediaViewerClick={() => navigate(`/artifact/${id}/media`)}
+      currentLanguage={currentLanguage}
+    />
+  );
+}
+
+interface DetailedContentRouteProps {
+  type: 'exhibition' | 'artifact';
+  getExhibitionById?: (id: string) => any;
+  getArtifactById?: (id: string) => any;
+  navigate: any;
+  currentLanguage: Language;
+}
+
+function DetailedContentRoute({ type, getExhibitionById, getArtifactById, navigate, currentLanguage }: DetailedContentRouteProps) {
+  const { id } = useParams();
+  if (!id) return <div>Content not found</div>;
+  
+  const item = type === 'exhibition' 
+    ? getExhibitionById?.(id)
+    : getArtifactById?.(id);
+    
+  if (!item || !item.detailedContent) return <div>Content not found</div>;
+  
+  return (
+    <DetailedContentPage
+      title={item.title}
+      content={item.detailedContent[currentLanguage]}
+      onBack={() => navigate(`/${type}/${id}`)}
+      onMediaClick={() => navigate(`/${type}/${id}/media`)}
+      currentLanguage={currentLanguage}
+    />
+  );
+}
+
+interface MediaViewerRouteProps {
+  type: 'exhibition' | 'artifact';
+  getExhibitionById?: (id: string) => any;
+  getArtifactById?: (id: string) => any;
+  navigate: any;
+  currentLanguage: Language;
+}
+
+function MediaViewerRoute({ type, getExhibitionById, getArtifactById, navigate, currentLanguage }: MediaViewerRouteProps) {
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') as 'images' | 'videos' | 'audio' | undefined;
+  
+  if (!id) return <div>Media not found</div>;
+  
+  const item = type === 'exhibition' 
+    ? getExhibitionById?.(id)
+    : getArtifactById?.(id);
+    
+  if (!item || !item.media) return <div>Media not found</div>;
+  
+  return (
+    <MediaViewerPage
+      images={item.media.images}
+      videos={item.media.videos}
+      audio={item.media.audio}
+      onBack={() => navigate(`/${type}/${id}`)}
+      currentLanguage={currentLanguage}
+      initialTab={initialTab}
+    />
   );
 }
 
