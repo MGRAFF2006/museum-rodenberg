@@ -112,3 +112,4 @@ npm run generate-translations
 # Check available languages
 ls public/translations/
 ```
+clear
