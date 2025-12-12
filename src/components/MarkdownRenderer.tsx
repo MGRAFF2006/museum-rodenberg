@@ -34,7 +34,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           image: '🖼️'
         };
 
-        return `<span id="${mediaId}" class="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium cursor-pointer hover:bg-blue-200 transition-colors my-2">
+        return `<span id="${mediaId}" class="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm font-medium cursor-pointer hover:bg-blue-200 transition-colors my-2">
           <span class="mr-2">${icons[type as keyof typeof icons]}</span>
           ${title}
         </span>`;
@@ -48,32 +48,32 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="text-3xl font-bold text-gray-900 mb-6 border-b-2 border-blue-200 pb-3">
+            <h1 className="text-3xl font-bold text-neutral-900 mb-6 border-b-2 border-blue-200 pb-3">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-2xl font-bold text-gray-800 mb-4 mt-8">
+            <h2 className="text-2xl font-bold text-neutral-800 mb-4 mt-8">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-xl font-semibold text-gray-700 mb-3 mt-6">
+            <h3 className="text-xl font-semibold text-neutral-700 mb-3 mt-6">
               {children}
             </h3>
           ),
           p: ({ children }) => (
-            <p className="text-gray-700 leading-relaxed mb-4">
+            <p className="text-neutral-700 leading-relaxed mb-4">
               {children}
             </p>
           ),
           ul: ({ children }) => (
-            <ul className="list-disc list-inside text-gray-700 mb-4 space-y-1">
+            <ul className="list-disc list-inside text-neutral-700 mb-4 space-y-1">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal list-inside text-gray-700 mb-4 space-y-1">
+            <ol className="list-decimal list-inside text-neutral-700 mb-4 space-y-1">
               {children}
             </ol>
           ),
@@ -81,10 +81,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             <li className="mb-1">{children}</li>
           ),
           strong: ({ children }) => (
-            <strong className="font-semibold text-gray-900">{children}</strong>
+            <strong className="font-semibold text-neutral-900">{children}</strong>
           ),
           em: ({ children }) => (
-            <em className="italic text-gray-800">{children}</em>
+            <em className="italic text-neutral-800">{children}</em>
           ),
           img: ({ src, alt }) => (
             <div className="my-6">
@@ -95,14 +95,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 onClick={() => onMediaClick?.('image', src || '', alt)}
               />
               {alt && (
-                <p className="text-xs md:text-sm text-gray-600 text-center mt-2 italic">
+                <p className="text-xs md:text-sm text-neutral-600 text-center mt-2 italic">
                   {alt}
                 </p>
               )}
             </div>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-blue-300 pl-4 py-2 my-4 bg-blue-50 italic text-gray-700">
+            <blockquote className="border-l-4 border-blue-300 pl-4 py-2 my-4 bg-blue-50 italic text-neutral-700">
               {children}
             </blockquote>
           ),

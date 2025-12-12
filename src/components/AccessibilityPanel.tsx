@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Settings, X, Type, Eye, RotateCcw } from 'lucide-react';
+import { Settings, X, Type, Eye, RotateCcw, Volume2 } from 'lucide-react';
 import { useAccessibility, FontSize, FontFamily, ContrastMode } from '../hooks/useAccessibility';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import { Language } from '../hooks/useLanguage';
 import { t } from '../utils/translations';
 
@@ -13,6 +14,7 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { settings, updateSettings, resetSettings } = useAccessibility();
+  const { getVoicesForLanguage, settings: ttsSettings, updateSettings: updateTTSSettings } = useTextToSpeech();
 
   const fontSizeOptions: { value: FontSize; label: string }[] = [
     { value: 'small', label: 'Klein' },
@@ -30,13 +32,14 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
     { value: 'high', label: 'Hoher Kontrast' },
   ];
 
+  const voicesForLanguage = getVoicesForLanguage(currentLanguage);
 
   return (
     <>
       {/* Accessibility Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 z-40 bg-blue-800 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        className="btn btn-primary fixed bottom-4 right-4 z-40 rounded-full p-3 h-12 w-12"
         title="Barrierefreiheit"
         aria-label="Barrierefreiheit-Einstellungen öffnen"
       >
@@ -46,13 +49,13 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
       {/* Panel */}
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">Barrierefreiheit</h2>
+                <h2 className="text-heading-lg font-semibold text-neutral-900">Barrierefreiheit</h2>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  className="p-2 rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors focus-ring-sm"
                   aria-label="Schließen"
                 >
                   <X className="h-5 w-5" />
@@ -63,8 +66,8 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                 {/* Font Size */}
                 <div>
                   <div className="flex items-center mb-3">
-                    <Type className="h-5 w-5 text-blue-800 mr-2" />
-                    <label className="text-sm font-semibold text-gray-900">
+                    <Type className="metadata-icon" />
+                    <label className="text-body-sm font-semibold text-neutral-900">
                       Schriftgröße
                     </label>
                   </div>
@@ -73,10 +76,10 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                       <button
                         key={option.value}
                         onClick={() => updateSettings({ fontSize: option.value })}
-                        className={`p-2 text-sm rounded-lg border transition-colors ${
+                        className={`p-2 text-sm rounded-md border transition-colors ${
                           settings.fontSize === option.value
-                            ? 'bg-blue-100 border-blue-500 text-blue-800'
-                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                            ? 'badge-primary'
+                            : 'bg-neutral-50 border-neutral-200 text-neutral-700 hover:bg-neutral-100'
                         }`}
                       >
                         {option.label}
@@ -88,8 +91,8 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                 {/* Font Family */}
                 <div>
                   <div className="flex items-center mb-3">
-                    <Type className="h-5 w-5 text-blue-800 mr-2" />
-                    <label className="text-sm font-semibold text-gray-900">
+                    <Type className="metadata-icon" />
+                    <label className="text-body-sm font-semibold text-neutral-900">
                       Schriftart
                     </label>
                   </div>
@@ -98,10 +101,10 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                       <button
                         key={option.value}
                         onClick={() => updateSettings({ fontFamily: option.value })}
-                        className={`w-full p-3 text-sm rounded-lg border transition-colors text-left ${
+                        className={`w-full p-3 text-sm rounded-md border transition-colors text-left ${
                           settings.fontFamily === option.value
-                            ? 'bg-blue-100 border-blue-500 text-blue-800'
-                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                            ? 'badge-primary'
+                            : 'bg-neutral-50 border-neutral-200 text-neutral-700 hover:bg-neutral-100'
                         }`}
                       >
                         <div className={option.value === 'dyslexie' ? 'font-dyslexie' : ''}>
@@ -115,8 +118,8 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                 {/* Contrast Mode */}
                 <div>
                   <div className="flex items-center mb-3">
-                    <Eye className="h-5 w-5 text-blue-800 mr-2" />
-                    <label className="text-sm font-semibold text-gray-900">
+                    <Eye className="metadata-icon" />
+                    <label className="text-body-sm font-semibold text-neutral-900">
                       Kontrast
                     </label>
                   </div>
@@ -125,10 +128,10 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                       <button
                         key={option.value}
                         onClick={() => updateSettings({ contrastMode: option.value })}
-                        className={`w-full p-3 text-sm rounded-lg border transition-colors text-left ${
+                        className={`w-full p-3 text-sm rounded-md border transition-colors text-left ${
                           settings.contrastMode === option.value
-                            ? 'bg-blue-100 border-blue-500 text-blue-800'
-                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                            ? 'badge-primary'
+                            : 'bg-neutral-50 border-neutral-200 text-neutral-700 hover:bg-neutral-100'
                         }`}
                       >
                         {option.label}
@@ -137,11 +140,82 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   </div>
                 </div>
 
+                {/* TTS Voice Selection */}
+                {voicesForLanguage.length > 0 && (
+                  <div className="divider pt-4">
+                    <div className="flex items-center mb-3">
+                      <Volume2 className="metadata-icon" />
+                      <label className="text-body-sm font-semibold text-neutral-900">
+                        Sprachstimme
+                      </label>
+                    </div>
+                    <select
+                      value={ttsSettings.selectedVoiceIndex}
+                      onChange={(e) => updateTTSSettings({ selectedVoiceIndex: parseInt(e.target.value) })}
+                      className="input-base text-sm"
+                    >
+                      {voicesForLanguage.map((voice, index) => (
+                        <option key={`${voice.voiceURI}-${index}`} value={index}>
+                          {voice.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* TTS Speed Control */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-body-sm font-semibold text-neutral-900">
+                      Sprechgeschwindigkeit
+                    </label>
+                    <span className="text-caption text-neutral-600">{(ttsSettings.rate * 100).toFixed(0)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={ttsSettings.rate}
+                    onChange={(e) => updateTTSSettings({ rate: parseFloat(e.target.value) })}
+                    className="w-full h-2 bg-neutral-200 rounded-full appearance-none cursor-pointer accent-primary-600"
+                  />
+                  <div className="flex justify-between text-caption text-neutral-500 mt-1">
+                    <span>Langsam</span>
+                    <span>Normal</span>
+                    <span>Schnell</span>
+                  </div>
+                </div>
+
+                {/* TTS Pitch Control */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-body-sm font-semibold text-neutral-900">
+                      Tonhöhe
+                    </label>
+                    <span className="text-caption text-neutral-600">{(ttsSettings.pitch * 100).toFixed(0)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={ttsSettings.pitch}
+                    onChange={(e) => updateTTSSettings({ pitch: parseFloat(e.target.value) })}
+                    className="w-full h-2 bg-neutral-200 rounded-full appearance-none cursor-pointer accent-primary-600"
+                  />
+                  <div className="flex justify-between text-caption text-neutral-500 mt-1">
+                    <span>Tief</span>
+                    <span>Normal</span>
+                    <span>Hoch</span>
+                  </div>
+                </div>
+
                 {/* Reset Button */}
-                <div className="pt-4 border-t border-gray-200">
+                <div className="pt-4 divider">
                   <button
                     onClick={resetSettings}
-                    className="w-full flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    className="w-full btn btn-secondary mt-4"
                   >
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Zurücksetzen

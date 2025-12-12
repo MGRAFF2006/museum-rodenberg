@@ -24,49 +24,53 @@ export const Header: React.FC<HeaderProps> = ({
   onLanguageChange
 }) => {
   return (
-    <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <header className="bg-white border-b border-neutral-200 sticky top-0 z-50 shadow-sm">
+      <div className="container-max max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo and Title */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center gap-3 md:gap-4">
             <button
               onClick={onMenuToggle}
-              className="p-2 rounded-md text-gray-600 hover:text-blue-800 hover:bg-gray-100 transition-colors md:hidden"
+              className="p-2 rounded-md text-neutral-600 hover:text-primary-700 hover:bg-neutral-100 transition-colors md:hidden focus-ring-sm"
+              aria-label="Menü"
             >
               <Menu className="h-6 w-6" />
             </button>
             <button
               onClick={onHomeClick}
-              className="flex items-center space-x-3 text-blue-900 hover:text-blue-700 transition-colors"
+              className="flex items-center gap-3 text-primary-700 hover:text-primary-600 transition-colors focus-ring-sm"
+              aria-label="Zur Startseite"
             >
               <Home className="h-8 w-8" />
               <div className="hidden sm:block">
-                <h1 className="text-xl font-bold">Museum Rodenberg</h1>
-                <p className="text-xs text-gray-600">Digitale Ausstellungen</p>
+                <h1 className="text-heading font-serif font-bold text-neutral-900">Museum Rodenberg</h1>
+                <p className="text-caption text-neutral-500">Digitale Ausstellungen</p>
               </div>
             </button>
           </div>
 
           {/* Search Bar */}
-          <div className="flex-1 max-w-lg mx-4">
+          <div className="flex-1 max-w-md mx-4 hidden md:block">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 h-5 w-5 pointer-events-none" />
               <input
                 type="text"
                 placeholder={t('searchPlaceholder', currentLanguage)}
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-gray-500"
+                className="input-base pl-10"
+                aria-label="Suche"
               />
             </div>
           </div>
 
           {/* Navigation Actions */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={onQRScanToggle}
-              className="p-2 rounded-md text-gray-600 hover:text-blue-800 hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-md text-neutral-600 hover:text-primary-700 hover:bg-neutral-100 transition-colors focus-ring-sm"
               title="QR-Code Scanner"
+              aria-label="QR-Code Scanner"
             >
               <QrCode className="h-6 w-6" />
             </button>
@@ -78,10 +82,25 @@ export const Header: React.FC<HeaderProps> = ({
             
             <button
               onClick={onHomeClick}
-              className="px-4 py-2 text-sm font-medium text-blue-800 hover:text-blue-600 transition-colors hidden md:block"
+              className="px-4 py-2 text-body-sm font-semibold text-primary-700 hover:text-primary-600 transition-colors hidden md:block focus-ring-sm"
             >
               {t('allExhibitions', currentLanguage)}
             </button>
+          </div>
+        </div>
+
+        {/* Mobile Search Bar */}
+        <div className="py-3 md:hidden border-t border-neutral-200">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 h-5 w-5 pointer-events-none" />
+            <input
+              type="text"
+              placeholder={t('searchPlaceholder', currentLanguage)}
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="input-base pl-10 w-full"
+              aria-label="Suche"
+            />
           </div>
         </div>
       </div>

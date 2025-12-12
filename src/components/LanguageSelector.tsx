@@ -27,13 +27,13 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-600 hover:text-blue-800 hover:bg-gray-100 transition-colors"
+        className="flex items-center gap-2 px-3 py-2 rounded-md text-neutral-600 hover:text-primary-700 hover:bg-neutral-100 transition-colors focus-ring-sm"
       >
         <Globe className="h-5 w-5" />
-        <span className="text-sm font-medium hidden sm:block">
+        <span className="text-body-sm font-medium hidden sm:block">
           {languages[currentLanguage].flag} {languages[currentLanguage].name}
         </span>
-        <span className="text-sm font-medium sm:hidden">
+        <span className="text-body-sm font-medium sm:hidden">
           {languages[currentLanguage].flag}
         </span>
         <ChevronDown className="h-4 w-4" />
@@ -45,7 +45,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
+          <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-md border border-neutral-200 z-20">
             <div className="py-2">
               {Object.entries(languages).map(([code, lang]) => (
                 <button
@@ -54,8 +54,10 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
                     onLanguageChange(code as Language);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center space-x-3 px-4 py-2 text-left hover:bg-gray-100 transition-colors ${
-                    currentLanguage === code ? 'bg-blue-50 text-blue-800' : 'text-gray-700'
+                  className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors focus-ring-sm ${
+                    currentLanguage === code 
+                      ? 'bg-primary-50 text-primary-700 font-semibold' 
+                      : 'text-neutral-700 hover:bg-neutral-50'
                   }`}
                 >
                   <span className="text-lg">{lang.flag}</span>

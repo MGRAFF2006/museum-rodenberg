@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Calendar, Ruler, MapPin, Palette, Info, Tag, Play, BookOpen } from 'lucide-react';
+import { ArrowLeft, Calendar, Ruler, MapPin, Palette, Info, Tag as TagIcon, Play, BookOpen } from 'lucide-react';
 import { MediaViewer } from './MediaViewer';
 import { DetailedContentModal } from './DetailedContentModal';
 import { TextToSpeechButton } from './TextToSpeechButton';
@@ -53,189 +53,253 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
   const isMobile = useIsMobile();
 
   const hasMedia = artifact.media && (
-    artifact.media.images.length > 0 ||
-    artifact.media.videos.length > 0 ||
-    artifact.media.audio.length > 0
+    (artifact.media.images && artifact.media.images.length > 0) ||
+    (artifact.media.videos && artifact.media.videos.length > 0) ||
+    (artifact.media.audio && artifact.media.audio.length > 0)
   );
 
   const hasDetailedContent = artifact.detailedContent && artifact.detailedContent[currentLanguage];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Back Button */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="bg-neutral-50 min-h-screen">
+      {/* Navigation Bar */}
+      <div className="bg-white border-b border-neutral-200 sticky top-0 z-10">
+        <div className="container-max max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <button
             onClick={onBack}
-            className="flex items-center py-4 text-blue-800 hover:text-blue-600 transition-colors"
+            className="flex items-center py-4 text-primary-600 hover:text-primary-700 transition-colors focus-ring-sm"
+            aria-label="Zurück"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            {exhibitionTitle ? `${t('backTo', currentLanguage)} ${exhibitionTitle}` : t('backToExhibitions', currentLanguage)}
+            <span className="text-body font-medium">
+              {exhibitionTitle ? `${t('backTo', currentLanguage)} ${exhibitionTitle}` : t('backToExhibitions', currentLanguage)}
+            </span>
           </button>
         </div>
       </div>
 
       {/* Hero Section with Banner */}
-      <div className="relative h-64 md:h-80 overflow-hidden">
+      <div className="relative min-h-[16rem] md:min-h-[24rem] overflow-hidden bg-neutral-200">
         <img
           src={artifact.image}
           alt={artifact.title}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover absolute inset-0"
         />
-        <div className="absolute inset-0 bg-black bg-opacity-40 flex items-end">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 w-full">
-            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-              {artifact.title}
-            </h1>
-            <p className="text-xl text-yellow-300 font-semibold">
-              {artifact.period}
-            </p>
+        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-end">
+          <div className="container-max max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 md:pb-8 pt-16 md:pt-24 w-full">
+            <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
+              <div className="flex-1">
+                <h1 className="text-heading-xl md:text-display font-serif font-bold text-white mb-2 md:mb-3">
+                  {artifact.title}
+                </h1>
+                {artifact.period && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-accent-300" />
+                    <p className="text-heading-sm font-semibold text-accent-300">
+                      {artifact.period}
+                    </p>
+                  </div>
+                )}
+              </div>
+              {artifact.description && (
+                <TextToSpeechButton
+                  text={artifact.description}
+                  language={currentLanguage}
+                  size="lg"
+                  className="bg-white/20 backdrop-blur text-white hover:bg-white/30"
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2">
+      {/* Main Content */}
+      <div className="container-max max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-8 md:py-10">
+          {/* Main Content Area */}
+          <div className="lg:col-span-2 space-y-6">
 
-            {/* Description */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-2xl font-bold text-gray-900">{t('description', currentLanguage)}</h2>
-                <div className="flex items-center space-x-2">
+            {/* Description Card */}
+            <section className="card-lg p-5 md:p-6">
+              <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-neutral-200">
+                <h2 className="text-heading-lg font-serif font-bold text-neutral-900">
+                  {t('description', currentLanguage)}
+                </h2>
+                {artifact.description && (
                   <TextToSpeechButton
                     text={artifact.description}
                     language={currentLanguage}
+                    size="md"
                   />
-                </div>
+                )}
               </div>
-              <p className="text-gray-700 leading-relaxed text-lg">
+              <p className="text-body-lg leading-relaxed text-neutral-700 mb-4">
                 {artifact.description}
               </p>
               {hasDetailedContent && (
-                <div className="mt-4">
-                  <button
-                    onClick={() => {
-                      if (isMobile && onDetailedContentClick) {
-                        onDetailedContentClick('artifact', artifact.id);
-                      } else {
-                        setIsDetailedContentOpen(true);
-                      }
-                    }}
-                    className="inline-flex items-center px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                  >
-                    <BookOpen className="h-4 w-4 mr-2" />
-                    {t('readMore', currentLanguage)}
-                  </button>
-                </div>
+                <button
+                  onClick={() => {
+                    if (isMobile && onDetailedContentClick) {
+                      onDetailedContentClick('artifact', artifact.id);
+                    } else {
+                      setIsDetailedContentOpen(true);
+                    }
+                  }}
+                  className="btn btn-primary"
+                >
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  {t('readMore', currentLanguage)}
+                </button>
               )}
-            </div>
+            </section>
+
+            {/* Significance Card */}
+            {artifact.significance && (
+              <section className="card-lg p-5 md:p-6">
+                <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-neutral-200">
+                  <div className="flex items-start gap-3">
+                    <Info className="h-5 w-5 text-primary-600 flex-shrink-0 mt-0.5" />
+                    <h2 className="text-heading-lg font-serif font-bold text-neutral-900">
+                      {t('historicalSignificance', currentLanguage)}
+                    </h2>
+                  </div>
+                  <TextToSpeechButton
+                    text={artifact.significance}
+                    language={currentLanguage}
+                    size="md"
+                  />
+                </div>
+                <p className="text-body-lg leading-relaxed text-neutral-700">
+                  {artifact.significance}
+                </p>
+              </section>
+            )}
 
             {/* Media Section */}
             {hasMedia && (
-              <div className="bg-white rounded-xl shadow-lg p-6 mt-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-2xl font-bold text-gray-900">{t('media', currentLanguage)}</h2>
+              <section className="card-lg p-5 md:p-6">
+                <div className="flex items-center justify-between mb-4 pb-4 border-b border-neutral-200">
+                  <h2 className="text-heading-lg font-serif font-bold text-neutral-900">
+                    {t('media', currentLanguage)}
+                  </h2>
                   <button
                     onClick={() => {
                       if (isMobile && onMediaViewerClick) {
-                        onMediaViewerClick('artifact', artifact.id);
+                        onMediaViewerClick(
+                          artifact.media!.images || [],
+                          artifact.media!.videos || [],
+                          artifact.media!.audio || []
+                        );
                       } else {
                         setIsMediaViewerOpen(true);
                       }
                     }}
-                    className="flex items-center px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="btn btn-accent btn-sm"
                   >
                     <Play className="h-4 w-4 mr-2" />
-                    {t('media', currentLanguage)}
+                    {t('viewMedia', currentLanguage)}
                   </button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {artifact.media!.images.slice(0, 6).map((image, index) => (
-                    <div key={index} className="aspect-square rounded-lg overflow-hidden">
+                  {artifact.media!.images && artifact.media!.images.slice(0, 8).map((image, index) => (
+                    <div
+                      key={index}
+                      className="aspect-square rounded-md overflow-hidden bg-neutral-100 group cursor-pointer"
+                      onClick={() => {
+                        if (isMobile && onMediaViewerClick) {
+                          onMediaViewerClick(
+                            artifact.media!.images || [],
+                            artifact.media!.videos || [],
+                            artifact.media!.audio || []
+                          );
+                        } else {
+                          setIsMediaViewerOpen(true);
+                        }
+                      }}
+                    >
                       <img
                         src={image}
                         alt={`Media ${index + 1}`}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
-                        onClick={() => {
-                          if (isMobile && onMediaViewerClick) {
-                            onMediaViewerClick('artifact', artifact.id);
-                          } else {
-                            setIsMediaViewerOpen(true);
-                          }
-                        }}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       />
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
-
-            {/* Significance */}
-            <div className="bg-white rounded-xl shadow-lg p-6 mt-8">
-              <div className="flex items-center mb-3">
-                <Info className="h-5 w-5 text-blue-800 mr-3" />
-                <h2 className="text-2xl font-bold text-gray-900">{t('historicalSignificance', currentLanguage)}</h2>
-                <TextToSpeechButton
-                  text={artifact.significance}
-                  language={currentLanguage}
-                  className="ml-auto"
-                />
-              </div>
-              <p className="text-gray-700 leading-relaxed text-lg">
-                {artifact.significance}
-              </p>
-            </div>
           </div>
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            {/* Details */}
-            <div className="bg-white rounded-xl shadow-lg p-6 sticky top-24">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">{t('details', currentLanguage)}</h3>
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <Palette className="h-5 w-5 text-blue-800 mr-3 mt-0.5" />
+            {/* Details Card */}
+            <div className="card-lg p-5 md:p-6 sticky top-24">
+              <h3 className="text-heading font-serif font-bold text-neutral-900 mb-4 pb-4 border-b border-neutral-200">
+                {t('details', currentLanguage)}
+              </h3>
+              
+              <div className="space-y-4 break-words">
+                {/* Materials */}
+                {artifact.materials && artifact.materials.length > 0 && (
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm">{t('materials', currentLanguage)}</p>
-                    <p className="text-gray-600 text-sm">{artifact.materials.join(', ')}</p>
+                    <div className="metadata mb-3">
+                      <Palette className="metadata-icon" />
+                      <p className="text-caption font-semibold text-neutral-900">
+                        {t('materials', currentLanguage)}
+                      </p>
+                    </div>
+                    <p className="text-body-sm text-neutral-600 ml-6 break-words">
+                      {artifact.materials.join(', ')}
+                    </p>
                   </div>
-                </div>
+                )}
                 
-                <div className="flex items-start">
-                  <Ruler className="h-5 w-5 text-blue-800 mr-3 mt-0.5" />
+                {/* Dimensions */}
+                {artifact.dimensions && (
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm">{t('dimensions', currentLanguage)}</p>
-                    <p className="text-gray-600 text-sm">{artifact.dimensions}</p>
+                    <div className="metadata mb-3">
+                      <Ruler className="metadata-icon" />
+                      <p className="text-caption font-semibold text-neutral-900">
+                        {t('dimensions', currentLanguage)}
+                      </p>
+                    </div>
+                    <p className="text-body-sm text-neutral-600 ml-6 break-words">
+                      {artifact.dimensions}
+                    </p>
                   </div>
-                </div>
+                )}
                 
-                <div className="flex items-start">
-                  <MapPin className="h-5 w-5 text-blue-800 mr-3 mt-0.5" />
+                {/* Provenance */}
+                {artifact.provenance && (
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm">{t('provenance', currentLanguage)}</p>
-                    <p className="text-gray-600 text-sm">{artifact.provenance}</p>
+                    <div className="metadata mb-3">
+                      <MapPin className="metadata-icon" />
+                      <p className="text-caption font-semibold text-neutral-900">
+                        {t('provenance', currentLanguage)}
+                      </p>
+                    </div>
+                    <p className="text-body-sm text-neutral-600 ml-6 break-words">
+                      {artifact.provenance}
+                    </p>
                   </div>
-                </div>
-              </div>
+                )}
 
-
-              {/* Tags */}
-              <div className="mt-6">
-                <h4 className="font-semibold text-gray-900 text-sm mb-3">{t('themes', currentLanguage)}</h4>
-                <div className="flex flex-wrap gap-2">
-                  {artifact.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                    >
-                      <Tag className="h-3 w-3 mr-1" />
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+                {/* Tags */}
+                {artifact.tags && artifact.tags.length > 0 && (
+                  <div className="pt-6 border-t border-neutral-200">
+                    <h4 className="text-caption font-semibold text-neutral-900 mb-3">
+                      {t('themes', currentLanguage)}
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {artifact.tags.map((tag) => (
+                        <span key={tag} className="tag tag-accent">
+                          <TagIcon className="h-3 w-3 mr-1" />
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -244,9 +308,9 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
       
       {hasMedia && !isMobile && (
         <MediaViewer
-          images={artifact.media!.images}
-          videos={artifact.media!.videos}
-          audio={artifact.media!.audio}
+          images={artifact.media!.images || []}
+          videos={artifact.media!.videos || []}
+          audio={artifact.media!.audio || []}
           isOpen={isMediaViewerOpen}
           onClose={() => setIsMediaViewerOpen(false)}
         />

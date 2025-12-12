@@ -34,13 +34,13 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
   const hasAudio = audio.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-neutral-50">
       {/* Header */}
       <div className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <button
             onClick={onBack}
-            className="flex items-center text-blue-800 hover:text-blue-600 transition-colors"
+            className="flex items-center text-primary-800 hover:text-primary-600 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
             {t('back', currentLanguage)}
@@ -49,7 +49,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
       </div>
 
       {/* Title Banner */}
-      <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white">
+      <div className="bg-gradient-to-r from-primary-800 to-primary-600 text-white">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <h1 className="text-2xl md:text-3xl font-bold">{t('media', currentLanguage)}</h1>
         </div>
@@ -64,8 +64,8 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                 onClick={() => setActiveTab('images')}
                 className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   activeTab === 'images'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-primary-100 text-primary-800'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
                 }`}
               >
                 <ImageIcon className="h-4 w-4 mr-2" />
@@ -77,8 +77,8 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                 onClick={() => setActiveTab('videos')}
                 className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   activeTab === 'videos'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-primary-100 text-primary-800'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
                 }`}
               >
                 <Video className="h-4 w-4 mr-2" />
@@ -90,8 +90,8 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                 onClick={() => setActiveTab('audio')}
                 className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   activeTab === 'audio'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-primary-100 text-primary-800'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
                 }`}
               >
                 <Music className="h-4 w-4 mr-2" />
@@ -110,7 +110,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
               <img
                 src={images[selectedImage]}
                 alt={`${t('image', currentLanguage)} ${selectedImage + 1}`}
-                className="w-full h-64 md:h-96 object-contain bg-gray-50"
+                className="w-full h-64 md:h-96 object-contain bg-neutral-50"
               />
             </div>
             {images.length > 1 && (
@@ -121,7 +121,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                       key={index}
                       onClick={() => setSelectedImage(index)}
                       className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                        selectedImage === index ? 'border-blue-500' : 'border-gray-200'
+                        selectedImage === index ? 'border-primary-500' : 'border-neutral-200'
                       }`}
                     >
                       <img
@@ -141,8 +141,8 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
           <div className="space-y-6">
             {videos.map((video, index) => (
               <div key={index} className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{video.title}</h3>
-                <p className="text-gray-600 text-sm mb-4">{video.description}</p>
+                <h3 className="text-lg font-semibold text-neutral-900 mb-2">{video.title}</h3>
+                <p className="text-neutral-600 text-sm mb-4">{video.description}</p>
                 <video
                   controls
                   className="w-full rounded-lg"
@@ -160,8 +160,8 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
           <div className="space-y-6">
             {audio.map((audioItem, index) => (
               <div key={index} className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{audioItem.title}</h3>
-                <p className="text-gray-600 text-sm mb-4">{audioItem.description}</p>
+                <h3 className="text-lg font-semibold text-neutral-900 mb-2">{audioItem.title}</h3>
+                <p className="text-neutral-600 text-sm mb-4">{audioItem.description}</p>
                 <audio
                   controls
                   className="w-full"

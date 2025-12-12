@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Ruler, MapPin, Tag } from 'lucide-react';
+import { Calendar, Ruler, MapPin, Tag as TagIcon } from 'lucide-react';
 
 interface Artifact {
   id: string;
@@ -17,66 +17,79 @@ interface Artifact {
 interface ArtifactCardProps {
   artifact: Artifact;
   onClick: (id: string) => void;
+  featured?: boolean;
 }
 
-export const ArtifactCard: React.FC<ArtifactCardProps> = ({ artifact, onClick }) => {
+export const ArtifactCard: React.FC<ArtifactCardProps> = ({ artifact, onClick, featured = false }) => {
   return (
     <div
       onClick={() => onClick(artifact.id)}
-      className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-1 overflow-hidden group"
+      className={`${featured ? 'card-featured' : 'card-interactive'} overflow-hidden group`}
     >
-      {/* Image */}
-      <div className="relative h-40 overflow-hidden">
+      {/* Image Container */}
+      <div className="relative w-full h-44 md:h-52 overflow-hidden bg-neutral-100 flex items-center justify-center">
         <img
           src={artifact.image}
           alt={artifact.title}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
         />
+        {featured && (
+          <div className="absolute top-0 right-0 m-3">
+            <span className="badge badge-accent">Hervorgehoben</span>
+          </div>
+        )}
       </div>
 
       {/* Content */}
-      <div className="p-5">
-        <h4 className="text-lg font-bold text-gray-900 mb-1 line-clamp-2">
+      <div className="p-4 md:p-5 flex flex-col gap-3">
+        {/* Period Badge */}
+        <div className="metadata">
+          <Calendar className="metadata-icon" />
+          <span className="text-caption font-semibold text-accent-600">
+            {artifact.period}
+          </span>
+        </div>
+
+        {/* Title */}
+        <h3 className="text-heading-sm font-semibold text-neutral-900 line-clamp-2">
           {artifact.title}
-        </h4>
-        <p className="text-yellow-700 font-medium mb-3 text-sm">
-          {artifact.period}
-        </p>
-        <p className="text-gray-600 mb-4 line-clamp-3 text-sm leading-relaxed">
+        </h3>
+
+        {/* Description */}
+        <p className="text-body-sm text-neutral-600 line-clamp-3">
           {artifact.description}
         </p>
 
         {/* Meta Information */}
-        <div className="space-y-2 mb-4">
-          <div className="flex items-center text-xs text-gray-500">
-            <Ruler className="h-4 w-4 mr-2" />
-            {artifact.dimensions}
+        <div className="space-y-1.5 pt-3 border-t border-neutral-200">
+          <div className="metadata">
+            <Ruler className="metadata-icon" />
+            <span className="text-caption text-neutral-600">{artifact.dimensions}</span>
           </div>
-          <div className="flex items-center text-xs text-gray-500">
-            <MapPin className="h-4 w-4 mr-2" />
-            {artifact.provenance}
+          <div className="metadata">
+            <MapPin className="metadata-icon" />
+            <span className="text-caption text-neutral-600">{artifact.provenance}</span>
           </div>
         </div>
 
         {/* Materials */}
-        <div className="mb-4">
-          <p className="text-xs font-semibold text-gray-700 mb-1">Materialien:</p>
-          <p className="text-xs text-gray-600">{artifact.materials.join(', ')}</p>
+        <div className="pt-3 border-t border-neutral-200">
+          <p className="text-caption font-semibold text-neutral-700 mb-1">Materialien:</p>
+          <p className="text-caption text-neutral-600 line-clamp-2">
+            {artifact.materials.join(', ')}
+          </p>
         </div>
 
         {/* Tags */}
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-2">
           {artifact.tags.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
-            >
-              <Tag className="h-3 w-3 mr-1" />
+            <span key={tag} className="tag tag-neutral">
+              <TagIcon className="h-3 w-3 mr-1" />
               {tag}
             </span>
           ))}
           {artifact.tags.length > 2 && (
-            <span className="text-xs text-gray-500">
+            <span className="text-caption text-neutral-500 px-2 py-1">
               +{artifact.tags.length - 2}
             </span>
           )}

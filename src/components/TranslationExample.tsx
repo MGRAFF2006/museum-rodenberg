@@ -18,7 +18,7 @@ export const TranslationExampleComponent: React.FC = () => {
   const { t, loading } = useAllTranslations(currentLanguage);
 
   if (loading) {
-    return <div className="text-gray-500">Loading translations...</div>;
+    return <div className="text-neutral-500">Loading translations...</div>;
   }
 
   return (

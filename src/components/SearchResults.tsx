@@ -53,49 +53,57 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   const { currentLanguage } = useLanguage();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-neutral-50 min-h-screen">
       {/* Header */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
+      <div className="bg-white border-b border-neutral-200">
+        <div className="container-max max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-6 flex-col md:flex-row gap-4">
             <button
               onClick={onBack}
-              className="flex items-center text-blue-800 hover:text-blue-600 transition-colors"
+              className="flex items-center text-primary-600 hover:text-primary-700 transition-colors focus-ring-sm order-2 md:order-1"
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
-              {t('backToExhibitions', currentLanguage)}
+              <span className="text-body font-medium">
+                {t('backToExhibitions', currentLanguage)}
+              </span>
             </button>
             
-            <div className="flex items-center text-gray-600">
+            <div className="flex items-center text-primary-700 order-1 md:order-2">
               <Search className="h-5 w-5 mr-2" />
-              <span className="text-sm">
-                {totalResults} {totalResults !== 1 ? t('searchResultsPlural', currentLanguage) : t('searchResults', currentLanguage)} {t('searchFor', currentLanguage)} "{query}"
+              <span className="text-body font-semibold">
+                {totalResults} {totalResults !== 1 ? t('searchResultsPlural', currentLanguage) : t('searchResults', currentLanguage)} "{query}"
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="container-max max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {totalResults === 0 ? (
-          <div className="text-center py-12">
-            <div className="bg-white rounded-xl shadow-lg p-8 max-w-md mx-auto">
-              <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">{t('noResults', currentLanguage)}</h2>
-              <p className="text-gray-600 text-sm md:text-base">
+          <div className="flex items-center justify-center py-16 md:py-24">
+            <div className="card-lg p-8 md:p-12 max-w-md w-full text-center">
+              <div className="mb-6 flex justify-center">
+                <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center">
+                  <Search className="h-8 w-8 text-neutral-400" />
+                </div>
+              </div>
+              <h2 className="text-heading font-serif font-bold text-neutral-900 mb-3">
+                {t('noResults', currentLanguage)}
+              </h2>
+              <p className="text-body text-neutral-600">
                 {t('noResultsText', currentLanguage)}
               </p>
             </div>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="section-lg space-y-12">
             {/* Exhibitions Results */}
             {exhibitions.length > 0 && (
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  {t('exhibitions', currentLanguage)} ({exhibitions.length})
+              <section>
+                <h2 className="text-heading-lg font-serif font-bold text-neutral-900 mb-8">
+                  {t('exhibitions', currentLanguage)} <span className="text-primary-600">({exhibitions.length})</span>
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid-responsive">
                   {exhibitions.map((exhibition) => (
                     <ExhibitionCard
                       key={exhibition.id}
@@ -104,16 +112,16 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                     />
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
             {/* Artifacts Results */}
             {artifacts.length > 0 && (
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  {t('artifacts', currentLanguage)} ({artifacts.length})
+              <section className={exhibitions.length > 0 ? 'pt-8 border-t border-neutral-200' : ''}>
+                <h2 className="text-heading-lg font-serif font-bold text-neutral-900 mb-8">
+                  {t('artifacts', currentLanguage)} <span className="text-primary-600">({artifacts.length})</span>
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid-responsive">
                   {artifacts.map((artifact) => (
                     <ArtifactCard
                       key={artifact.id}
@@ -122,7 +130,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                     />
                   ))}
                 </div>
-              </div>
+              </section>
             )}
           </div>
         )}

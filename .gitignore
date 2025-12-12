@@ -26,3 +26,8 @@ public/translations/.hash
 *.sln
 *.sw?
 .env
+
+# Temporary files
+*.tmp
+*.temp
+1.json

@@ -60,25 +60,25 @@ export const QRScanner: React.FC<QRScannerProps> = ({ isOpen, onClose, onScan })
         <div className="p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <QrCode className="h-6 w-6 text-blue-800 mr-3" />
-              <h2 className="text-lg md:text-xl font-bold text-gray-900">{t('qrScanner', currentLanguage)}</h2>
+              <QrCode className="h-6 w-6 text-primary-800 mr-3" />
+              <h2 className="text-lg md:text-xl font-bold text-neutral-900">{t('qrScanner', currentLanguage)}</h2>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              className="p-2 rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100"
             >
               <X className="h-6 w-6" />
             </button>
           </div>
 
           <div className="mb-4">
-            <p className="text-gray-600 text-sm mb-4 leading-relaxed">
+            <p className="text-neutral-600 text-sm mb-4 leading-relaxed">
               {t('qrScannerText', currentLanguage)}
             </p>
             
-            <div className="flex items-center justify-center p-6 bg-gray-50 rounded-lg mb-4">
-              <Camera className="h-8 w-8 text-gray-400 mr-3" />
-              <span className="text-gray-600 text-base">{t('cameraLoading', currentLanguage)}</span>
+            <div className="flex items-center justify-center p-6 bg-neutral-50 rounded-lg mb-4">
+              <Camera className="h-8 w-8 text-neutral-400 mr-3" />
+              <span className="text-neutral-600 text-base">{t('cameraLoading', currentLanguage)}</span>
             </div>
           </div>
 
@@ -87,7 +87,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ isOpen, onClose, onScan })
           <div className="mt-4 text-center">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors text-sm md:text-base"
+              className="px-4 py-2 bg-neutral-200 text-neutral-800 rounded-lg hover:bg-neutral-300 transition-colors text-sm md:text-base"
             >
               {t('cancel', currentLanguage)}
             </button>

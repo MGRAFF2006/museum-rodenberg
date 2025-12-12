@@ -1,6 +1,6 @@
 import React from 'react';
 import { ExhibitionCard } from './ExhibitionCard';
-import { BookOpen, Star } from 'lucide-react';
+import { BookOpen, Star, Sparkles, Users } from 'lucide-react';
 import { Language } from '../hooks/useLanguage';
 import { t } from '../utils/translations';
 
@@ -34,31 +34,36 @@ export const HomePage: React.FC<HomePageProps> = ({
   const otherExhibitions = exhibitions.filter(ex => ex.id !== featuredId);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-neutral-50 min-h-screen">
       {/* Hero Section */}
-      <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 text-center">
-          <BookOpen className="h-16 w-16 mx-auto mb-6 text-yellow-400" />
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
+      <div className="hero-section py-12 md:py-16 lg:py-20">
+        <div className="hero-overlay absolute inset-0" />
+        <div className="container-max max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+          <div className="mb-4 flex justify-center">
+            <BookOpen className="h-12 w-12 md:h-16 md:w-16 text-accent-300" />
+          </div>
+          <h1 className="text-display-lg md:text-display text-white mb-3 md:mb-4">
             {t('museumTitle', currentLanguage)}
           </h1>
-          <p className="text-lg md:text-xl lg:text-2xl text-blue-100 mb-6 md:mb-8 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-body-lg md:text-heading-sm text-primary-100 mb-6 md:mb-8 max-w-3xl mx-auto leading-relaxed">
             {t('museumSubtitle', currentLanguage)}
           </p>
-          <div className="flex items-center justify-center text-yellow-400 text-sm md:text-base">
+          <div className="flex items-center justify-center text-accent-300 text-body font-semibold">
             <Star className="h-5 w-5 mr-2" />
-            <span className="text-lg">{t('collectionsInfo', currentLanguage)}</span>
+            <span>{t('collectionsInfo', currentLanguage)}</span>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Featured Exhibition */}
+      <div className="container-max max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Featured Exhibition Section */}
         {featuredExhibition && (
-          <div className="mb-12">
-            <div className="flex items-center mb-6">
-              <Star className="h-6 w-6 text-yellow-500 mr-3" />
-              <h2 className="text-3xl font-bold text-gray-900">{t('mainExhibition', currentLanguage)}</h2>
+          <section className="py-8 md:py-10 border-b border-neutral-200">
+            <div className="flex items-center gap-3 mb-6">
+              <Sparkles className="h-6 w-6 text-accent-600" />
+              <h2 className="text-heading-xl font-serif font-bold text-neutral-900">
+                {t('mainExhibition', currentLanguage)}
+              </h2>
             </div>
             <div className="max-w-4xl">
               <ExhibitionCard
@@ -67,14 +72,16 @@ export const HomePage: React.FC<HomePageProps> = ({
                 featured={true}
               />
             </div>
-          </div>
+          </section>
         )}
 
-        {/* All Exhibitions */}
-        <div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-8">{t('allExhibitions', currentLanguage)}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[featuredExhibition, ...otherExhibitions].filter(Boolean).map((exhibition) => (
+        {/* All Exhibitions Section */}
+        <section className="py-8 md:py-10 border-b border-neutral-200">
+          <h2 className="text-heading-xl font-serif font-bold text-neutral-900 mb-6">
+            {t('allExhibitions', currentLanguage)}
+          </h2>
+          <div className="grid-responsive">
+            {exhibitions.map((exhibition) => (
               <ExhibitionCard
                 key={exhibition.id}
                 exhibition={exhibition}
@@ -83,25 +90,62 @@ export const HomePage: React.FC<HomePageProps> = ({
               />
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Quick Stats */}
-        <div className="mt-16 bg-white rounded-xl shadow-lg p-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-            <div>
-              <div className="text-3xl font-bold text-blue-800 mb-2">{exhibitions.length}</div>
-              <div className="text-gray-600">{t('currentExhibitions', currentLanguage)}</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-blue-800 mb-2">25+</div>
-              <div className="text-gray-600">{t('specialArtifacts', currentLanguage)}</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-blue-800 mb-2">800+</div>
-              <div className="text-gray-600">{t('yearsHistory', currentLanguage)}</div>
+        {/* Quick Stats Section */}
+        <section className="py-8 md:py-10">
+          <div className="card-lg p-6 md:p-8">
+            <h3 className="text-heading-lg font-serif font-bold text-neutral-900 mb-6 text-center">
+              Zahlen & Fakten
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+              {/* Stat 1 */}
+              <div className="text-center">
+                <div className="mb-4 flex justify-center">
+                  <div className="h-14 w-14 rounded-lg bg-primary-100 flex items-center justify-center">
+                    <Star className="h-7 w-7 text-primary-600" />
+                  </div>
+                </div>
+                <div className="text-heading-xl font-bold text-primary-600 mb-2">
+                  {exhibitions.length}
+                </div>
+                <p className="text-body text-neutral-600">
+                  {t('currentExhibitions', currentLanguage)}
+                </p>
+              </div>
+
+              {/* Stat 2 */}
+              <div className="text-center">
+                <div className="mb-4 flex justify-center">
+                  <div className="h-14 w-14 rounded-lg bg-accent-100 flex items-center justify-center">
+                    <Sparkles className="h-7 w-7 text-accent-600" />
+                  </div>
+                </div>
+                <div className="text-heading-xl font-bold text-accent-600 mb-2">
+                  25+
+                </div>
+                <p className="text-body text-neutral-600">
+                  {t('specialArtifacts', currentLanguage)}
+                </p>
+              </div>
+
+              {/* Stat 3 */}
+              <div className="text-center">
+                <div className="mb-4 flex justify-center">
+                  <div className="h-14 w-14 rounded-lg bg-primary-100 flex items-center justify-center">
+                    <Users className="h-7 w-7 text-primary-600" />
+                  </div>
+                </div>
+                <div className="text-heading-xl font-bold text-primary-600 mb-2">
+                  800+
+                </div>
+                <p className="text-body text-neutral-600">
+                  {t('yearsHistory', currentLanguage)}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

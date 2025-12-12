@@ -21,14 +21,14 @@ export const DetailedContentPage: React.FC<DetailedContentPageProps> = ({
   currentLanguage,
 }) => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-neutral-50">
       {/* Header */}
       <div className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <button
               onClick={onBack}
-              className="flex items-center text-blue-800 hover:text-blue-600 transition-colors"
+              className="flex items-center text-primary-800 hover:text-primary-600 transition-colors"
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
               {t('back', currentLanguage)}
@@ -42,7 +42,7 @@ export const DetailedContentPage: React.FC<DetailedContentPageProps> = ({
       </div>
 
       {/* Title Banner */}
-      <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white">
+      <div className="bg-gradient-to-r from-primary-800 to-primary-600 text-white">
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="flex items-center">
             <BookOpen className="h-8 w-8 mr-4" />
