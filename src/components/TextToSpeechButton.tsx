@@ -23,15 +23,18 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
 
-  // Show a brief error tooltip when an error occurs
+  // Hide tooltip when the error clears
   useEffect(() => {
-    if (error) {
-      setShowError(true);
+    if (!error) setShowError(false);
+  }, [error]);
+
+  // Auto-dismiss tooltip after 4 seconds
+  useEffect(() => {
+    if (showError) {
       const timer = setTimeout(() => setShowError(false), 4000);
       return () => clearTimeout(timer);
     }
-    setShowError(false);
-  }, [error]);
+  }, [showError]);
 
   // Calculate tooltip position relative to viewport when showing
   useEffect(() => {
@@ -49,6 +52,11 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
   if (!isSupported || !text) return null;
 
   const handleClick = () => {
+    if (hasError) {
+      // Show the error tooltip on click instead of auto-showing
+      setShowError(true);
+      return;
+    }
     if (isSpeaking) {
       stop();
     } else {
