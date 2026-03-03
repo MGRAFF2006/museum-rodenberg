@@ -4,113 +4,26 @@
  * Used by both the Express production server (server/index.js) and the Vite
  * dev-server plugin (scripts/dev-server-plugin.ts) so that API behaviour is
  * defined in one place.
+ *
+ * Content CRUD (exhibitions, artifacts, assets metadata) is now handled by
+ * Convex mutations on the client side. This file only handles:
+ *   - File upload/delete (disk operations)
+ *   - Translation proxy (LibreTranslate)
+ *   - Asset validation (checking files on disk)
+ *   - Upload listing (physical files)
  */
 
 import fs from 'fs';
 import path from 'path';
 import busboy from 'busboy';
 
-// ── Content CRUD ────────────────────────────────────────────────
-
-export function saveContent(rootDir, body) {
-  const { type, data } = body;
-  if (!type || !data || !data.id) {
-    return { status: 400, body: { error: 'Invalid data: type and data.id are required' } };
-  }
-
-  const filePath = path.resolve(rootDir, `src/content/${type === 'exhibition' ? 'exhibitions' : 'artifacts'}.json`);
-  if (!fs.existsSync(filePath)) {
-    return { status: 404, body: { error: `Content file not found: ${filePath}` } };
-  }
-
-  const currentData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-
-  if (type === 'exhibition') {
-    if (!currentData.exhibitions) currentData.exhibitions = {};
-    const existing = currentData.exhibitions[data.id] || {};
-    currentData.exhibitions[data.id] = { ...existing, ...data };
-  } else {
-    if (!currentData.artifacts) currentData.artifacts = {};
-    const existing = currentData.artifacts[data.id] || {};
-    currentData.artifacts[data.id] = { ...existing, ...data };
-  }
-
-  fs.writeFileSync(filePath, JSON.stringify(currentData, null, 2));
-  return { status: 200, body: { success: true } };
-}
-
-export function deleteContent(rootDir, body) {
-  const { type, id } = body;
-  if (!type || !id) {
-    return { status: 400, body: { error: 'Type and ID are required' } };
-  }
-
-  const filePath = path.resolve(rootDir, `src/content/${type === 'exhibition' ? 'exhibitions' : 'artifacts'}.json`);
-  if (!fs.existsSync(filePath)) {
-    return { status: 404, body: { error: `Content file not found: ${filePath}` } };
-  }
-
-  const currentData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  const targetId = id.toLowerCase();
-
-  if (type === 'exhibition') {
-    if (currentData.exhibitions) {
-      delete currentData.exhibitions[targetId];
-    }
-    if (currentData.featured === targetId) {
-      const remaining = Object.keys(currentData.exhibitions || {});
-      currentData.featured = remaining.length > 0 ? remaining[0] : '';
-    }
-  } else {
-    if (currentData.artifacts) {
-      delete currentData.artifacts[targetId];
-    }
-    // Also remove from any exhibitions that reference this artifact
-    const exPath = path.resolve(rootDir, 'src/content/exhibitions.json');
-    if (fs.existsSync(exPath)) {
-      const exData = JSON.parse(fs.readFileSync(exPath, 'utf-8'));
-      let changed = false;
-      Object.values(exData.exhibitions || {}).forEach((ex) => {
-        if (ex.artifacts && ex.artifacts.includes(targetId)) {
-          ex.artifacts = ex.artifacts.filter((a) => a !== targetId);
-          changed = true;
-        }
-      });
-      if (changed) {
-        fs.writeFileSync(exPath, JSON.stringify(exData, null, 2));
-      }
-    }
-  }
-
-  fs.writeFileSync(filePath, JSON.stringify(currentData, null, 2));
-  return { status: 200, body: { success: true } };
-}
-
-// ── Asset management ────────────────────────────────────────────
-
-export function saveAsset(rootDir, body) {
-  const asset = body;
-  if (!asset || !asset.id) {
-    return { status: 400, body: { error: 'Asset ID is required' } };
-  }
-
-  const filePath = path.resolve(rootDir, 'src/content/assets.json');
-  let currentData = { assets: {} };
-  if (fs.existsSync(filePath)) {
-    currentData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  }
-
-  if (!currentData.assets) currentData.assets = {};
-  currentData.assets[asset.id] = { ...currentData.assets[asset.id], ...asset };
-
-  fs.writeFileSync(filePath, JSON.stringify(currentData, null, 2));
-  return { status: 200, body: { success: true } };
-}
+// ── File upload ─────────────────────────────────────────────────
 
 /**
  * Handle file upload via busboy. Returns a Promise that resolves with
- * { urls, url, assets } when all files have been written to disk and
- * assets.json has been updated.
+ * { urls, url, assets } when all files have been written to disk.
+ * Asset metadata is NOT written to any JSON file — the client saves
+ * it to Convex after the upload completes.
  */
 export function uploadMedia(rootDir, headers, reqStream) {
   return new Promise((resolve, reject) => {
@@ -142,18 +55,6 @@ export function uploadMedia(rootDir, headers, reqStream) {
     });
 
     bb.on('finish', () => {
-      const filePath = path.resolve(rootDir, 'src/content/assets.json');
-      let currentData = { assets: {} };
-      if (fs.existsSync(filePath)) {
-        currentData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      }
-      if (!currentData.assets) currentData.assets = {};
-
-      assets.forEach((asset) => {
-        currentData.assets[asset.id] = asset;
-      });
-
-      fs.writeFileSync(filePath, JSON.stringify(currentData, null, 2));
       resolve({ urls, url: urls[0], assets });
     });
 
@@ -232,26 +133,25 @@ export function validateAssets(rootDir, body) {
 
 // ── List uploads ────────────────────────────────────────────────
 
+/**
+ * Lists physical files in public/uploads/. Asset metadata is now
+ * served from Convex on the client side.
+ */
 export function listUploads(rootDir) {
-  const filePath = path.resolve(rootDir, 'src/content/assets.json');
-  if (fs.existsSync(filePath)) {
-    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    return {
-      status: 200,
-      body: { files: Object.values(data.assets || {}).map((a) => a.url), assets: data.assets },
-    };
-  }
-
   const uploadDir = path.resolve(rootDir, 'public/uploads');
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
   const files = fs.readdirSync(uploadDir);
-  return { status: 200, body: { files: files.map((f) => `/uploads/${f}`), assets: {} } };
+  return { status: 200, body: { files: files.map((f) => `/uploads/${f}`) } };
 }
 
 // ── Delete image/media ──────────────────────────────────────────
 
+/**
+ * Deletes a file from public/uploads/. Asset metadata removal from
+ * Convex is handled by the client.
+ */
 export function deleteImage(rootDir, imagePath) {
   if (!imagePath || typeof imagePath !== 'string' || !imagePath.startsWith('/uploads/')) {
     return { status: 400, body: { error: 'Invalid path' } };
@@ -263,19 +163,5 @@ export function deleteImage(rootDir, imagePath) {
   }
 
   fs.unlinkSync(fullPath);
-
-  // Also remove from assets.json
-  const filePath = path.resolve(rootDir, 'src/content/assets.json');
-  if (fs.existsSync(filePath)) {
-    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (data.assets) {
-      const assetId = Object.keys(data.assets).find((id) => data.assets[id].url === imagePath);
-      if (assetId) {
-        delete data.assets[assetId];
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-      }
-    }
-  }
-
   return { status: 200, body: { success: true } };
 }

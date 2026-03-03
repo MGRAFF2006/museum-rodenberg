@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Plus, Edit2, LogOut, Image as ImageIcon, FileText, Languages, Loader2 } from 'lucide-react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useContentData } from '../../hooks/useContentData';
 import { useLanguage } from '../../hooks/useLanguage';
 import { useContentTranslation } from '../../hooks/useContentTranslation';
 import { Language, EntityRecord } from '../../types';
 import { TranslatableField } from '../../hooks/useEditorForm';
 import { MediaLibrary } from './MediaLibrary';
-import { authFetch } from '../../utils/auth';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -23,10 +24,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAddExhibition,
   onAddArtifact,
 }) => {
-  const { exhibitions, artifacts, refreshData } = useContentData();
+  const { exhibitions, artifacts, refreshData, getRawExhibitionById, getRawArtifactById } = useContentData();
   const { t } = useLanguage();
   const { isTranslating, translationProgress, translateFields } = useContentTranslation();
   const [selectedExhibitionId, setSelectedExhibitionId] = useState<string | null>(null);
+
+  // Convex mutations for saving translated content
+  const saveExhibition = useMutation(api.exhibitions.save);
+  const saveArtifact = useMutation(api.artifacts.save);
 
   const filteredArtifacts = useMemo(() => {
     if (!selectedExhibitionId) return artifacts;
@@ -37,16 +42,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!confirm('This will regenerate translations for ALL items using German as the source. This may take several minutes and overwrite existing translations. Continue?')) return;
 
     try {
-      // Fetch RAW data to ensure we have the source German content and all fields
-      const [exRes, artRes] = await Promise.all([
-        fetch('/src/content/exhibitions.json?v=' + Date.now()),
-        fetch('/src/content/artifacts.json?v=' + Date.now())
-      ]);
-      const exData = await exRes.json();
-      const artData = await artRes.json();
-      
-      const rawExhibitions = Object.values(exData.exhibitions || {}) as EntityRecord[];
-      const rawArtifacts = Object.values(artData.artifacts || {}) as EntityRecord[];
+      // Get raw data from ContentContext (reconstructed from Convex)
+      const rawExhibitions: EntityRecord[] = exhibitions.map(ex => {
+        const raw = getRawExhibitionById(ex.id);
+        return raw ? { ...raw, id: ex.id } as EntityRecord : { id: ex.id } as EntityRecord;
+      }).filter(ex => ex.translations?.de);
+
+      const rawArtifacts: EntityRecord[] = artifacts.map(art => {
+        const raw = getRawArtifactById(art.id);
+        return raw ? { ...raw, id: art.id } as EntityRecord : { id: art.id } as EntityRecord;
+      }).filter(art => art.translations?.de);
 
       const allFields: TranslatableField[] = [];
       const languages: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
@@ -155,7 +160,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         allCurrentTranslations
       );
 
-      // Save all updated items back to the server sequentially
+      // Save all updated items back via Convex mutations
       for (const item of Object.values(results)) {
         const original = item.type === 'exhibition' 
           ? rawExhibitions.find(e => e.id === item.id) 
@@ -163,27 +168,114 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         
         if (!original) continue;
 
-        const dataToSave = {
-          ...original,
-          translations: {
-            ...original.translations,
-            ...item.translations
-          },
-          detailedContent: {
-            ...original.detailedContent,
-            ...item.detailedContent
-          },
-          _hashes: {
-            ...(original._hashes || {}),
-            ...item._hashes
-          }
+        // Merge new translations with existing
+        const mergedTranslations: Record<string, Record<string, string>> = {
+          ...(original.translations || {}),
+        };
+        for (const [lang, fields] of Object.entries(item.translations)) {
+          mergedTranslations[lang] = { ...(mergedTranslations[lang] || {}), ...fields };
+        }
+        const mergedDetailedContent: Record<string, string> = {
+          ...(original.detailedContent || {}),
+          ...item.detailedContent,
         };
 
-        await authFetch('/api/save-content', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: item.type, data: dataToSave })
-        });
+        const LANGS: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
+
+        if (item.type === 'exhibition') {
+          // Build media items from original
+          const mediaItems: Array<{
+            mediaType: 'image' | 'video' | 'audio';
+            url: string;
+            title?: string;
+            description?: string;
+            sortOrder: number;
+          }> = [];
+          let sortIdx = 0;
+          const origMedia = original.media as { images?: string[]; videos?: Array<{url: string; title: string; description: string}>; audio?: Array<{url: string; title: string; description: string}> } | undefined;
+          for (const img of origMedia?.images || []) {
+            mediaItems.push({ mediaType: 'image', url: img, sortOrder: sortIdx++ });
+          }
+          for (const vid of origMedia?.videos || []) {
+            mediaItems.push({ mediaType: 'video', url: vid.url, title: vid.title || undefined, description: vid.description || undefined, sortOrder: sortIdx++ });
+          }
+          for (const aud of origMedia?.audio || []) {
+            mediaItems.push({ mediaType: 'audio', url: aud.url, title: aud.title || undefined, description: aud.description || undefined, sortOrder: sortIdx++ });
+          }
+
+          const translations = LANGS
+            .filter(lang => mergedTranslations[lang]?.title)
+            .map(lang => ({
+              language: lang,
+              title: mergedTranslations[lang].title || '',
+              subtitle: mergedTranslations[lang].subtitle || undefined,
+              description: mergedTranslations[lang].description || '',
+              detailedContent: mergedDetailedContent[lang] || undefined,
+            }));
+
+          await saveExhibition({
+            slug: item.id,
+            qrCode: (original.qrCode as string) || item.id,
+            image: (original.image as string) || '',
+            dateRange: (original.dateRange as string) || undefined,
+            location: (original.location as string) || undefined,
+            curator: (original.curator as string) || undefined,
+            organizer: (original.organizer as string) || undefined,
+            sponsor: (original.sponsor as string) || undefined,
+            tags: (original.tags as string[]) || undefined,
+            enabledAttributes: original.enabledAttributes || undefined,
+            isFeatured: (original.isFeatured as boolean) || false,
+            artifactSlugs: (original.artifacts as string[]) || [],
+            translations,
+            mediaItems,
+          });
+        } else {
+          // Artifact
+          const mediaItems: Array<{
+            mediaType: 'image' | 'video' | 'audio';
+            url: string;
+            title?: string;
+            description?: string;
+            sortOrder: number;
+          }> = [];
+          let sortIdx = 0;
+          const origMedia = original.media as { images?: string[]; videos?: Array<{url: string; title: string; description: string}>; audio?: Array<{url: string; title: string; description: string}> } | undefined;
+          for (const img of origMedia?.images || []) {
+            mediaItems.push({ mediaType: 'image', url: img, sortOrder: sortIdx++ });
+          }
+          for (const vid of origMedia?.videos || []) {
+            mediaItems.push({ mediaType: 'video', url: vid.url, title: vid.title || undefined, description: vid.description || undefined, sortOrder: sortIdx++ });
+          }
+          for (const aud of origMedia?.audio || []) {
+            mediaItems.push({ mediaType: 'audio', url: aud.url, title: aud.title || undefined, description: aud.description || undefined, sortOrder: sortIdx++ });
+          }
+
+          const translations = LANGS
+            .filter(lang => mergedTranslations[lang]?.title)
+            .map(lang => ({
+              language: lang,
+              title: mergedTranslations[lang].title || '',
+              period: mergedTranslations[lang].period || undefined,
+              artist: mergedTranslations[lang].artist || undefined,
+              description: mergedTranslations[lang].description || '',
+              significance: mergedTranslations[lang].significance || undefined,
+              detailedContent: mergedDetailedContent[lang] || undefined,
+            }));
+
+          await saveArtifact({
+            slug: item.id,
+            qrCode: (original.qrCode as string) || item.id,
+            exhibitionSlug: (original.exhibition as string) || undefined,
+            image: (original.image as string) || '',
+            materials: (original.materials as string[]) || undefined,
+            dimensions: (original.dimensions as string) || undefined,
+            provenance: (original.provenance as string) || undefined,
+            tags: (original.tags as string[]) || undefined,
+            enabledAttributes: original.enabledAttributes || undefined,
+            translations,
+            mediaItems,
+          });
+        }
       }
 
       alert('Bulk translation completed and all items updated!');
@@ -192,7 +284,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       console.error('Bulk translation failed:', error);
       alert('Bulk translation failed. Some items might not have been updated.');
     }
-  }, [translateFields, refreshData]);
+  }, [exhibitions, artifacts, getRawExhibitionById, getRawArtifactById, translateFields, saveExhibition, saveArtifact, refreshData]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

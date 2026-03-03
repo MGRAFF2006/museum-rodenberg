@@ -6,7 +6,7 @@ import { Asset } from '../../types';
 import { authFetch } from '../../utils/auth';
 
 export const MediaLibrary: React.FC = () => {
-  const { assets, isLoading, fetchAssets, saveAsset, deleteAsset } = useAssets();
+  const { assets, isLoading, saveAsset, deleteAsset } = useAssets();
   const { t } = useLanguage();
   const [copied, setCopied] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -90,11 +90,23 @@ export const MediaLibrary: React.FC = () => {
                   formData.append('file', input.files[i]);
                 }
                 try {
-                  await authFetch('/api/upload-media', {
+                  const response = await authFetch('/api/upload-media', {
                     method: 'POST',
                     body: formData,
                   });
-                  fetchAssets();
+                  const result = await response.json();
+                  // Save each uploaded asset's metadata to Convex
+                  if (result.assets && Array.isArray(result.assets)) {
+                    for (const asset of result.assets) {
+                      await saveAsset({
+                        id: asset.id,
+                        name: asset.name,
+                        alt: asset.alt,
+                        url: asset.url,
+                        type: asset.type,
+                      });
+                    }
+                  }
                 } catch (error) {
                   console.error('Upload failed:', error);
                 }

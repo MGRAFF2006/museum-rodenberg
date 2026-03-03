@@ -7,6 +7,11 @@
 #
 # The museum app is available at http://localhost:3000
 # LibreTranslate is available at http://localhost:5000
+# Convex Dashboard is available at http://localhost:6791
+#
+# After first start, generate the Convex admin key:
+#   docker compose exec convex-backend ./generate_admin_key.sh
+# Then add it to .env as CONVEX_SELF_HOSTED_ADMIN_KEY=<key>
 
 services:
   museum:
@@ -16,16 +21,52 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # Persist user-uploaded media and CMS-edited content across rebuilds
+      # Persist user-uploaded media across rebuilds
       - ./public/uploads:/app/public/uploads
-      - ./src/content:/app/src/content
     environment:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-museum2025}
       - LIBRETRANSLATE_API_URL=http://libretranslate:5000/translate
+      - CONVEX_URL=http://convex-backend:3210
       - PORT=3000
     depends_on:
       libretranslate:
         condition: service_started
+      convex-backend:
+        condition: service_healthy
+
+  convex-backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    container_name: museum-convex-backend
+    restart: unless-stopped
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - "3210:3210"
+      - "3211:3211"
+    volumes:
+      - convex-data:/convex/data
+    environment:
+      - CONVEX_CLOUD_ORIGIN=http://127.0.0.1:3210
+      - CONVEX_SITE_ORIGIN=http://127.0.0.1:3211
+      - RUST_LOG=info
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 5s
+      start_period: 10s
+
+  convex-dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    container_name: museum-convex-dashboard
+    restart: unless-stopped
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - "6791:6791"
+    environment:
+      - NEXT_PUBLIC_DEPLOYMENT_URL=http://127.0.0.1:3210
+    depends_on:
+      convex-backend:
+        condition: service_healthy
 
   libretranslate:
     image: libretranslate/libretranslate:latest
@@ -45,3 +86,4 @@ services:
 
 volumes:
   lt-data:
+  convex-data:

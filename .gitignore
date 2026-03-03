@@ -31,3 +31,10 @@ public/translations/.hash
 *.tmp
 *.temp
 1.json
+test-hash.js
+
+# User-uploaded media files
+public/uploads/
+
+# Convex generated files are committed as stubs for build compatibility.
+# Running `npx convex dev` will overwrite them with properly typed versions.

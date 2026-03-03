@@ -1,5 +1,8 @@
 /**
  * Type declarations for server/api-handlers.js
+ *
+ * Content CRUD (saveContent, deleteContent, saveAsset) has been removed —
+ * those operations are now handled by Convex mutations on the client side.
  */
 
 import type { IncomingHttpHeaders, IncomingMessage } from 'http';
@@ -8,21 +11,6 @@ interface ApiResult<T = unknown> {
   status: number;
   body: T;
 }
-
-export function saveContent(
-  rootDir: string,
-  body: Record<string, unknown>,
-): ApiResult;
-
-export function deleteContent(
-  rootDir: string,
-  body: Record<string, unknown>,
-): ApiResult;
-
-export function saveAsset(
-  rootDir: string,
-  body: Record<string, unknown>,
-): ApiResult;
 
 export function uploadMedia(
   rootDir: string,

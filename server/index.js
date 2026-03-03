@@ -25,9 +25,6 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 import {
-  saveContent,
-  deleteContent,
-  saveAsset,
   uploadMedia,
   translate,
   validateAssets,
@@ -108,37 +105,7 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// ── Protected Content CRUD ──────────────────────────────────────
-
-app.post('/api/save-content', requireAuth, (req, res) => {
-  try {
-    const result = saveContent(ROOT_DIR, req.body);
-    res.status(result.status).json(result.body);
-  } catch (error) {
-    console.error('Error saving content:', error);
-    res.status(500).json({ error: 'Failed to save content' });
-  }
-});
-
-app.post('/api/delete-content', requireAuth, (req, res) => {
-  try {
-    const result = deleteContent(ROOT_DIR, req.body);
-    res.status(result.status).json(result.body);
-  } catch (error) {
-    console.error('Error deleting content:', error);
-    res.status(500).json({ error: 'Failed to delete content' });
-  }
-});
-
-app.post('/api/save-asset', requireAuth, (req, res) => {
-  try {
-    const result = saveAsset(ROOT_DIR, req.body);
-    res.status(result.status).json(result.body);
-  } catch (error) {
-    console.error('Error saving asset:', error);
-    res.status(500).json({ error: 'Failed to save asset' });
-  }
-});
+// ── Protected API routes (file operations, translation) ─────────
 
 app.post('/api/upload-media', requireAuth, async (req, res) => {
   try {

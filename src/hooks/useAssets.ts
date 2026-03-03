@@ -1,41 +1,46 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { Asset } from '../types';
 import { authFetch } from '../utils/auth';
 
 export const useAssets = () => {
-  const [assets, setAssets] = useState<Record<string, Asset>>({});
-  const [isLoading, setIsLoading] = useState(false);
+  // Reactive asset list from Convex
+  const convexAssets = useQuery(api.assets.list);
+  const saveAssetMutation = useMutation(api.assets.save);
+  const removeAssetMutation = useMutation(api.assets.remove);
 
-  const fetchAssets = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await authFetch('/api/list-uploads');
-      const data = await response.json();
-      if (data.assets) {
-        setAssets(data.assets);
-      }
-    } catch (error) {
-      console.error('Failed to fetch assets:', error);
-    } finally {
-      setIsLoading(false);
+  const isLoading = convexAssets === undefined;
+
+  // Build the assets array and map from Convex data
+  const assetsMap: Record<string, Asset> = {};
+  if (convexAssets) {
+    for (const a of convexAssets) {
+      assetsMap[a.assetId] = {
+        id: a.assetId,
+        name: a.name,
+        alt: a.alt,
+        url: a.url,
+        type: a.type,
+      };
     }
-  }, []);
+  }
 
-  useEffect(() => {
-    fetchAssets();
-  }, [fetchAssets]);
+  // fetchAssets is now a no-op (Convex auto-updates), kept for API compat
+  const fetchAssets = useCallback(async () => {
+    // Convex subscriptions auto-update
+  }, []);
 
   const saveAsset = async (asset: Asset) => {
     try {
-      const response = await authFetch('/api/save-asset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(asset),
+      await saveAssetMutation({
+        assetId: asset.id,
+        name: asset.name,
+        alt: asset.alt,
+        url: asset.url,
+        type: asset.type,
       });
-      if (response.ok) {
-        setAssets(prev => ({ ...prev, [asset.id]: asset }));
-        return true;
-      }
+      return true;
     } catch (error) {
       console.error('Failed to save asset:', error);
     }
@@ -44,15 +49,13 @@ export const useAssets = () => {
 
   const deleteAsset = async (asset: Asset) => {
     try {
+      // Delete the file from disk via Express
       const response = await authFetch(`/api/delete-image?path=${encodeURIComponent(asset.url)}`, {
         method: 'DELETE',
       });
       if (response.ok) {
-        setAssets(prev => {
-          const next = { ...prev };
-          delete next[asset.id];
-          return next;
-        });
+        // Remove metadata from Convex
+        await removeAssetMutation({ assetId: asset.id });
         return true;
       }
     } catch (error) {
@@ -62,14 +65,14 @@ export const useAssets = () => {
   };
 
   const resolveAsset = (idOrUrl: string): Asset | undefined => {
-    if (assets[idOrUrl]) return assets[idOrUrl];
+    if (assetsMap[idOrUrl]) return assetsMap[idOrUrl];
     // Fallback if it's already a URL
-    return Object.values(assets).find(a => a.url === idOrUrl);
+    return Object.values(assetsMap).find(a => a.url === idOrUrl);
   };
 
   return {
-    assets: Object.values(assets),
-    assetsMap: assets,
+    assets: Object.values(assetsMap),
+    assetsMap,
     isLoading,
     fetchAssets,
     saveAsset,

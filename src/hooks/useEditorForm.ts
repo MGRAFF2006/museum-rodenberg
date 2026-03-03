@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { Language, MediaItem, EntityRecord } from '../types';
 import { extractMediaFromMarkdown } from '../utils/markdownUtils';
 import { useContentTranslation } from './useContentTranslation';
 import { useAssetValidation } from './useAssetValidation';
 import { useLanguage } from './useLanguage';
 import { useContentData } from './useContentData';
-import { authFetch } from '../utils/auth';
 
 export const LANGUAGES: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
 
@@ -55,6 +56,12 @@ export function useEditorForm(config: EditorConfig) {
   const { t } = useLanguage();
   const { isTranslating, translationProgress, translateFields } = useContentTranslation();
   const { isValidating, validationErrors, validateAssets, setValidationErrors } = useAssetValidation();
+
+  // Convex mutations
+  const saveExhibition = useMutation(api.exhibitions.save);
+  const removeExhibition = useMutation(api.exhibitions.remove);
+  const saveArtifact = useMutation(api.artifacts.save);
+  const removeArtifact = useMutation(api.artifacts.remove);
 
   const [activeLang, setActiveLang] = useState<Language>('de');
 
@@ -377,50 +384,131 @@ export function useEditorForm(config: EditorConfig) {
     }
 
     try {
-      const dataToSave = {
-        ...formData,
-        id: formData.id?.toLowerCase(),
-      };
+      const slug = (formData.id || '').toLowerCase();
+      const LANGS: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
 
-      const response = await authFetch('/api/save-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: contentType, data: dataToSave }),
-      });
-
-      if (response.ok) {
-        refreshData();
-        onBack(true);
-      } else {
-        alert(t('saveFailed'));
+      // Build media items array from formData.media
+      const mediaItems: Array<{
+        mediaType: 'image' | 'video' | 'audio';
+        url: string;
+        title?: string;
+        description?: string;
+        sortOrder: number;
+      }> = [];
+      let sortIdx = 0;
+      for (const img of formData.media?.images || []) {
+        mediaItems.push({ mediaType: 'image', url: img, sortOrder: sortIdx++ });
       }
+      for (const vid of formData.media?.videos || []) {
+        mediaItems.push({
+          mediaType: 'video',
+          url: vid.url,
+          title: vid.title || undefined,
+          description: vid.description || undefined,
+          sortOrder: sortIdx++,
+        });
+      }
+      for (const aud of formData.media?.audio || []) {
+        mediaItems.push({
+          mediaType: 'audio',
+          url: aud.url,
+          title: aud.title || undefined,
+          description: aud.description || undefined,
+          sortOrder: sortIdx++,
+        });
+      }
+
+      if (contentType === 'exhibition') {
+        // Build exhibition translations array
+        const translations = LANGS
+          .filter(lang => formData.translations?.[lang]?.title)
+          .map(lang => {
+            const t = formData.translations![lang];
+            return {
+              language: lang,
+              title: t.title || '',
+              subtitle: t.subtitle || undefined,
+              description: t.description || '',
+              detailedContent: formData.detailedContent?.[lang] || undefined,
+            };
+          });
+
+        await saveExhibition({
+          slug,
+          qrCode: (formData.qrCode as string) || slug,
+          image: formData.image || '',
+          dateRange: (formData.dateRange as string) || undefined,
+          location: (formData.location as string) || undefined,
+          curator: (formData.curator as string) || undefined,
+          organizer: (formData.organizer as string) || undefined,
+          sponsor: (formData.sponsor as string) || undefined,
+          tags: (formData.tags as string[]) || undefined,
+          enabledAttributes: formData.enabledAttributes || undefined,
+          isFeatured: (formData.isFeatured as boolean) || false,
+          artifactSlugs: (formData.artifacts as string[]) || [],
+          translations,
+          mediaItems,
+        });
+      } else {
+        // Build artifact translations array
+        const translations = LANGS
+          .filter(lang => formData.translations?.[lang]?.title)
+          .map(lang => {
+            const t = formData.translations![lang];
+            return {
+              language: lang,
+              title: t.title || '',
+              period: t.period || undefined,
+              artist: t.artist || undefined,
+              description: t.description || '',
+              significance: t.significance || undefined,
+              detailedContent: formData.detailedContent?.[lang] || undefined,
+            };
+          });
+
+        await saveArtifact({
+          slug,
+          qrCode: (formData.qrCode as string) || slug,
+          exhibitionSlug: (formData.exhibition as string) || undefined,
+          image: formData.image || '',
+          materials: (formData.materials as string[]) || undefined,
+          dimensions: (formData.dimensions as string) || undefined,
+          provenance: (formData.provenance as string) || undefined,
+          tags: (formData.tags as string[]) || undefined,
+          enabledAttributes: formData.enabledAttributes || undefined,
+          translations,
+          mediaItems,
+        });
+      }
+
+      // refreshData is a no-op with Convex (reactive), but call it for API compat
+      refreshData();
+      onBack(true);
     } catch (error) {
       console.error('Error saving:', error);
       alert(t('errorSaving'));
     }
-  }, [formData, contentType, validateAssets, refreshData, onBack, t]);
+  }, [formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm(t(deleteConfirmKey))) return;
 
     try {
-      const response = await authFetch('/api/delete-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: contentType, id }),
-      });
+      const slug = (formData.id || id).toLowerCase();
 
-      if (response.ok) {
-        refreshData();
-        onBack(true);
+      if (contentType === 'exhibition') {
+        await removeExhibition({ slug });
       } else {
-        alert(t('errorDeleting'));
+        await removeArtifact({ slug });
       }
+
+      refreshData();
+      onBack(true);
     } catch (error) {
       console.error('Error deleting:', error);
       alert(t('errorDeleting'));
     }
-  }, [contentType, id, deleteConfirmKey, refreshData, onBack, t]);
+  }, [contentType, id, formData.id, deleteConfirmKey, removeExhibition, removeArtifact, refreshData, onBack, t]);
 
   return {
     // State

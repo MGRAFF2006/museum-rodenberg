@@ -1,8 +1,5 @@
 import { Plugin, loadEnv } from 'vite';
 import {
-  saveContent,
-  deleteContent,
-  saveAsset,
   uploadMedia,
   translate,
   validateAssets,
@@ -46,16 +43,7 @@ export function devServerApiPlugin(): Plugin {
 
         try {
           // ── POST routes ─────────────────────────────────
-          if (req.method === 'POST' && req.url === '/api/save-content') {
-            const body = await readJsonBody(req);
-            sendResult(res, saveContent(rootDir, body));
-          } else if (req.method === 'POST' && req.url === '/api/delete-content') {
-            const body = await readJsonBody(req);
-            sendResult(res, deleteContent(rootDir, body));
-          } else if (req.method === 'POST' && req.url === '/api/save-asset') {
-            const body = await readJsonBody(req);
-            sendResult(res, saveAsset(rootDir, body));
-          } else if (req.method === 'POST' && (req.url === '/api/upload-image' || req.url === '/api/upload-media')) {
+          if (req.method === 'POST' && (req.url === '/api/upload-image' || req.url === '/api/upload-media')) {
             const result = await uploadMedia(rootDir, req.headers, req);
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');

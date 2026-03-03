@@ -21,7 +21,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
   assetType = 'all',
   selectedValue
 }) => {
-  const { assets, isLoading, fetchAssets } = useAssets();
+  const { assets, isLoading, saveAsset } = useAssets();
   const { t } = useLanguage();
 
   const filteredAssets = assets.filter(asset => {
@@ -54,7 +54,18 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
           const data = await response.json();
           const asset = data.assets?.[0] || (data.url && { id: data.url.split('/').pop().split('.')[0] });
           if (asset) {
-            await fetchAssets();
+            // Save asset metadata to Convex
+            if (data.assets && Array.isArray(data.assets)) {
+              for (const a of data.assets) {
+                await saveAsset({
+                  id: a.id,
+                  name: a.name,
+                  alt: a.alt,
+                  url: a.url,
+                  type: a.type,
+                });
+              }
+            }
             onSelect(asset.id);
             onClose();
           }
