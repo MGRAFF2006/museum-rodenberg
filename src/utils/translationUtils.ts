@@ -194,8 +194,10 @@ async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-let lastCallTime = 0;
 const sessionCache = new Map<string, string>();
+
+const MAX_RETRIES = 5;
+const RETRY_BASE_DELAY_MS = 1000;
 
 /**
  * Translates a single field, handling markdown splitting if necessary.
@@ -229,19 +231,12 @@ export async function translateField(
   return joinBlocks(translatedBlocks);
 }
 
-export async function translateText(text: string, targetLang: string): Promise<string> {
+export async function translateText(text: string, targetLang: string, attempt = 0): Promise<string> {
   if (!text || !text.trim()) return text;
 
   const cacheKey = `${text}|${targetLang}`;
   if (sessionCache.has(cacheKey)) {
     return sessionCache.get(cacheKey)!;
-  }
-
-  // Rate limit: 20/min = 1 every 3s.
-  const now = Date.now();
-  const timeSinceLastCall = now - lastCallTime;
-  if (timeSinceLastCall < 3100) {
-    await sleep(3100 - timeSinceLastCall);
   }
 
   try {
@@ -251,16 +246,8 @@ export async function translateText(text: string, targetLang: string): Promise<s
       body: JSON.stringify({ text, target: targetLang })
     });
 
-    lastCallTime = Date.now();
-
-    if (response.status === 429) {
-      console.log('Rate limited. Waiting 30 seconds...');
-      await sleep(30000);
-      return translateText(text, targetLang);
-    }
-
     if (!response.ok) {
-      throw new Error(`Translation failed: ${response.statusText}`);
+      throw new Error(`Translation failed: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -269,7 +256,13 @@ export async function translateText(text: string, targetLang: string): Promise<s
     sessionCache.set(cacheKey, result);
     return result;
   } catch (error) {
-    console.error('Translation error:', error);
-    throw error;
+    if (attempt >= MAX_RETRIES) {
+      console.error(`Translation failed after ${MAX_RETRIES} retries:`, error);
+      throw error;
+    }
+    const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+    console.warn(`Translation attempt ${attempt + 1} failed, retrying in ${delay}ms...`, error);
+    await sleep(delay);
+    return translateText(text, targetLang, attempt + 1);
   }
 }

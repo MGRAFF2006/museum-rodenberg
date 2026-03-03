@@ -9,6 +9,8 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:full": "bash scripts/dev.sh",
+    "dev:full:all": "bash scripts/dev.sh --all",
     "build": "vite build",
     "generate-translations": "node scripts/generate-translations.js",
     "build:with-translations": "npm run generate-translations && vite build",

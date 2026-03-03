@@ -54,20 +54,15 @@ async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-let lastCallTime = 0;
-async function translateText(text, targetLanguage) {
+const MAX_RETRIES = 5;
+const RETRY_BASE_DELAY_MS = 1000;
+
+async function translateText(text, targetLanguage, attempt = 0) {
   if (!text || typeof text !== 'string' || text.trim() === '') return { text, cached: false };
   
   const cacheKey = `${text}|${targetLanguage}`;
   if (translationCache.has(cacheKey)) {
     return { text: translationCache.get(cacheKey), cached: true };
-  }
-  
-  // Rate limit: 20/min = 1 every 3s. 
-  const now = Date.now();
-  const timeSinceLastCall = now - lastCallTime;
-  if (timeSinceLastCall < 3100) {
-    await sleep(3100 - timeSinceLastCall);
   }
 
   try {
@@ -83,8 +78,6 @@ async function translateText(text, targetLanguage) {
       headers: { 'Content-Type': 'application/json' }
     });
 
-    lastCallTime = Date.now();
-
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
       throw new Error(`LibreTranslate Error: ${response.status} ${JSON.stringify(errData)}`);
@@ -97,12 +90,14 @@ async function translateText(text, targetLanguage) {
     saveCache(); 
     return { text: result, cached: false };
   } catch (err) {
-    if (err.message.includes('429')) {
-      console.log('\r\x1b[K      Rate limited. Waiting 30 seconds...');
-      await sleep(30000);
-      return translateText(text, targetLanguage);
+    if (attempt >= MAX_RETRIES) {
+      console.error(`\n  Translation failed after ${MAX_RETRIES} retries: ${err.message}`);
+      return { text, cached: false };
     }
-    return { text, cached: false };
+    const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+    process.stdout.write(`\r\x1b[K      Retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms...`);
+    await sleep(delay);
+    return translateText(text, targetLanguage, attempt + 1);
   }
 }
 

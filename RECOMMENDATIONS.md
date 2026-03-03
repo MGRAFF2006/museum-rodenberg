@@ -11,15 +11,16 @@
 | ----------------- | ----------------------------------------------------------------------- |
 | Frontend          | React 18 + Vite 5 + Tailwind CSS + React Router 6                      |
 | Backend           | Express 5 (production) + Vite dev plugin (shared API handler module)    |
-| Data storage      | 3 JSON flat files (`exhibitions.json`, `artifacts.json`, `assets.json`) |
-| Database          | None                                                                    |
+| Data storage      | Self-hosted Convex (7 tables, SQLite-backed)                            |
+| Database          | Convex self-hosted via Docker (:3210), dashboard on :6791               |
 | Admin             | Custom admin panel at `/admin` with TipTap editor + media library       |
 | Auth              | Server-side session auth, token-based, 24h TTL                          |
-| Translation       | 7 languages, LibreTranslate (self-hosted via Docker), embedded per-record |
-| Media             | Static files in `public/uploads/`, asset registry in JSON               |
+| Translation       | 7 languages, LibreTranslate (self-hosted via Docker), exponential backoff retry |
+| Media             | Static files in `public/uploads/`, asset registry in Convex             |
 | PWA               | Service worker with CacheFirst for uploads                              |
 | TypeScript        | Zero `any` types across entire `src/` directory                         |
-| Deployment        | Dockerized (museum-app + LibreTranslate), docker-compose                |
+| Deployment        | Dockerized (museum-app + Convex backend + LibreTranslate), docker-compose |
+| Dev startup       | `npm run dev:full` — one-command orchestrator (Docker + Convex + Vite)  |
 
 ---
 
@@ -166,253 +167,82 @@ Starting from 44 `any` usages across 12 files, all were eliminated:
 
 ## Part 3: Architectural Changes
 
-### 3.1 Migrate to Self-Hosted Convex as Database
+### 3.1 Migrate to Self-Hosted Convex as Database (Implemented)
 
 **Effect: HIGH | Effort: HIGH**
 
-**Problem:** All data lives in 3 JSON flat files. Every read/write parses and
-rewrites the entire file. No query capability, no indexing, no transactions,
-risk of data corruption from concurrent writes. The `ContentContext` polls every
-5 seconds in dev mode with `JSON.stringify` comparisons to detect changes.
+**Problem:** All data lived in 3 JSON flat files. Every read/write parsed and
+rewrote the entire file. No query capability, no indexing, no transactions,
+risk of data corruption from concurrent writes. The `ContentContext` polled
+every 5 seconds in dev mode with `JSON.stringify` comparisons to detect changes.
 
-**Why Convex:**
-- **Self-hostable**: Convex is fully open-source (FSL Apache 2.0) and can be
-  self-hosted via Docker. The backend stores state in a local SQLite database
-  by default, so no external DB dependency is needed.
-  (See: https://docs.convex.dev/self-hosting)
-- **Reactive queries**: Convex's `useQuery` hook automatically re-renders
-  components when underlying data changes via WebSocket subscriptions. This
-  eliminates the need for polling or manual `refreshData()` calls -- the exact
-  problem your current architecture has.
-- **Real-time sync**: When an admin edits content, all connected visitors see
-  updates immediately without page refresh. No more 5-second polling.
-- **Type-safe**: Convex generates TypeScript types from your schema, replacing
-  all the `as any` casts with proper end-to-end type safety.
-- **ACID transactions**: Mutations are transactional with optimistic concurrency
-  control. No risk of corrupted JSON files.
-- **File storage**: Convex has built-in file storage, which could replace the
-  `public/uploads/` + `assets.json` system.
-- **Runs locally**: With Docker, the entire Convex backend runs on the same
-  machine as your app. No internet dependency.
+**What was done:**
 
-**Self-hosting setup:**
-```bash
-# Download docker-compose.yml from the Convex repo
-# Start Convex backend + dashboard
-docker compose up
+- **Convex schema** (`convex/schema.ts`): 7 tables — `exhibitions`,
+  `exhibition_translations`, `artifacts`, `artifact_translations`, `assets`,
+  `media`, `settings` — with indexes on `slug`, `qrCode`, `exhibitionId`,
+  and composite `(entity, language)` for translations.
+- **Convex functions**: `exhibitions.ts`, `artifacts.ts`, `assets.ts`,
+  `lookup.ts` (QR code search, full-text search), `migrate.ts` (stub).
+  Queries: `list`, `getBySlug`, `getByExhibition`, `getFeatured`,
+  `findByQRCode`, `search`. Mutations: `save`, `remove`, `setFeatured`.
+- **Migration script** (`scripts/migrate-to-convex.mjs`): Node.js CLI using
+  `ConvexHttpClient`. Reads JSON files, maps old IDs to Convex IDs, inserts
+  all records with translations. Successfully migrated 14 assets, 5
+  exhibitions, 13 artifacts, and set the featured exhibition.
+- **Frontend rewired**: `ContentContext.tsx` fully rewritten to use Convex
+  `useQuery` for reactive data. `useEditorForm.ts`, `useAssets.ts`,
+  `AdminDashboard.tsx`, `MediaLibrary.tsx`, `AssetSelector.tsx` all use
+  Convex mutations. `refreshData()` is now a no-op (Convex subscriptions
+  auto-update). `main.tsx` wraps the app with `ConvexProvider`.
+- **Express simplified**: Removed `save-content`, `delete-content`,
+  `save-asset` endpoints. 8 endpoints remain (file upload/delete/list,
+  validate-assets, translate proxy, login/logout).
+- **Docker**: `docker-compose.yml` updated with `convex-backend` (:3210)
+  and `convex-dashboard` (:6791) services. Backend stores state in local
+  SQLite via Docker volume.
+- **Codegen**: `convex/_generated/` committed to git so builds work
+  without a running Convex backend. Files are `.js` + `.d.ts` pairs
+  (not `.ts`, as Convex codegen produces).
+- **JSON files kept** in `src/content/` as backup but no longer read by
+  the app.
 
-# Generate admin key
-docker compose exec backend ./generate_admin_key.sh
+**Translation rate limiting** was also updated as part of this phase:
+- Removed the 3.1-second minimum interval between LibreTranslate API calls
+  (was targeting the free-tier 20 req/min limit, unnecessary for self-hosted).
+- Removed the 30-second sleep on HTTP 429 responses.
+- Added exponential backoff retry: up to 5 retries with delays of 1s, 2s,
+  4s, 8s, 16s. Session cache and disk cache (`translation-memory.json`)
+  kept for deduplication.
 
-# In your project:
-echo 'CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3210' >> .env.local
-echo 'CONVEX_SELF_HOSTED_ADMIN_KEY=<key>' >> .env.local
-
-npm install convex@latest
-npx convex dev
-```
-
-**Migration plan:**
-
-#### Phase 1: Define Convex Schema
-```typescript
-// convex/schema.ts
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
-
-export default defineSchema({
-  exhibitions: defineTable({
-    slug: v.string(),           // URL-friendly ID
-    qrCode: v.string(),
-    image: v.string(),          // asset reference
-    dateRange: v.optional(v.string()),
-    location: v.optional(v.string()),
-    curator: v.optional(v.string()),
-    organizer: v.optional(v.string()),
-    sponsor: v.optional(v.string()),
-    tags: v.optional(v.array(v.string())),
-    enabledAttributes: v.optional(v.array(v.string())),
-    isFeatured: v.boolean(),
-  })
-    .index("by_slug", ["slug"])
-    .index("by_qrCode", ["qrCode"]),
-
-  exhibition_translations: defineTable({
-    exhibitionId: v.id("exhibitions"),
-    language: v.string(),
-    title: v.string(),
-    subtitle: v.optional(v.string()),
-    description: v.string(),
-    detailedContent: v.optional(v.string()), // markdown
-  })
-    .index("by_exhibition", ["exhibitionId"])
-    .index("by_exhibition_lang", ["exhibitionId", "language"]),
-
-  artifacts: defineTable({
-    slug: v.string(),
-    qrCode: v.string(),
-    exhibitionId: v.optional(v.id("exhibitions")),
-    image: v.string(),
-    materials: v.optional(v.array(v.string())),
-    dimensions: v.optional(v.string()),
-    provenance: v.optional(v.string()),
-    tags: v.optional(v.array(v.string())),
-    enabledAttributes: v.optional(v.array(v.string())),
-  })
-    .index("by_slug", ["slug"])
-    .index("by_qrCode", ["qrCode"])
-    .index("by_exhibition", ["exhibitionId"]),
-
-  artifact_translations: defineTable({
-    artifactId: v.id("artifacts"),
-    language: v.string(),
-    title: v.string(),
-    period: v.optional(v.string()),
-    artist: v.optional(v.string()),
-    description: v.string(),
-    significance: v.optional(v.string()),
-    detailedContent: v.optional(v.string()),
-  })
-    .index("by_artifact", ["artifactId"])
-    .index("by_artifact_lang", ["artifactId", "language"]),
-
-  assets: defineTable({
-    name: v.string(),
-    alt: v.string(),
-    url: v.string(),
-    type: v.union(
-      v.literal("image"),
-      v.literal("audio"),
-      v.literal("video"),
-      v.literal("other")
-    ),
-  }),
-
-  media: defineTable({
-    parentType: v.union(v.literal("exhibition"), v.literal("artifact")),
-    parentId: v.string(),  // Convex ID of parent
-    mediaType: v.union(
-      v.literal("image"),
-      v.literal("video"),
-      v.literal("audio")
-    ),
-    url: v.string(),
-    title: v.optional(v.string()),
-    description: v.optional(v.string()),
-    sortOrder: v.number(),
-  }).index("by_parent", ["parentType", "parentId"]),
-});
-```
-
-#### Phase 2: Write Convex Functions
-```typescript
-// convex/exhibitions.ts
-import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
-
-export const list = query({
-  handler: async (ctx) => {
-    return await ctx.db.query("exhibitions").collect();
-  },
-});
-
-export const getBySlug = query({
-  args: { slug: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("exhibitions")
-      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
-      .first();
-  },
-});
-
-export const findByQRCode = query({
-  args: { qrCode: v.string() },
-  handler: async (ctx, args) => {
-    const exhibition = await ctx.db
-      .query("exhibitions")
-      .withIndex("by_qrCode", (q) => q.eq("qrCode", args.qrCode))
-      .first();
-    if (exhibition) return { type: "exhibition", item: exhibition };
-
-    const artifact = await ctx.db
-      .query("artifacts")
-      .withIndex("by_qrCode", (q) => q.eq("qrCode", args.qrCode))
-      .first();
-    if (artifact) return { type: "artifact", item: artifact };
-
-    return null;
-  },
-});
-```
-
-#### Phase 3: Update React Frontend
-Replace `ContentContext.tsx` with Convex hooks:
-
-```typescript
-// Before (polling JSON):
-const exhibitions = useContent().exhibitions;
-
-// After (reactive Convex):
-import { useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
-const exhibitions = useQuery(api.exhibitions.list);
-```
-
-Wrap the app with `ConvexProvider`:
-```typescript
-import { ConvexProvider, ConvexReactClient } from "convex/react";
-const convex = new ConvexReactClient("http://127.0.0.1:3210"); // self-hosted
-
-root.render(
-  <ConvexProvider client={convex}>
-    <App />
-  </ConvexProvider>
-);
-```
-
-#### Phase 4: Remove Old Data Layer
-- Delete `src/content/*.json` (data lives in Convex)
-- Remove JSON read/write from `server/index.js`
-- Remove `scripts/dev-server-plugin.ts` (Convex replaces it)
-- Simplify Express server to only serve static files + proxy translation
-- Keep admin components but rewire them to use `useMutation` from Convex
-
-**What stays unchanged:**
-- All public-facing React components (HomePage, ExhibitionDetail, etc.)
-- Language/Accessibility contexts and hooks
-- QR scanner, Text-to-Speech, Search
-- PWA configuration
-- Tailwind styles
-- Translation utilities (markdown splitting, URL protection)
-
-**Key benefit for your use case:** With Convex self-hosted via Docker on the
-same machine, the WebSocket connection is `localhost` -- zero internet
-dependency, instant reactivity, and the admin panel updates are reflected to
-all visitors in real-time.
+**Developer experience** — one-command startup:
+- `scripts/dev.sh`: Starts Docker services (Convex backend, optionally
+  dashboard and LibreTranslate), waits for health checks, runs `convex dev`
+  (schema push + watcher) and `vite` in parallel. Supports `--no-docker`,
+  `--dashboard`, `--translate`, `--all` flags. Handles Docker daemon
+  requiring `sudo` by auto-detecting access.
+- `npm run dev:full`: Runs `dev.sh` (Convex + Vite, no dashboard).
+- `npm run dev:full:all`: Runs `dev.sh --all` (everything including
+  dashboard and LibreTranslate).
 
 ### 3.2 Full PWA Offline Support for Content
 
 **Effect: HIGH | Effort: HIGH**
 
-**Problem:** Your PWA caches uploaded media (images/audio) but content data
+**Problem:** The PWA caches uploaded media (images/audio) but content data
 and the app shell are not fully offline-capable. Given the unreliable internet
-at your deployment site, the museum app should be usable even when completely
+at the deployment site, the museum app should be usable even when completely
 offline.
 
-**Solution (after Convex migration):**
+**Solution (now that Convex is in place):**
 - Convex client handles reconnection automatically when connection drops
 - For true offline support, use a service worker to precache the app shell
   and critical content data
 - Implement a background sync queue for admin writes when offline
 - The Convex WebSocket client will automatically retry and sync when
   connectivity returns
-
-**Solution (before Convex migration):**
-- Configure the Vite PWA plugin to precache `exhibitions.json`,
-  `artifacts.json`, and `assets.json` as part of the build
-- Add a NetworkFirst strategy for API calls so the app uses cached content
-  when offline but gets fresh data when online
+- Consider caching Convex query results in IndexedDB for instant offline
+  access to content that was previously loaded
 
 ### 3.3 Migrate to SSR or Pre-rendering (Optional)
 
@@ -477,12 +307,12 @@ proper data storage, reactivity, and type safety.
 | 2.4 | Self-host LibreTranslate               | MEDIUM | MEDIUM     |
 | 2.5 | Clean up TypeScript any types          | MEDIUM | MEDIUM     |
 
-### Phase 3: Architecture (Do Next)
-| #   | Change                                 | Effect | Effort |
-| --- | -------------------------------------- | ------ | ------ |
-| 3.1 | Migrate to self-hosted Convex          | HIGH   | HIGH   |
-| 3.2 | Full PWA offline support               | HIGH   | HIGH   |
-| 3.3 | SSR / Pre-rendering (optional)         | MEDIUM | HIGH   |
+### Phase 3: Architecture
+| #   | Change                                 | Effect | Effort | Status |
+| --- | -------------------------------------- | ------ | ------ | ------ |
+| 3.1 | Migrate to self-hosted Convex          | HIGH   | HIGH   | Done   |
+| 3.2 | Full PWA offline support               | HIGH   | HIGH   | Next   |
+| 3.3 | SSR / Pre-rendering (optional)         | MEDIUM | HIGH   | —      |
 
 ### Phase 4: Decided Against
 | Option              | Reason                                                    |
@@ -493,29 +323,46 @@ proper data storage, reactivity, and type safety.
 
 ---
 
+## Express API Endpoints (Remaining)
+
+After the Convex migration, 8 Express endpoints remain for operations that
+require server-side file system access or external service proxying:
+
+| Method | Endpoint               | Purpose                              |
+| ------ | ---------------------- | ------------------------------------ |
+| POST   | `/api/login`           | Authenticate admin, issue session    |
+| POST   | `/api/logout`          | Invalidate admin session             |
+| POST   | `/api/upload-image`    | Upload image file to disk            |
+| POST   | `/api/upload-media`    | Upload media file to disk            |
+| POST   | `/api/validate-assets` | Check file existence on disk         |
+| GET    | `/api/list-uploads`    | List physical files in uploads dir   |
+| DELETE | `/api/delete-image`    | Delete file from disk                |
+| POST   | `/api/translate`       | Proxy to LibreTranslate              |
+
+---
+
 ## Deployment Target Architecture
 
 ```
  Docker Host (your server, no internet required)
  +-------------------------------------------------+
- |                                                 |
- |  +-------------------+  +--------------------+  |
- |  | museum-app        |  | convex-backend     |  |
- |  | (Node + Express)  |  | (self-hosted)      |  |
- |  | :3000             |  | :3210 (backend)    |  |
- |  |                   |  | :3211 (http acts)  |  |
- |  +-------------------+  | :6791 (dashboard)  |  |
- |           |              +--------------------+  |
- |           |                       |              |
- |  +-------------------+            |              |
- |  | libretranslate    |  +---------+----------+   |
- |  | :5000             |  | SQLite (embedded)  |   |
+ |                                                  |
+ |  +-------------------+  +--------------------+   |
+ |  | museum-app        |  | convex-backend     |   |
+ |  | (Node + Express)  |  | (self-hosted)      |   |
+ |  | :3000             |  | :3210 (backend)    |   |
+ |  |                   |  | :3211 (http acts)  |   |
+ |  +-------------------+  +--------------------+   |
+ |           |                       |               |
+ |  +-------------------+  +--------------------+   |
+ |  | libretranslate    |  | convex-dashboard   |   |
+ |  | :5000             |  | :6791              |   |
  |  +-------------------+  +--------------------+   |
  |                                                  |
  |  Volumes:                                        |
- |  - /uploads (media files)                        |
- |  - /convex-data (database)                       |
- |  - /lt-models (translation models)               |
+ |  - /uploads          (media files)               |
+ |  - /convex-data      (Convex SQLite database)    |
+ |  - /lt-models        (translation models)        |
  +-------------------------------------------------+
 ```
 
@@ -523,3 +370,23 @@ Everything runs on `localhost`. The museum app connects to Convex at
 `http://127.0.0.1:3210` and LibreTranslate at `http://localhost:5000`.
 Visitors connect to `http://<local-ip>:3000` over the local network.
 Zero internet dependency for core functionality.
+
+---
+
+## Development Quick Start
+
+```bash
+# First time: start Docker, push schema, and launch dev server
+npm run dev:full
+
+# With LibreTranslate and Convex dashboard too:
+npm run dev:full:all
+
+# If you manage Docker yourself:
+bash scripts/dev.sh --no-docker
+
+# Regular dev (no Docker, no Convex watcher — assumes backend is running):
+npm run dev
+```
+
+See `scripts/dev.sh --help` for all options.

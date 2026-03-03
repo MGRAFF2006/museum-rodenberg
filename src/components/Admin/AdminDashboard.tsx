@@ -39,7 +39,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [artifacts, selectedExhibitionId]);
 
   const handleTranslateAll = useCallback(async () => {
-    if (!confirm('This will regenerate translations for ALL items using German as the source. This may take several minutes and overwrite existing translations. Continue?')) return;
+    if (!confirm('This will regenerate translations for ALL items using German as the source. Existing translations will be overwritten. Continue?')) return;
 
     try {
       // Get raw data from ContentContext (reconstructed from Convex)
