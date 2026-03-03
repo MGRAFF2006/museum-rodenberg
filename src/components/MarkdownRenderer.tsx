@@ -124,6 +124,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 <img
                   src={src}
                   alt={alt}
+                  loading="lazy"
                   className="w-full max-w-2xl mx-auto rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
                   onClick={() => onMediaClick?.('image', src || '', alt)}
                 />

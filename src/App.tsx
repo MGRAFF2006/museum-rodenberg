@@ -1,20 +1,28 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunction } from 'react-router-dom';
 import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
 import { ExhibitionDetail } from './components/ExhibitionDetail';
 import { ArtifactDetail } from './components/ArtifactDetail';
-import { SearchResults } from './components/SearchResults';
 import { MobileMenu } from './components/MobileMenu';
-import { QRScanner } from './components/QRScanner';
-import { DetailedContentPage } from './components/DetailedContentPage';
-import { MediaViewerPage } from './components/MediaViewerPage';
-import { AccessibilityPanel } from './components/AccessibilityPanel';
-import { Admin } from './components/Admin/Admin';
 import { useLanguage } from './hooks/useLanguage';
 import { useContentData } from './hooks/useContentData';
 import { useSearch } from './hooks/useSearch';
 import type { Artifact, Exhibition } from './types';
+
+// Lazy-loaded routes (not needed on initial page load)
+const SearchResults = lazy(() => import('./components/SearchResults').then(m => ({ default: m.SearchResults })));
+const QRScanner = lazy(() => import('./components/QRScanner').then(m => ({ default: m.QRScanner })));
+const DetailedContentPage = lazy(() => import('./components/DetailedContentPage').then(m => ({ default: m.DetailedContentPage })));
+const MediaViewerPage = lazy(() => import('./components/MediaViewerPage').then(m => ({ default: m.MediaViewerPage })));
+const AccessibilityPanel = lazy(() => import('./components/AccessibilityPanel').then(m => ({ default: m.AccessibilityPanel })));
+const Admin = lazy(() => import('./components/Admin/Admin').then(m => ({ default: m.Admin })));
+
+const LazyFallback = () => (
+  <div className="min-h-[50vh] flex items-center justify-center">
+    <div className="inline-block h-8 w-8 border-4 border-primary-200 border-t-primary-700 rounded-full animate-spin" />
+  </div>
+);
 
 function App() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -85,12 +93,17 @@ function App() {
         }}
       />
       
-      <QRScanner
-        isOpen={isQRScannerOpen}
-        onClose={() => setIsQRScannerOpen(false)}
-        onScan={handleQRScan}
-      />
+      {isQRScannerOpen && (
+        <Suspense fallback={<LazyFallback />}>
+          <QRScanner
+            isOpen={isQRScannerOpen}
+            onClose={() => setIsQRScannerOpen(false)}
+            onScan={handleQRScan}
+          />
+        </Suspense>
+      )}
       
+      <Suspense fallback={<LazyFallback />}>
       <Routes>
         <Route
           path="/"
@@ -204,8 +217,11 @@ function App() {
           }
         />
       </Routes>
+      </Suspense>
       
-      <AccessibilityPanel />
+      <Suspense fallback={null}>
+        <AccessibilityPanel />
+      </Suspense>
     </div>
   );
 }

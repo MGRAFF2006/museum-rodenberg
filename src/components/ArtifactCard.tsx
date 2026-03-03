@@ -22,6 +22,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({ artifact, onClick, f
         <img
           src={artifact.image}
           alt={artifact.title}
+          loading="lazy"
           className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
         />
         {featured && (

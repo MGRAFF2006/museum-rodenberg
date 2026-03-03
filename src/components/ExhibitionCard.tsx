@@ -26,6 +26,7 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
         <img
           src={exhibition.image}
           alt={exhibition.title}
+          loading="lazy"
           className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
         />
         {featured && (

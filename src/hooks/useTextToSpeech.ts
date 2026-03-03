@@ -111,6 +111,13 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
       loadVoices();
       window.speechSynthesis.onvoiceschanged = loadVoices;
 
+      // If no voices loaded synchronously, assume no-voices until proven
+      // otherwise. This lets the UI show the warning icon immediately
+      // instead of waiting for the full polling timeout.
+      if (nativeVoicesRef.current.length === 0) {
+        setError('no-voices');
+      }
+
       // On some browsers, voices load asynchronously but the
       // onvoiceschanged event never fires. Poll a few times as a safety net.
       let attempts = 0;
@@ -118,9 +125,7 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
         attempts++;
         if (nativeVoicesRef.current.length > 0 || attempts >= 10) {
           clearInterval(pollId);
-          // After polling, if still no voices, mark it
           if (nativeVoicesRef.current.length === 0 && attempts >= 10) {
-            setError('no-voices');
             console.warn(
               '[TTS] No speech synthesis voices available after polling. ' +
               'On Linux, install speech-dispatcher and espeak-ng. ' +

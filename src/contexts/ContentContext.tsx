@@ -332,7 +332,18 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
     isLoading,
   };
 
-  return <ContentContext.Provider value={value}>{children}</ContentContext.Provider>;
+  return (
+    <ContentContext.Provider value={value}>
+      {isLoading ? (
+        <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block h-10 w-10 border-4 border-primary-200 border-t-primary-700 rounded-full animate-spin mb-4" />
+            <p className="text-neutral-500 text-sm">Museum Rodenberg</p>
+          </div>
+        </div>
+      ) : children}
+    </ContentContext.Provider>
+  );
 };
 
 export const useContent = () => {

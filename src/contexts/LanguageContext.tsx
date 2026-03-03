@@ -10,6 +10,14 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const isDev = import.meta.env.DEV;
+
+/** In dev mode, bust cache to pick up file changes. In production, let the browser cache. */
+function translationUrl(lang: string): string {
+  const base = `/translations/${lang}.json`;
+  return isDev ? base + '?v=' + Date.now() : base;
+}
+
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentLanguage, setCurrentLanguage] = useState<Language>('de');
   const [translations, setTranslations] = useState<Record<string, string>>({});
@@ -18,7 +26,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const loadFallback = useCallback(async () => {
     try {
-      const response = await fetch('/translations/de.json?v=' + Date.now());
+      const response = await fetch(translationUrl('de'));
       if (response.ok) {
         const data = await response.json();
         setFallbackTranslations(prev => JSON.stringify(prev) !== JSON.stringify(data) ? data : prev);
@@ -37,7 +45,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     if (!isSilent) setLoading(true);
     try {
-      const response = await fetch(`/translations/${currentLanguage}.json?v=` + Date.now());
+      const response = await fetch(translationUrl(currentLanguage));
       if (response.ok) {
         const data = await response.json();
         setTranslations(prev => JSON.stringify(prev) !== JSON.stringify(data) ? data : prev);
