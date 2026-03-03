@@ -664,6 +664,27 @@
   --tw-prose-td-borders: var(--hc-text) !important;
 }
 
+/* Prose headings: override explicit Tailwind text-neutral-* classes inside .prose */
+[data-contrast-mode="high"] .prose h1,
+[data-contrast-mode="high"] .prose h2,
+[data-contrast-mode="high"] .prose h3,
+[data-contrast-mode="high"] .prose h4 {
+  color: var(--hc-primary) !important;
+}
+
+/* Gradient backgrounds: override gradient stops for high contrast.
+   Tailwind from- and to- classes set CSS vars used by bg-gradient-to-*.
+   Override the whole background to a solid high-contrast surface color. */
+[data-contrast-mode="high"] .bg-gradient-to-r,
+[data-contrast-mode="high"] .bg-gradient-to-l,
+[data-contrast-mode="high"] .bg-gradient-to-br,
+[data-contrast-mode="high"] .bg-gradient-to-bl,
+[data-contrast-mode="high"] .bg-gradient-to-t,
+[data-contrast-mode="high"] .bg-gradient-to-b {
+  background: var(--hc-surface) !important;
+  color: var(--hc-text) !important;
+}
+
 /* Images */
 [data-contrast-mode="high"] img {
   filter: contrast(1.3) brightness(1.2);

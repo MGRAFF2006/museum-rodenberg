@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Volume2, VolumeX, AlertTriangle } from 'lucide-react';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import { Language, useLanguage } from '../hooks/useLanguage';
@@ -19,6 +20,8 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
   const { speak, stop, isSpeaking, isSupported, error } = useTextToSpeech();
   const { t } = useLanguage();
   const [showError, setShowError] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
 
   // Show a brief error tooltip when an error occurs
   useEffect(() => {
@@ -29,6 +32,19 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
     }
     setShowError(false);
   }, [error]);
+
+  // Calculate tooltip position relative to viewport when showing
+  useEffect(() => {
+    if (showError && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setTooltipPos({
+        top: rect.top - 8, // 8px above the button
+        left: rect.left + rect.width / 2,
+      });
+    } else {
+      setTooltipPos(null);
+    }
+  }, [showError]);
 
   if (!isSupported || !text) return null;
 
@@ -63,6 +79,7 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
   return (
     <div className="relative inline-flex">
       <button
+        ref={buttonRef}
         onClick={handleClick}
         className={`
           ${sizeClasses[size]}
@@ -90,11 +107,19 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
           <Volume2 className={iconSizes[size]} />
         )}
       </button>
-      {showError && errorMessage && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-red-600 text-white text-xs rounded-md whitespace-nowrap shadow-lg z-50">
+      {showError && errorMessage && tooltipPos && createPortal(
+        <div
+          className="fixed px-3 py-1.5 bg-red-600 text-white text-xs rounded-md whitespace-nowrap shadow-lg z-[9999] pointer-events-none"
+          style={{
+            top: tooltipPos.top,
+            left: tooltipPos.left,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
           {errorMessage}
           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-red-600" />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
