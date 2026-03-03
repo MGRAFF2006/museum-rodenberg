@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 /** Find an exhibition or artifact by QR code. */
 export const findByQRCode = query({
@@ -42,7 +43,7 @@ export const search = query({
     const allExTranslations = await ctx.db
       .query("exhibition_translations")
       .collect();
-    const matchingExIds = new Set<string>();
+    const matchingExIds = new Set<Id<"exhibitions">>();
     for (const t of allExTranslations) {
       if (t.language !== args.language) continue;
       if (
@@ -64,7 +65,7 @@ export const search = query({
     const allArtTranslations = await ctx.db
       .query("artifact_translations")
       .collect();
-    const matchingArtIds = new Set<string>();
+    const matchingArtIds = new Set<Id<"artifacts">>();
     for (const t of allArtTranslations) {
       if (t.language !== args.language) continue;
       if (
