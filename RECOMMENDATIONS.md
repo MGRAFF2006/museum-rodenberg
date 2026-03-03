@@ -343,6 +343,8 @@ require server-side file system access or external service proxying:
 
 ## Deployment Target Architecture
 
+### Option A: Docker Compose (Self-Hosted / Local Network)
+
 ```
  Docker Host (your server, no internet required)
  +-------------------------------------------------+
@@ -370,6 +372,131 @@ Everything runs on `localhost`. The museum app connects to Convex at
 `http://127.0.0.1:3210` and LibreTranslate at `http://localhost:5000`.
 Visitors connect to `http://<local-ip>:3000` over the local network.
 Zero internet dependency for core functionality.
+
+### Option B: Sevalla Cloud
+
+See the [Sevalla Cloud Deployment](#sevalla-cloud-deployment) section below
+for full setup instructions. Deploy 2–3 Sevalla applications (Convex backend,
+museum app, optionally LibreTranslate) in the same data center with persistent
+storage and internal connections.
+
+---
+
+## Sevalla Cloud Deployment
+
+The app can be deployed to Sevalla as **2–3 separate applications** in the same
+data center, connected via private networking. Sevalla supports Dockerfile
+builds, Docker image deployments, persistent storage, and internal connections.
+
+### Architecture on Sevalla
+
+```
+ Sevalla (same data center)
+ +-------------------------------------------------------+
+ |                                                        |
+ |  +---------------------+   +------------------------+ |
+ |  | museum-app          |   | convex-backend         | |
+ |  | (GitHub → Dockerfile)|  | (Docker image)         | |
+ |  | Web port: 3000      |   | Private port: 3210     | |
+ |  | Disk: /app/public/  |   | TCP proxy: :3210       | |
+ |  |       uploads       |   | Disk: /convex/data     | |
+ |  +---------------------+   +------------------------+ |
+ |            |                          |                |
+ |            | (private network)        | (public TCP    |
+ |            |                          |  for browsers) |
+ |  +---------------------+                              |
+ |  | libretranslate      |   (optional)                 |
+ |  | (Docker image)      |                              |
+ |  | Private port: 5000  |                              |
+ |  | Disk: /app/data     |                              |
+ |  +---------------------+                              |
+ +-------------------------------------------------------+
+```
+
+### Step 1: Deploy the Convex Backend
+
+1. In Sevalla, create a new application from **Docker image**
+2. Image: `ghcr.io/get-convex/convex-backend:latest`
+3. Add a **persistent disk**: path `/convex/data`, size 10 GB
+4. Under **Networking** → expose a **TCP proxy** on port `3210`
+   - Note the TCP proxy hostname (e.g. `tcp-convex-abc123.sevalla.app:3210`)
+   - Browsers need this URL to connect via WebSocket
+5. Alternatively, give it a domain (e.g. `convex.museum-rodenberg.de`) and
+   expose port 3210 publicly
+
+### Step 2: Generate the Convex Admin Key
+
+1. Use the **Web Terminal** in Sevalla to open a shell on the Convex container
+2. Run: `./generate_admin_key.sh`
+3. Save the output — you'll need it to push the schema
+
+### Step 3: Push the Convex Schema
+
+From your local machine (with the Convex CLI):
+
+```bash
+CONVEX_SELF_HOSTED_URL=https://convex.museum-rodenberg.de:3210 \
+CONVEX_SELF_HOSTED_ADMIN_KEY=<admin-key-from-step-2> \
+npx convex deploy
+```
+
+This pushes the schema and functions to the remote Convex backend.
+
+### Step 4: Migrate Data
+
+```bash
+CONVEX_SELF_HOSTED_URL=https://convex.museum-rodenberg.de:3210 \
+CONVEX_SELF_HOSTED_ADMIN_KEY=<admin-key-from-step-2> \
+node scripts/migrate-to-convex.mjs
+```
+
+### Step 5: Deploy the Museum App
+
+1. In Sevalla, create a new application from **GitHub** repository
+2. Build strategy: **Dockerfile** (path: `Dockerfile`, context: `.`)
+3. Set the web process port to `3000` (matches `process.env.PORT`)
+4. Add a **persistent disk**: path `/app/public/uploads`, size 10 GB
+5. **Environment variables** (mark `VITE_CONVEX_URL` as available at build):
+
+   | Variable | Availability | Value |
+   |----------|-------------|-------|
+   | `VITE_CONVEX_URL` | **Build time** | `https://convex.museum-rodenberg.de:3210` (the public Convex URL) |
+   | `ADMIN_PASSWORD` | Runtime | Your strong admin password |
+   | `LIBRETRANSLATE_API_URL` | Runtime | Internal hostname of LibreTranslate (if deployed), or omit |
+   | `LIBRETRANSLATE_API_KEY` | Runtime | API key if required, or omit |
+
+6. Add an **internal connection** to the Convex backend (optional — only
+   needed if the Express server ever needs to call Convex directly)
+
+### Step 6: Deploy LibreTranslate (Optional)
+
+1. Create a new application from **Docker image**
+2. Image: `libretranslate/libretranslate:latest`
+3. Environment variable: `LT_LOAD_ONLY=de,en,fr,es,it,nl,pl`
+4. Add a **persistent disk**: path `/app/data`, size 20 GB (for language models)
+5. Expose a **private port** on `5000`
+6. Add an **internal connection** from museum-app to LibreTranslate
+7. Set `LIBRETRANSLATE_API_URL` on museum-app to the internal hostname
+
+### Important Notes
+
+- **`VITE_CONVEX_URL` is a build-time variable.** Vite replaces
+  `import.meta.env.VITE_CONVEX_URL` with a literal string during
+  `npm run build`. It must be set before the build runs. In Sevalla,
+  mark it as available during the build process. The Dockerfile includes
+  `ARG VITE_CONVEX_URL` to support this.
+
+- **The Convex URL must be publicly accessible.** Visitors' browsers
+  connect to Convex directly via WebSocket. Use a TCP proxy or public
+  domain — private networking alone is not enough for the browser connection.
+
+- **Persistent storage limits horizontal scaling.** Processes with
+  persistent disks are limited to 1 instance on Sevalla. This is fine
+  for the museum's scale.
+
+- **Uploads persist across deploys.** With the persistent disk at
+  `/app/public/uploads`, uploaded media files survive container restarts
+  and redeployments.
 
 ---
 

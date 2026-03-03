@@ -3,6 +3,12 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
+# Vite bakes VITE_* env vars into the JS bundle at build time.
+# On Sevalla, set VITE_CONVEX_URL in env vars (available at build).
+# For Docker Compose, override with --build-arg or .env.
+ARG VITE_CONVEX_URL
+ENV VITE_CONVEX_URL=${VITE_CONVEX_URL}
+
 # Install dependencies first (layer caching)
 COPY package.json package-lock.json* ./
 RUN npm ci
