@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Routes, Route, useNavigate, useSearchParams, useParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunction } from 'react-router-dom';
 import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
 import { ExhibitionDetail } from './components/ExhibitionDetail';
@@ -10,18 +10,18 @@ import { QRScanner } from './components/QRScanner';
 import { DetailedContentPage } from './components/DetailedContentPage';
 import { MediaViewerPage } from './components/MediaViewerPage';
 import { AccessibilityPanel } from './components/AccessibilityPanel';
+import { Admin } from './components/Admin/Admin';
 import { useLanguage } from './hooks/useLanguage';
 import { useContentData } from './hooks/useContentData';
 import { useSearch } from './hooks/useSearch';
-import { t } from './utils/translations';
-import type { Language } from './contexts/LanguageContext';
+import type { Artifact, Exhibition } from './types';
 
 function App() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchQuery = searchParams.get('q') || '';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
-  const { currentLanguage, changeLanguage } = useLanguage();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   
   const {
@@ -46,7 +46,7 @@ function App() {
       navigate(`/exhibition/${result.item.id}`);
     } else {
       // QR code not found - TODO: Replace with toast notification
-      alert(t('qrCodeNotRecognized', currentLanguage));
+      alert(t('qrCodeNotRecognized'));
     }
     setIsQRScannerOpen(false);
   };
@@ -69,8 +69,6 @@ function App() {
         onHomeClick={() => navigate('/')}
         onQRScanToggle={() => setIsQRScannerOpen(!isQRScannerOpen)}
         onMenuToggle={() => setIsMobileMenuOpen(true)}
-        currentLanguage={currentLanguage}
-        onLanguageChange={changeLanguage}
       />
       
       <MobileMenu
@@ -101,7 +99,6 @@ function App() {
               exhibitions={exhibitions}
               featuredId={featuredExhibitionId}
               onExhibitionClick={(id) => navigate(`/exhibition/${id}`)}
-              currentLanguage={currentLanguage}
             />
           }
         />
@@ -113,7 +110,6 @@ function App() {
               getExhibitionById={getExhibitionById}
               getArtifactsByExhibition={getArtifactsByExhibition}
               navigate={navigate}
-              currentLanguage={currentLanguage}
             />
           }
         />
@@ -125,7 +121,6 @@ function App() {
               getArtifactById={getArtifactById}
               getExhibitionById={getExhibitionById}
               navigate={navigate}
-              currentLanguage={currentLanguage}
             />
           }
         />
@@ -151,7 +146,6 @@ function App() {
               type="exhibition"
               getExhibitionById={getExhibitionById}
               navigate={navigate}
-              currentLanguage={currentLanguage}
             />
           }
         />
@@ -163,7 +157,6 @@ function App() {
               type="artifact"
               getArtifactById={getArtifactById}
               navigate={navigate}
-              currentLanguage={currentLanguage}
             />
           }
         />
@@ -175,7 +168,6 @@ function App() {
               type="exhibition"
               getExhibitionById={getExhibitionById}
               navigate={navigate}
-              currentLanguage={currentLanguage}
             />
           }
         />
@@ -187,26 +179,45 @@ function App() {
               type="artifact"
               getArtifactById={getArtifactById}
               navigate={navigate}
-              currentLanguage={currentLanguage}
             />
+          }
+        />
+        
+        <Route path="/admin" element={<Admin />} />
+        
+        <Route
+          path="*"
+          element={
+            <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
+              <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+                <h1 className="text-6xl font-bold text-primary-800 mb-4">404</h1>
+                <p className="text-xl text-neutral-700 mb-2">{t('contentNotFound')}</p>
+                <p className="text-neutral-500 mb-6">{t('noResultsText')}</p>
+                <button
+                  onClick={() => navigate('/')}
+                  className="px-6 py-3 bg-primary-800 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  {t('backToExhibitions')}
+                </button>
+              </div>
+            </div>
           }
         />
       </Routes>
       
-      <AccessibilityPanel currentLanguage={currentLanguage} />
+      <AccessibilityPanel />
     </div>
   );
 }
 
 // Route components
 interface ExhibitionRouteProps {
-  getExhibitionById: (id: string) => any;
-  getArtifactsByExhibition: (id: string) => any[];
-  navigate: any;
-  currentLanguage: Language;
+  getExhibitionById: (id: string) => Exhibition | undefined;
+  getArtifactsByExhibition: (id: string) => Artifact[];
+  navigate: NavigateFunction;
 }
 
-function ExhibitionRoute({ getExhibitionById, getArtifactsByExhibition, navigate, currentLanguage }: ExhibitionRouteProps) {
+function ExhibitionRoute({ getExhibitionById, getArtifactsByExhibition, navigate }: ExhibitionRouteProps) {
   const { id } = useParams();
   if (!id) return <div>Exhibition not found</div>;
   
@@ -223,19 +234,17 @@ function ExhibitionRoute({ getExhibitionById, getArtifactsByExhibition, navigate
       onArtifactClick={(artId) => navigate(`/artifact/${artId}`)}
       onDetailedContentClick={() => navigate(`/exhibition/${id}/details`)}
       onMediaViewerClick={() => navigate(`/exhibition/${id}/media`)}
-      currentLanguage={currentLanguage}
     />
   );
 }
 
 interface ArtifactRouteProps {
-  getArtifactById: (id: string) => any;
-  getExhibitionById: (id: string) => any;
-  navigate: any;
-  currentLanguage: Language;
+  getArtifactById: (id: string) => Artifact | undefined;
+  getExhibitionById: (id: string) => Exhibition | undefined;
+  navigate: NavigateFunction;
 }
 
-function ArtifactRoute({ getArtifactById, getExhibitionById, navigate, currentLanguage }: ArtifactRouteProps) {
+function ArtifactRoute({ getArtifactById, getExhibitionById, navigate }: ArtifactRouteProps) {
   const { id } = useParams();
   if (!id) return <div>Artifact not found</div>;
   
@@ -251,21 +260,20 @@ function ArtifactRoute({ getArtifactById, getExhibitionById, navigate, currentLa
       exhibitionTitle={exhibition?.title}
       onDetailedContentClick={() => navigate(`/artifact/${id}/details`)}
       onMediaViewerClick={() => navigate(`/artifact/${id}/media`)}
-      currentLanguage={currentLanguage}
     />
   );
 }
 
 interface DetailedContentRouteProps {
   type: 'exhibition' | 'artifact';
-  getExhibitionById?: (id: string) => any;
-  getArtifactById?: (id: string) => any;
-  navigate: any;
-  currentLanguage: Language;
+  getExhibitionById?: (id: string) => Exhibition | undefined;
+  getArtifactById?: (id: string) => Artifact | undefined;
+  navigate: NavigateFunction;
 }
 
-function DetailedContentRoute({ type, getExhibitionById, getArtifactById, navigate, currentLanguage }: DetailedContentRouteProps) {
+function DetailedContentRoute({ type, getExhibitionById, getArtifactById, navigate }: DetailedContentRouteProps) {
   const { id } = useParams();
+  const { currentLanguage } = useLanguage();
   if (!id) return <div>Content not found</div>;
   
   const item = type === 'exhibition' 
@@ -277,26 +285,28 @@ function DetailedContentRoute({ type, getExhibitionById, getArtifactById, naviga
   return (
     <DetailedContentPage
       title={item.title}
-      content={item.detailedContent[currentLanguage]}
+      content={item.detailedContent[currentLanguage] || item.detailedContent['de'] || ''}
       onBack={() => navigate(`/${type}/${id}`)}
-      onMediaClick={() => navigate(`/${type}/${id}/media`)}
-      currentLanguage={currentLanguage}
+      onMediaClick={(mediaType, url) => {
+        const tabMap = { 'image': 'images', 'video': 'videos', 'audio': 'audio' };
+        navigate(`/${type}/${id}/media?tab=${tabMap[mediaType]}&url=${encodeURIComponent(url)}`);
+      }}
     />
   );
 }
 
 interface MediaViewerRouteProps {
   type: 'exhibition' | 'artifact';
-  getExhibitionById?: (id: string) => any;
-  getArtifactById?: (id: string) => any;
-  navigate: any;
-  currentLanguage: Language;
+  getExhibitionById?: (id: string) => Exhibition | undefined;
+  getArtifactById?: (id: string) => Artifact | undefined;
+  navigate: NavigateFunction;
 }
 
-function MediaViewerRoute({ type, getExhibitionById, getArtifactById, navigate, currentLanguage }: MediaViewerRouteProps) {
+function MediaViewerRoute({ type, getExhibitionById, getArtifactById, navigate }: MediaViewerRouteProps) {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') as 'images' | 'videos' | 'audio' | undefined;
+  const initialUrl = searchParams.get('url');
   
   if (!id) return <div>Media not found</div>;
   
@@ -308,12 +318,12 @@ function MediaViewerRoute({ type, getExhibitionById, getArtifactById, navigate, 
   
   return (
     <MediaViewerPage
-      images={item.media.images}
-      videos={item.media.videos}
-      audio={item.media.audio}
+      images={item.media.images || []}
+      videos={item.media.videos || []}
+      audio={item.media.audio || []}
       onBack={() => navigate(`/${type}/${id}`)}
-      currentLanguage={currentLanguage}
       initialTab={initialTab}
+      initialUrl={initialUrl}
     />
   );
 }

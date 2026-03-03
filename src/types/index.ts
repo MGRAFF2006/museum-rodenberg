@@ -10,9 +10,7 @@ export interface Translation {
 }
 
 export interface Translations {
-  de: Translation;
-  en: Translation;
-  fr: Translation;
+  [key: string]: Translation | undefined;
 }
 
 export interface MediaItem {
@@ -21,16 +19,28 @@ export interface MediaItem {
   description: string;
 }
 
+export interface Asset {
+  id: string;
+  name: string;
+  alt: string;
+  url: string;
+  type: 'image' | 'audio' | 'video' | 'other';
+}
+
 export interface Media {
+  images?: string[];
+  videos?: MediaItem[];
+  audio?: MediaItem[];
+}
+
+/** Media shape with all fields required (used by DetailedContentModal / MediaViewer) */
+export interface RequiredMedia {
   images: string[];
   videos: MediaItem[];
   audio: MediaItem[];
 }
 
 export interface DetailedContent {
-  de?: string;
-  en?: string;
-  fr?: string;
   [key: string]: string | undefined;
 }
 
@@ -48,8 +58,13 @@ export interface Exhibition {
   dateRange?: string;
   location?: string;
   curator?: string;
+  organizer?: string;
+  sponsor?: string;
   tags?: string[];
+  enabledAttributes?: string[];
   translations?: Translations;
+  isTranslationMissing?: boolean;
+  _hashes?: Record<string, string>;
   [key: string]: unknown;
 }
 
@@ -58,6 +73,7 @@ export interface Artifact {
   id: string;
   qrCode: string;
   title: string;
+  artist?: string;
   period?: string;
   description: string;
   image: string;
@@ -65,15 +81,52 @@ export interface Artifact {
   dimensions?: string;
   provenance?: string;
   significance?: string;
+  dateCreated?: string;
+  condition?: string;
   tags?: string[];
+  enabledAttributes?: string[];
   media?: Media;
   exhibition?: string;
   detailedContent?: DetailedContent;
   translations?: Translations;
+  isTranslationMissing?: boolean;
+  _hashes?: Record<string, string>;
   [key: string]: unknown;
 }
 
-export type Language = 'de' | 'en' | 'fr';
+// ── Raw JSON wrapper types (shape of the imported .json files) ────
+
+/** Shape of exhibitions.json */
+export interface RawExhibitionsData {
+  featured: string;
+  exhibitions: Record<string, Record<string, unknown>>;
+}
+
+/** Shape of artifacts.json */
+export interface RawArtifactsData {
+  artifacts: Record<string, Record<string, unknown>>;
+}
+
+/** Shape of assets.json */
+export interface RawAssetsData {
+  assets: Record<string, Asset>;
+}
+
+// ── Shared entity record used for editor form data ──────────────
+
+/** Loosely-typed record used in editor forms and bulk operations. */
+export interface EntityRecord {
+  id?: string;
+  translations?: Record<string, Record<string, string>>;
+  detailedContent?: Record<string, string>;
+  _hashes?: Record<string, string>;
+  media?: RequiredMedia;
+  enabledAttributes?: string[];
+  image?: string;
+  [key: string]: unknown;
+}
+
+export type Language = 'de' | 'en' | 'fr' | 'es' | 'it' | 'nl' | 'pl';
 
 export type ViewType = 'home' | 'exhibition' | 'artifact' | 'search' | 'detailed-content' | 'media-viewer';
 

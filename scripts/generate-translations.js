@@ -2,13 +2,22 @@
 
 import fs from 'fs';
 import path from 'path';
-import https from 'https';
-import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+import dotenv from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
-// Target languages for translation
+const API_KEY = process.env.LIBRETRANSLATE_API_KEY;
+const API_URL = process.env.LIBRETRANSLATE_API_URL || 'http://localhost:5000/translate';
+
+function getHash(text) {
+  // Using v2 prefix to identify LibreTranslate translations
+  // Uses SHA-256 to match the Web Crypto implementation in translationUtils.ts
+  return crypto.createHash('sha256').update('v2:' + (text || '')).digest('hex');
+}
+
 const TARGET_LANGUAGES = {
   en: 'English',
   fr: 'French',
@@ -18,180 +27,285 @@ const TARGET_LANGUAGES = {
   pl: 'Polish',
 };
 
-const CACHE_DIR = path.join(__dirname, '../public/translations');
-const HASH_FILE = path.join(CACHE_DIR, '.hash');
+const TRANSLATIONS_DIR = path.join(__dirname, '../public/translations');
+const CONTENT_DIR = path.join(__dirname, '../src/content');
+const CACHE_FILE = path.join(TRANSLATIONS_DIR, 'translation-memory.json');
 
-// Ensure cache directory exists
-if (!fs.existsSync(CACHE_DIR)) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
+if (!fs.existsSync(TRANSLATIONS_DIR)) {
+  fs.mkdirSync(TRANSLATIONS_DIR, { recursive: true });
 }
 
-// Cache for translations to avoid redundant API calls
 const translationCache = new Map();
-
-// Simple translation using free translation API with caching
-async function translateText(text, targetLanguage) {
-  const cacheKey = `${text}|${targetLanguage}`;
-  
-  // Check cache first
-  if (translationCache.has(cacheKey)) {
-    return translationCache.get(cacheKey);
-  }
-  
-  // Using MyMemory Translation API (free, no key required)
-  const encodedText = encodeURIComponent(text);
-  const url = `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=de|${getLanguageCode(targetLanguage)}`;
-  
-  return new Promise((resolve) => {
-    const timeoutId = setTimeout(() => {
-      console.error(`Timeout translating: ${text.substring(0, 30)}...`);
-      resolve(text); // Return original on timeout
-    }, 5000);
-    
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        clearTimeout(timeoutId);
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.responseStatus === 200 && parsed.responseData?.translatedText) {
-            const result = parsed.responseData.translatedText;
-            translationCache.set(cacheKey, result);
-            resolve(result);
-          } else {
-            resolve(text);
-          }
-        } catch (e) {
-          resolve(text);
-        }
-      });
-    }).on('error', (err) => {
-      clearTimeout(timeoutId);
-      console.error(`API error:`, err.message);
-      resolve(text); // Return original on error
-    });
-  });
-}
-
-function getLanguageCode(lang) {
-  const codes = {
-    en: 'en-GB',
-    fr: 'fr',
-    es: 'es',
-    it: 'it',
-    nl: 'nl',
-    pl: 'pl',
-  };
-  return codes[lang] || lang;
-}
-
-function computeHash(deTranslations) {
-  const content = JSON.stringify(deTranslations);
-  return crypto.createHash('md5').update(content).digest('hex');
-}
-
-function hashHasChanged(deTranslations) {
-  const currentHash = computeHash(deTranslations);
-  
-  if (!fs.existsSync(HASH_FILE)) {
-    return true;
-  }
-  
-  const savedHash = fs.readFileSync(HASH_FILE, 'utf-8').trim();
-  return currentHash !== savedHash;
-}
-
-function saveHash(deTranslations) {
-  const currentHash = computeHash(deTranslations);
-  fs.writeFileSync(HASH_FILE, currentHash);
-}
-
-async function generateTranslations() {
-  console.log('🌍 Checking for cached translations...\n');
-  
-  const translationsFilePath = path.join(__dirname, '../src/utils/translations.ts');
-  
-  // Read the current translations file
-  const fileContent = fs.readFileSync(translationsFilePath, 'utf-8');
-  
-  // Extract German translations
-  const deMatch = fileContent.match(/de:\s*\{([\s\S]*?)\n  \},/);
-  if (!deMatch) {
-    console.error('Could not find German translations in translations.ts');
-    process.exit(1);
-  }
-  
-  // Parse German translations
-  const deTranslations = {};
-  const lines = deMatch[1].split('\n');
-  
-  for (const line of lines) {
-    const match = line.trim().match(/^(\w+):\s*['"](.+?)['"],?\s*$/);
-    if (match) {
-      deTranslations[match[1]] = match[2];
+if (fs.existsSync(CACHE_FILE)) {
+  try {
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
+    for (const [key, value] of Object.entries(data)) {
+      translationCache.set(key, value);
     }
+  } catch (e) {}
+}
+
+function saveCache() {
+  const data = Object.fromEntries(translationCache);
+  fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
+}
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+let lastCallTime = 0;
+async function translateText(text, targetLanguage) {
+  if (!text || typeof text !== 'string' || text.trim() === '') return { text, cached: false };
+  
+  const cacheKey = `${text}|${targetLanguage}`;
+  if (translationCache.has(cacheKey)) {
+    return { text: translationCache.get(cacheKey), cached: true };
   }
   
-  console.log(`Found ${Object.keys(deTranslations).length} German translations`);
-  
-  // Check if translations have changed
-  if (!hashHasChanged(deTranslations)) {
-    console.log('✅ Translations are up to date. Using cached version.\n');
+  // Rate limit: 20/min = 1 every 3s. 
+  const now = Date.now();
+  const timeSinceLastCall = now - lastCallTime;
+  if (timeSinceLastCall < 3100) {
+    await sleep(3100 - timeSinceLastCall);
+  }
+
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        q: text,
+        source: 'de',
+        target: targetLanguage,
+        format: 'text',
+        api_key: API_KEY
+      }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    lastCallTime = Date.now();
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(`LibreTranslate Error: ${response.status} ${JSON.stringify(errData)}`);
+    }
+
+    const data = await response.json();
+    const result = data.translatedText;
+    
+    translationCache.set(cacheKey, result);
+    saveCache(); 
+    return { text: result, cached: false };
+  } catch (err) {
+    if (err.message.includes('429')) {
+      console.log('\r\x1b[K      Rate limited. Waiting 30 seconds...');
+      await sleep(30000);
+      return translateText(text, targetLanguage);
+    }
+    return { text, cached: false };
+  }
+}
+
+function drawProgressBar(current, total, width = 40) {
+  const percentage = Math.round((current / total) * 100);
+  const filled = Math.round((width * current) / total);
+  const empty = width - filled;
+  const bar = '█'.repeat(filled) + '░'.repeat(empty);
+  process.stdout.write(`\r[${bar}] ${percentage}% (${current}/${total})`);
+}
+
+async function translateUIStrings() {
+  const deFilePath = path.join(TRANSLATIONS_DIR, 'de.json');
+  if (!fs.existsSync(deFilePath)) {
+    console.error('❌ de.json not found in public/translations/');
     return;
   }
   
-  console.log('\n📝 German translations changed. Regenerating all translations...\n');
-  
-  // Generate translations for each language
-  const translationsByLang = {};
-  
-  for (const [langCode, langName] of Object.entries(TARGET_LANGUAGES)) {
-    console.log(`Translating to ${langName}...`);
-    translationsByLang[langCode] = {};
-    
-    let count = 0;
-    for (const [key, value] of Object.entries(deTranslations)) {
-      try {
-        const translated = await translateText(value, langCode);
-        translationsByLang[langCode][key] = translated;
-        count++;
-        if (count % 5 === 0) process.stdout.write('.');
-      } catch (error) {
-        console.error(`Error translating ${key}:`, error);
-        translationsByLang[langCode][key] = value;
-      }
-      
-      // Add small delay between requests to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 50));
+  const deTranslations = JSON.parse(fs.readFileSync(deFilePath, 'utf-8'));
+  const hashFilePath = path.join(TRANSLATIONS_DIR, 'ui-hashes.json');
+  let uiHashes = {};
+  if (fs.existsSync(hashFilePath)) {
+    try { uiHashes = JSON.parse(fs.readFileSync(hashFilePath, 'utf-8')); } catch (e) {}
+  }
+
+  const languages = Object.keys(TARGET_LANGUAGES);
+  const uiKeys = Object.keys(deTranslations);
+  const totalUISteps = languages.length * uiKeys.length;
+  let currentStep = 0;
+
+  console.log('🌍 Syncing UI Strings...');
+
+  for (const langCode of languages) {
+    const filePath = path.join(TRANSLATIONS_DIR, `${langCode}.json`);
+    let langTranslations = {};
+    if (fs.existsSync(filePath)) {
+      try { langTranslations = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) {}
     }
-    console.log(` ✓ (${count}/${Object.keys(deTranslations).length})\n`);
+    
+    let updated = false;
+
+    for (const key of uiKeys) {
+      currentStep++;
+      const value = deTranslations[key];
+      const currentHash = getHash(value);
+      const previousHash = uiHashes[key];
+      
+      let result;
+      let method = '';
+
+      if (langTranslations[key] && langTranslations[key] !== value && currentHash === previousHash) {
+        result = { text: langTranslations[key], cached: true };
+        method = '(disk-cache)';
+      } else {
+        process.stdout.write('\r\x1b[K');
+        console.log(`    [UI:${langCode}] "${key}"... translating`);
+        result = await translateText(value, langCode);
+        method = result.cached ? '(mem-cache)' : '(translated)';
+        if (result.text !== value) {
+          langTranslations[key] = result.text;
+          updated = true;
+        }
+      }
+
+      process.stdout.write('\r\x1b[K');
+      console.log(`    [UI:${langCode}] "${key}" -> ${result.text.substring(0, 30)}${result.text.length > 30 ? '...' : ''} ${method}`);
+      drawProgressBar(currentStep, totalUISteps);
+    }
+    
+    if (updated || !fs.existsSync(filePath)) {
+      // Sort keys alphabetically before saving
+      const sorted = Object.keys(langTranslations).sort().reduce((acc, key) => {
+        acc[key] = langTranslations[key];
+        return acc;
+      }, {});
+      fs.writeFileSync(filePath, JSON.stringify(sorted, null, 2));
+    }
   }
-  
-  // Save translations as JSON files in public directory
-  console.log('\n💾 Saving translations to public/translations/...');
-  
-  for (const [langCode, langTranslations] of Object.entries(translationsByLang)) {
-    const filePath = path.join(CACHE_DIR, `${langCode}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(langTranslations, null, 2));
-    console.log(`   ✓ ${langCode}.json`);
+
+  const newHashes = {};
+  for (const [key, value] of Object.entries(deTranslations)) {
+    newHashes[key] = getHash(value);
   }
-  
-  // Also save German translations
-  const dePath = path.join(CACHE_DIR, 'de.json');
-  fs.writeFileSync(dePath, JSON.stringify(deTranslations, null, 2));
-  console.log(`   ✓ de.json`);
-  
-  // Save hash to prevent regeneration
-  saveHash(deTranslations);
-  
-  console.log('\n✅ All translations generated and cached!\n');
+  fs.writeFileSync(hashFilePath, JSON.stringify(newHashes, null, 2));
+  console.log('\n✅ UI Strings complete.\n');
 }
 
-// Run the translation generation
-generateTranslations().catch((error) => {
-  console.error('Error generating translations:', error);
-  process.exit(1);
-});
+async function translateContent() {
+  const files = ['exhibitions.json', 'artifacts.json'];
+  
+  for (const filename of files) {
+    const filePath = path.join(CONTENT_DIR, filename);
+    if (!fs.existsSync(filePath)) continue;
+    
+    console.log(`📦 Processing ${filename}...`);
+    let content;
+    try {
+      content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    } catch (e) { continue; }
+
+    const items = content.exhibitions || content.artifacts;
+    const itemEntries = Object.entries(items);
+    const languages = Object.keys(TARGET_LANGUAGES);
+    const fields = ['title', 'subtitle', 'description', 'significance', 'period'];
+    const totalOps = itemEntries.length * (fields.length + 1) * languages.length;
+    let currentOp = 0;
+
+    for (const [id, item] of itemEntries) {
+      if (!item.translations || !item.translations.de) {
+        currentOp += (fields.length + 1) * languages.length;
+        continue;
+      }
+      
+      const deSource = item.translations.de;
+      if (!item._hashes) item._hashes = {};
+
+      for (const field of fields) {
+        const deValue = deSource[field];
+        const currentHash = getHash(deValue);
+
+        for (const langCode of languages) {
+          currentOp++;
+          if (!item.translations[langCode]) item.translations[langCode] = {};
+          const target = item.translations[langCode];
+          
+          let result;
+          let method = '';
+
+          if (deValue && target[field] && target[field] !== deValue && item._hashes[field] === currentHash) {
+            result = { text: target[field], cached: true };
+            method = '(disk-cache)';
+          } else if (deValue) {
+            process.stdout.write('\r\x1b[K');
+            console.log(`    [${id}] [${langCode}] ${field}... translating`);
+            result = await translateText(deValue, langCode);
+            method = result.cached ? '(mem-cache)' : '(translated)';
+            if (result.text !== deValue) {
+              target[field] = result.text;
+              fs.writeFileSync(filePath, JSON.stringify(content, null, 2));
+            }
+          } else {
+            result = { text: '', cached: true };
+            method = '(empty)';
+          }
+          
+          process.stdout.write('\r\x1b[K');
+          console.log(`    [${id}] [${langCode}] ${field} -> ${result.text.substring(0, 30)}... ${method}`);
+          drawProgressBar(currentOp, totalOps);
+        }
+        if (deValue) item._hashes[field] = currentHash;
+      }
+
+      const deMD = item.detailedContent?.de;
+      const currentMDHash = getHash(deMD);
+
+      for (const langCode of languages) {
+        currentOp++;
+        if (!item.detailedContent) item.detailedContent = {};
+        const targetMD = item.detailedContent[langCode];
+        
+        if (deMD && targetMD && targetMD !== deMD && item._hashes.detailedContent === currentMDHash) {
+          process.stdout.write('\r\x1b[K');
+          console.log(`    [${id}] [${langCode}] detailedContent -> (disk-cache)`);
+        } else if (deMD) {
+          process.stdout.write('\r\x1b[K');
+          console.log(`    [${id}] [${langCode}] detailedContent... translating chunks`);
+          const chunks = deMD.split('\n\n');
+          const translatedChunks = [];
+          let mdUpdated = false;
+          
+          for (const chunk of chunks) {
+            if (chunk.trim()) {
+              const mediaMatch = chunk.match(/^\[(Audio|Video):.*?\]\(.*?\)$/);
+              if (mediaMatch) {
+                translatedChunks.push(chunk);
+                continue;
+              }
+              const result = await translateText(chunk, langCode);
+              translatedChunks.push(result.text);
+              if (result.text !== chunk) mdUpdated = true;
+            } else {
+              translatedChunks.push('');
+            }
+          }
+          if (mdUpdated) {
+            item.detailedContent[langCode] = translatedChunks.join('\n\n');
+            fs.writeFileSync(filePath, JSON.stringify(content, null, 2));
+            console.log(`    [${id}] [${langCode}] detailedContent -> updated.`);
+          }
+        }
+        drawProgressBar(currentOp, totalOps);
+      }
+      if (deMD) item._hashes.detailedContent = currentMDHash;
+      fs.writeFileSync(filePath, JSON.stringify(content, null, 2));
+    }
+    console.log(`\n✅ ${filename} complete.\n`);
+  }
+}
+
+async function run() {
+  await translateUIStrings();
+  await translateContent();
+  console.log('\n✅ All translations complete.');
+}
+
+run().catch(console.error);

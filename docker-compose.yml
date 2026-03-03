@@ -1,0 +1,47 @@
+# Museum Rodenberg – Docker Compose
+#
+# Usage:
+#   docker compose up -d          # start all services
+#   docker compose logs -f        # follow logs
+#   docker compose down           # stop
+#
+# The museum app is available at http://localhost:3000
+# LibreTranslate is available at http://localhost:5000
+
+services:
+  museum:
+    build: .
+    container_name: museum-rodenberg
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist user-uploaded media and CMS-edited content across rebuilds
+      - ./public/uploads:/app/public/uploads
+      - ./src/content:/app/src/content
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-museum2025}
+      - LIBRETRANSLATE_API_URL=http://libretranslate:5000/translate
+      - PORT=3000
+    depends_on:
+      libretranslate:
+        condition: service_started
+
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    container_name: museum-libretranslate
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - lt-data:/home/libretranslate/.local
+    environment:
+      # Only load the 7 languages the museum uses (saves RAM & startup time)
+      - LT_LOAD_ONLY=de,en,fr,es,it,nl,pl
+      # Disable API key requirement (internal network only)
+      - LT_API_KEYS=false
+      # Disable rate limiting (internal network only)
+      - LT_DISABLE_WEB_UI=false
+
+volumes:
+  lt-data:

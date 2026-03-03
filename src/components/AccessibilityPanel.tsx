@@ -2,34 +2,35 @@ import React, { useState } from 'react';
 import { Settings, X, Type, Eye, RotateCcw, Volume2 } from 'lucide-react';
 import { useAccessibility, FontSize, FontFamily, ContrastMode } from '../hooks/useAccessibility';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
-import { Language } from '../hooks/useLanguage';
-import { t } from '../utils/translations';
+import { useLanguage } from '../hooks/useLanguage';
 
-interface AccessibilityPanelProps {
-  currentLanguage: Language;
-}
+interface AccessibilityPanelProps {}
 
-export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
-  currentLanguage,
-}) => {
+export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { settings, updateSettings, resetSettings } = useAccessibility();
-  const { getVoicesForLanguage, settings: ttsSettings, updateSettings: updateTTSSettings } = useTextToSpeech();
+  const { settings, updateSettings, resetSettings: resetAccSettings } = useAccessibility();
+  const { getVoicesForLanguage, settings: ttsSettings, updateSettings: updateTTSSettings, resetSettings: resetTTSSettings } = useTextToSpeech();
+  const { currentLanguage, t } = useLanguage();
+
+  const handleReset = () => {
+    resetAccSettings();
+    resetTTSSettings();
+  };
 
   const fontSizeOptions: { value: FontSize; label: string }[] = [
-    { value: 'small', label: 'Klein' },
-    { value: 'medium', label: 'Normal' },
-    { value: 'large', label: 'Groß' },
+    { value: 'small', label: t('small') },
+    { value: 'medium', label: t('medium') },
+    { value: 'large', label: t('large') },
   ];
 
   const fontFamilyOptions: { value: FontFamily; label: string }[] = [
-    { value: 'default', label: 'Standard' },
-    { value: 'dyslexie', label: 'Dyslexie (Legasthenie-freundlich)' },
+    { value: 'default', label: t('defaultFont') },
+    { value: 'dyslexie', label: `${t('dyslexiaFriendly')}` },
   ];
 
   const contrastOptions: { value: ContrastMode; label: string }[] = [
-    { value: 'normal', label: 'Normal' },
-    { value: 'high', label: 'Hoher Kontrast' },
+    { value: 'normal', label: t('normalContrast') },
+    { value: 'high', label: t('highContrast') },
   ];
 
   const voicesForLanguage = getVoicesForLanguage(currentLanguage);
@@ -40,8 +41,8 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
       <button
         onClick={() => setIsOpen(true)}
         className="btn btn-primary fixed bottom-4 right-4 z-40 rounded-full p-3 h-12 w-12"
-        title="Barrierefreiheit"
-        aria-label="Barrierefreiheit-Einstellungen öffnen"
+        title={t('accessibility')}
+        aria-label={t('accessibility')}
       >
         <Settings className="h-6 w-6" />
       </button>
@@ -52,11 +53,11 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-heading-lg font-semibold text-neutral-900">Barrierefreiheit</h2>
+                <h2 className="text-heading-lg font-semibold text-neutral-900">{t('accessibility')}</h2>
                 <button
                   onClick={() => setIsOpen(false)}
                   className="p-2 rounded-md text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors focus-ring-sm"
-                  aria-label="Schließen"
+                  aria-label={t('close')}
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -68,7 +69,7 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   <div className="flex items-center mb-3">
                     <Type className="metadata-icon" />
                     <label className="text-body-sm font-semibold text-neutral-900">
-                      Schriftgröße
+                      {t('fontSize')}
                     </label>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -93,7 +94,7 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   <div className="flex items-center mb-3">
                     <Type className="metadata-icon" />
                     <label className="text-body-sm font-semibold text-neutral-900">
-                      Schriftart
+                      {t('fontFamily')}
                     </label>
                   </div>
                   <div className="space-y-2">
@@ -120,7 +121,7 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   <div className="flex items-center mb-3">
                     <Eye className="metadata-icon" />
                     <label className="text-body-sm font-semibold text-neutral-900">
-                      Kontrast
+                      {t('contrast')}
                     </label>
                   </div>
                   <div className="space-y-2">
@@ -146,7 +147,7 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                     <div className="flex items-center mb-3">
                       <Volume2 className="metadata-icon" />
                       <label className="text-body-sm font-semibold text-neutral-900">
-                        Sprachstimme
+                        {t('voice')}
                       </label>
                     </div>
                     <select
@@ -167,7 +168,7 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-body-sm font-semibold text-neutral-900">
-                      Sprechgeschwindigkeit
+                      {t('speechRate')}
                     </label>
                     <span className="text-caption text-neutral-600">{(ttsSettings.rate * 100).toFixed(0)}%</span>
                   </div>
@@ -181,9 +182,9 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                     className="w-full h-2 bg-neutral-200 rounded-full appearance-none cursor-pointer accent-primary-600"
                   />
                   <div className="flex justify-between text-caption text-neutral-500 mt-1">
-                    <span>Langsam</span>
-                    <span>Normal</span>
-                    <span>Schnell</span>
+                    <span>{t('slow')}</span>
+                    <span>{t('normal')}</span>
+                    <span>{t('fast')}</span>
                   </div>
                 </div>
 
@@ -191,7 +192,7 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-body-sm font-semibold text-neutral-900">
-                      Tonhöhe
+                      {t('pitch')}
                     </label>
                     <span className="text-caption text-neutral-600">{(ttsSettings.pitch * 100).toFixed(0)}%</span>
                   </div>
@@ -205,20 +206,20 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                     className="w-full h-2 bg-neutral-200 rounded-full appearance-none cursor-pointer accent-primary-600"
                   />
                   <div className="flex justify-between text-caption text-neutral-500 mt-1">
-                    <span>Tief</span>
-                    <span>Normal</span>
-                    <span>Hoch</span>
+                    <span>{t('low')}</span>
+                    <span>{t('normal')}</span>
+                    <span>{t('high')}</span>
                   </div>
                 </div>
 
                 {/* Reset Button */}
                 <div className="pt-4 divider">
                   <button
-                    onClick={resetSettings}
+                    onClick={handleReset}
                     className="w-full btn btn-secondary mt-4"
                   >
                     <RotateCcw className="h-4 w-4 mr-2" />
-                    Zurücksetzen
+                    {t('reset')}
                   </button>
                 </div>
               </div>

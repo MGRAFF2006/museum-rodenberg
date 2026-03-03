@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Image as ImageIcon, Video, Music } from 'lucide-react';
-import { Language } from '../hooks/useLanguage';
-import { t } from '../utils/translations';
+import { useLanguage } from '../hooks/useLanguage';
+import { AudioPlayer } from './AudioPlayer';
 
 interface MediaItem {
   url: string;
@@ -14,8 +14,8 @@ interface MediaViewerPageProps {
   videos: MediaItem[];
   audio: MediaItem[];
   onBack: () => void;
-  currentLanguage: Language;
   initialTab?: 'images' | 'videos' | 'audio';
+  initialUrl?: string | null;
 }
 
 export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
@@ -23,11 +23,26 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
   videos,
   audio,
   onBack,
-  currentLanguage,
   initialTab = 'images',
+  initialUrl = null,
 }) => {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'images' | 'videos' | 'audio'>(initialTab);
-  const [selectedImage, setSelectedImage] = useState(0);
+  
+  // Set initial selected image if url is provided
+  const initialImageIndex = initialUrl && activeTab === 'images' 
+    ? images.findIndex(img => img === initialUrl) 
+    : 0;
+  const [selectedImage, setSelectedImage] = useState(initialImageIndex >= 0 ? initialImageIndex : 0);
+
+  useEffect(() => {
+    if (initialUrl) {
+      const element = document.getElementById(`media-${encodeURIComponent(initialUrl)}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [initialUrl, activeTab]);
 
   const hasImages = images.length > 0;
   const hasVideos = videos.length > 0;
@@ -43,7 +58,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
             className="flex items-center text-primary-800 hover:text-primary-600 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            {t('back', currentLanguage)}
+            {t('back')}
           </button>
         </div>
       </div>
@@ -51,7 +66,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
       {/* Title Banner */}
       <div className="bg-gradient-to-r from-primary-800 to-primary-600 text-white">
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <h1 className="text-2xl md:text-3xl font-bold">{t('media', currentLanguage)}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">{t('media')}</h1>
         </div>
       </div>
 
@@ -69,7 +84,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                 }`}
               >
                 <ImageIcon className="h-4 w-4 mr-2" />
-                {t('images', currentLanguage)} ({images.length})
+                {t('images')} ({images.length})
               </button>
             )}
             {hasVideos && (
@@ -82,7 +97,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                 }`}
               >
                 <Video className="h-4 w-4 mr-2" />
-                {t('videos', currentLanguage)} ({videos.length})
+                {t('videos')} ({videos.length})
               </button>
             )}
             {hasAudio && (
@@ -95,7 +110,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                 }`}
               >
                 <Music className="h-4 w-4 mr-2" />
-                {t('audio', currentLanguage)} ({audio.length})
+                {t('audio')} ({audio.length})
               </button>
             )}
           </div>
@@ -106,22 +121,22 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
       <div className="max-w-4xl mx-auto px-4 py-6">
         {activeTab === 'images' && hasImages && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div className="bg-neutral-900 rounded-xl shadow-xl overflow-hidden flex items-center justify-center min-h-[400px] md:min-h-[600px] max-h-[80vh] relative shadow-inner">
               <img
                 src={images[selectedImage]}
-                alt={`${t('image', currentLanguage)} ${selectedImage + 1}`}
-                className="w-full h-64 md:h-96 object-contain bg-neutral-50"
+                alt={`${t('image')} ${selectedImage + 1}`}
+                className="max-w-full max-h-full object-contain"
               />
             </div>
             {images.length > 1 && (
-              <div className="bg-white rounded-lg shadow-lg p-3 md:p-4">
-                <div className="grid grid-cols-4 md:grid-cols-6 gap-2 md:gap-3">
+              <div className="bg-white rounded-xl shadow-md p-4 border border-neutral-100">
+                <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-hide">
                   {images.map((image, index) => (
                     <button
                       key={index}
                       onClick={() => setSelectedImage(index)}
-                      className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                        selectedImage === index ? 'border-primary-500' : 'border-neutral-200'
+                      className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                        selectedImage === index ? 'border-primary-500 ring-2 ring-primary-200' : 'border-neutral-200 hover:border-neutral-300 hover:scale-105'
                       }`}
                     >
                       <img
@@ -138,39 +153,33 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
         )}
 
         {activeTab === 'videos' && hasVideos && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {videos.map((video, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold text-neutral-900 mb-2">{video.title}</h3>
-                <p className="text-neutral-600 text-sm mb-4">{video.description}</p>
-                <video
-                  controls
-                  className="w-full rounded-lg"
-                  preload="metadata"
-                >
-                  <source src={video.url} type="video/mp4" />
-                  {t('videoNotSupported', currentLanguage)}
-                </video>
+              <div key={index} id={`media-${encodeURIComponent(video.url)}`} className={`bg-white rounded-xl shadow-lg p-6 border border-neutral-100 transition-all ${initialUrl === video.url ? 'ring-2 ring-primary-500' : ''}`}>
+                <h3 className="text-xl font-bold text-neutral-900 mb-2">{video.title}</h3>
+                {video.description && <p className="text-neutral-600 text-sm mb-6 leading-relaxed">{video.description}</p>}
+                <div className="aspect-video bg-black rounded-lg overflow-hidden shadow-inner">
+                  <video
+                    controls
+                    className="w-full h-full"
+                    preload="metadata"
+                  >
+                    <source src={video.url} type="video/mp4" />
+                    {t('videoNotSupported')}
+                  </video>
+                </div>
               </div>
             ))}
           </div>
         )}
 
         {activeTab === 'audio' && hasAudio && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {audio.map((audioItem, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold text-neutral-900 mb-2">{audioItem.title}</h3>
-                <p className="text-neutral-600 text-sm mb-4">{audioItem.description}</p>
-                <audio
-                  controls
-                  className="w-full"
-                  preload="metadata"
-                >
-                  <source src={audioItem.url} type="audio/wav" />
-                  <source src={audioItem.url} type="audio/mp3" />
-                  {t('audioNotSupported', currentLanguage)}
-                </audio>
+              <div key={index} id={`media-${encodeURIComponent(audioItem.url)}`} className={`bg-white rounded-xl shadow-lg p-6 border border-neutral-100 transition-all ${initialUrl === audioItem.url ? 'ring-2 ring-primary-500' : ''}`}>
+                <h3 className="text-xl font-bold text-neutral-900 mb-2">{audioItem.title}</h3>
+                {audioItem.description && <p className="text-neutral-600 text-sm mb-6 leading-relaxed">{audioItem.description}</p>}
+                <AudioPlayer url={audioItem.url} />
               </div>
             ))}
           </div>

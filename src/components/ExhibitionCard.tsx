@@ -1,17 +1,8 @@
 import React from 'react';
 import { Calendar, MapPin, User, Tag as TagIcon } from 'lucide-react';
-
-interface Exhibition {
-  id: string;
-  title: string;
-  subtitle: string;
-  description: string;
-  image: string;
-  dateRange: string;
-  location: string;
-  curator: string;
-  tags: string[];
-}
+import { useLanguage } from '../hooks/useLanguage';
+import { Exhibition } from '../types';
+import { stripMarkdown } from '../utils/markdownUtils';
 
 interface ExhibitionCardProps {
   exhibition: Exhibition;
@@ -24,6 +15,7 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
   onClick, 
   featured = false 
 }) => {
+  const { t } = useLanguage();
   return (
     <div
       onClick={() => onClick(exhibition.id)}
@@ -38,7 +30,7 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
         />
         {featured && (
           <div className="absolute top-0 right-0 m-4">
-            <span className="badge badge-accent">Hauptausstellung</span>
+            <span className="badge badge-accent">{t('mainExhibition')}</span>
           </div>
         )}
       </div>
@@ -55,7 +47,7 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
         </div>
         
         <p className="text-body-sm text-neutral-600 line-clamp-3">
-          {exhibition.description}
+          {stripMarkdown(exhibition.description)}
         </p>
 
         {/* Meta Information */}
@@ -76,15 +68,15 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2">
-          {exhibition.tags.slice(0, 3).map((tag) => (
+          {exhibition.tags?.slice(0, 3).map((tag) => (
             <span key={tag} className="tag">
               <TagIcon className="h-3 w-3 mr-1" />
               {tag}
             </span>
           ))}
-          {exhibition.tags.length > 3 && (
+          {(exhibition.tags?.length || 0) > 3 && (
             <span className="text-caption text-neutral-500 px-2 py-1">
-              +{exhibition.tags.length - 3}
+              +{(exhibition.tags?.length || 0) - 3}
             </span>
           )}
         </div>

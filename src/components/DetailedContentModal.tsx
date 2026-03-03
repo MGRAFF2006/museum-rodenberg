@@ -3,8 +3,8 @@ import { X, BookOpen, Play } from 'lucide-react';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { MediaViewer } from './MediaViewer';
 import { TextToSpeechButton } from './TextToSpeechButton';
-import { Language } from '../hooks/useLanguage';
-import { t } from '../utils/translations';
+import { useLanguage } from '../hooks/useLanguage';
+import { stripMarkdown } from '../utils/markdownUtils';
 
 interface DetailedContentModalProps {
   isOpen: boolean;
@@ -16,7 +16,6 @@ interface DetailedContentModalProps {
     videos: Array<{ url: string; title: string; description: string }>;
     audio: Array<{ url: string; title: string; description: string }>;
   };
-  currentLanguage: Language;
 }
 
 export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
@@ -25,17 +24,15 @@ export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
   title,
   content,
   media,
-  currentLanguage,
 }) => {
+  const { currentLanguage, t } = useLanguage();
   const [isMediaViewerOpen, setIsMediaViewerOpen] = useState(false);
-  const [selectedMediaType, setSelectedMediaType] = useState<'image' | 'video' | 'audio'>('image');
-  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string>('');
+  const [mediaViewerInitialItem, setMediaViewerInitialItem] = useState<{type: 'image' | 'video' | 'audio', url: string} | undefined>();
 
   if (!isOpen) return null;
 
   const handleMediaClick = (type: 'image' | 'video' | 'audio', url: string, title?: string) => {
-    setSelectedMediaType(type);
-    setSelectedMediaUrl(url);
+    setMediaViewerInitialItem({ type, url });
     setIsMediaViewerOpen(true);
   };
 
@@ -57,7 +54,7 @@ export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
             </div>
             <div className="flex items-center space-x-2">
               <TextToSpeechButton
-                text={content.replace(/[#*\[\]()]/g, '')} // Remove markdown formatting for TTS
+                text={stripMarkdown(content)}
                 language={currentLanguage}
               />
               {hasMedia && (
@@ -66,14 +63,14 @@ export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
                   className="hidden md:flex items-center px-3 py-2 bg-primary-800 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
                 >
                   <Play className="h-4 w-4 mr-2" />
-                  {t('media', currentLanguage)}
+                  {t('media')}
                 </button>
               )}
               {hasMedia && (
                 <button
                   onClick={() => setIsMediaViewerOpen(true)}
                   className="md:hidden p-2 bg-primary-800 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                  title={t('media', currentLanguage)}
+                  title={t('media')}
                 >
                   <Play className="h-5 w-5" />
                 </button>
@@ -106,7 +103,11 @@ export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
           videos={media!.videos}
           audio={media!.audio}
           isOpen={isMediaViewerOpen}
-          onClose={() => setIsMediaViewerOpen(false)}
+          onClose={() => {
+            setIsMediaViewerOpen(false);
+            setMediaViewerInitialItem(undefined);
+          }}
+          initialItem={mediaViewerInitialItem}
         />
       )}
     </div>

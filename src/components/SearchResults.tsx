@@ -3,34 +3,8 @@ import { Search, ArrowLeft } from 'lucide-react';
 import { ExhibitionCard } from './ExhibitionCard';
 import { ArtifactCard } from './ArtifactCard';
 import { useLanguage } from '../hooks/useLanguage';
-import { t } from '../utils/translations';
 
-interface Exhibition {
-  id: string;
-  title: string;
-  subtitle?: string;
-  description: string;
-  image: string;
-  dateRange?: string;
-  location?: string;
-  curator?: string;
-  tags?: string[];
-  [key: string]: unknown;
-}
-
-interface Artifact {
-  id: string;
-  title: string;
-  period?: string;
-  description: string;
-  image: string;
-  materials?: string[];
-  dimensions?: string;
-  provenance?: string;
-  significance?: string;
-  tags?: string[];
-  [key: string]: unknown;
-}
+import { Exhibition, Artifact } from '../types';
 
 interface SearchResultsProps {
   query: string;
@@ -50,7 +24,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   onBack,
 }) => {
   const totalResults = exhibitions.length + artifacts.length;
-  const { currentLanguage } = useLanguage();
+  const { t } = useLanguage();
 
   return (
     <div className="bg-neutral-50 min-h-screen">
@@ -64,14 +38,14 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
               <span className="text-body font-medium">
-                {t('backToExhibitions', currentLanguage)}
+                {t('backToExhibitions')}
               </span>
             </button>
             
             <div className="flex items-center text-primary-700 order-1 md:order-2">
               <Search className="h-5 w-5 mr-2" />
               <span className="text-body font-semibold">
-                {totalResults} {totalResults !== 1 ? t('searchResultsPlural', currentLanguage) : t('searchResults', currentLanguage)} "{query}"
+                {totalResults} {totalResults !== 1 ? t('searchResultsPlural') : t('searchResults')} "{query}"
               </span>
             </div>
           </div>
@@ -88,10 +62,10 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                 </div>
               </div>
               <h2 className="text-heading font-serif font-bold text-neutral-900 mb-3">
-                {t('noResults', currentLanguage)}
+                {t('noResults')}
               </h2>
               <p className="text-body text-neutral-600">
-                {t('noResultsText', currentLanguage)}
+                {t('noResultsText')}
               </p>
             </div>
           </div>
@@ -101,7 +75,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
             {exhibitions.length > 0 && (
               <section>
                 <h2 className="text-heading-lg font-serif font-bold text-neutral-900 mb-8">
-                  {t('exhibitions', currentLanguage)} <span className="text-primary-600">({exhibitions.length})</span>
+                  {t('exhibitions')} <span className="text-primary-600">({exhibitions.length})</span>
                 </h2>
                 <div className="grid-responsive">
                   {exhibitions.map((exhibition) => (
@@ -119,7 +93,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
             {artifacts.length > 0 && (
               <section className={exhibitions.length > 0 ? 'pt-8 border-t border-neutral-200' : ''}>
                 <h2 className="text-heading-lg font-serif font-bold text-neutral-900 mb-8">
-                  {t('artifacts', currentLanguage)} <span className="text-primary-600">({artifacts.length})</span>
+                  {t('artifacts')} <span className="text-primary-600">({artifacts.length})</span>
                 </h2>
                 <div className="grid-responsive">
                   {artifacts.map((artifact) => (

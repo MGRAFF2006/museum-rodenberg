@@ -2,15 +2,14 @@ import React from 'react';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { TextToSpeechButton } from './TextToSpeechButton';
-import { Language } from '../hooks/useLanguage';
-import { t } from '../utils/translations';
+import { useLanguage } from '../hooks/useLanguage';
+import { stripMarkdown } from '../utils/markdownUtils';
 
 interface DetailedContentPageProps {
   title: string;
   content: string;
   onBack: () => void;
   onMediaClick?: (type: 'image' | 'video' | 'audio', url: string, title?: string) => void;
-  currentLanguage: Language;
 }
 
 export const DetailedContentPage: React.FC<DetailedContentPageProps> = ({
@@ -18,8 +17,8 @@ export const DetailedContentPage: React.FC<DetailedContentPageProps> = ({
   content,
   onBack,
   onMediaClick,
-  currentLanguage,
 }) => {
+  const { currentLanguage, t } = useLanguage();
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Header */}
@@ -31,10 +30,10 @@ export const DetailedContentPage: React.FC<DetailedContentPageProps> = ({
               className="flex items-center text-primary-800 hover:text-primary-600 transition-colors"
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
-              {t('back', currentLanguage)}
+              {t('back')}
             </button>
             <TextToSpeechButton
-              text={content.replace(/[#*\[\]()]/g, '')}
+              text={stripMarkdown(content)}
               language={currentLanguage}
             />
           </div>

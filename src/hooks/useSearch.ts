@@ -21,16 +21,16 @@ export const useSearch = (
     const matchingExhibitions = exhibitions.filter(ex =>
       ex.title.toLowerCase().includes(lowerQuery) ||
       ex.description.toLowerCase().includes(lowerQuery) ||
-      ex.tags.some(tag => tag.toLowerCase().includes(lowerQuery)) ||
-      ('curator' in ex && ex.curator.toLowerCase().includes(lowerQuery))
+      ex.tags?.some(tag => tag.toLowerCase().includes(lowerQuery)) ||
+      (ex.curator?.toLowerCase().includes(lowerQuery))
     );
 
     const matchingArtifacts = artifacts.filter(art =>
       art.title.toLowerCase().includes(lowerQuery) ||
       art.description.toLowerCase().includes(lowerQuery) ||
-      art.period.toLowerCase().includes(lowerQuery) ||
-      art.tags.some(tag => tag.toLowerCase().includes(lowerQuery)) ||
-      art.materials.some(material => material.toLowerCase().includes(lowerQuery))
+      art.period?.toLowerCase().includes(lowerQuery) ||
+      art.tags?.some(tag => tag.toLowerCase().includes(lowerQuery)) ||
+      art.materials?.some(material => material.toLowerCase().includes(lowerQuery))
     );
 
     return {

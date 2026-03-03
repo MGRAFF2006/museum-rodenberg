@@ -1,11 +1,12 @@
 import React from 'react';
-import { X, Home, Search, BookOpen } from 'lucide-react';
+import { X, Home, BookOpen } from 'lucide-react';
+import type { Exhibition } from '../types';
 
 interface MobileMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onHomeClick: () => void;
-  exhibitions: any[];
+  exhibitions: Exhibition[];
   onExhibitionClick: (id: string) => void;
 }
 

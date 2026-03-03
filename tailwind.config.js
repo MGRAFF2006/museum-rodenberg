@@ -8,33 +8,33 @@ export default {
         sans: ['Lexend', 'system-ui', '-apple-system', 'sans-serif'],
       },
       colors: {
-        // Primary palette - Museum brand colors
+        // Primary palette - Museum brand colors (Sophisticated Navy)
         primary: {
-          50: '#f0f4f8',
-          100: '#d9e2ed',
-          200: '#b3c5db',
-          300: '#8ca8c9',
-          400: '#6690ba',
-          500: '#4a77ab',
-          600: '#3a5c8f',
-          700: '#2a4373',
-          800: '#1a2a57',
-          900: '#0f1a38',
+          50: '#f4f6fb',
+          100: '#e8ecf7',
+          200: '#d1d9ef',
+          300: '#b9c6e7',
+          400: '#8ba1d7',
+          500: '#5d7bc7',
+          600: '#546fb3',
+          700: '#465c95',
+          800: '#384a77',
+          900: '#2e3c61',
         },
-        // Secondary accent - Gold/warm tones
+        // Secondary accent - Gold/warm tones (Elegant Amber)
         accent: {
-          50: '#fef9f0',
-          100: '#fce8d1',
-          200: '#f9d7a3',
-          300: '#f5c675',
-          400: '#f2b547',
-          500: '#dfa234',
-          600: '#c8871e',
-          700: '#9e6b18',
-          800: '#744f12',
-          900: '#4a330c',
+          50: '#fffbf2',
+          100: '#fef3d9',
+          200: '#fde4a3',
+          300: '#fbd46d',
+          400: '#f9c537',
+          500: '#f7b500',
+          600: '#e5a700',
+          700: '#9d7300',
+          800: '#765600',
+          900: '#4d3800',
         },
-        // Neutral palette
+        // Neutral palette - Refined Stone
         neutral: {
           50: '#fafaf9',
           100: '#f5f5f4',
@@ -87,5 +87,7 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/typography'),
+  ],
 };
