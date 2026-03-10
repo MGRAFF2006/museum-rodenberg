@@ -43,15 +43,20 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/uploads\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'museum-uploads',
+              // Bumped to v2 to purge stale 404s cached by the v1 SW
+              cacheName: 'museum-uploads-v2',
               expiration: {
                 maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
               },
             },
           },
