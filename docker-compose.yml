@@ -1,39 +1,29 @@
 # Museum Rodenberg – Docker Compose
 #
+# Profiles:
+#   (default)   convex-backend only (for npm run dev:full — Vite runs on host)
+#   dev         full local stack: museum-app + convex + libretranslate + schema push
+#   dashboard   convex-dashboard UI
+#   translate   libretranslate only (for npm run dev:full --translate)
+#
 # Usage:
-#   docker compose up -d          # start all services
-#   docker compose logs -f        # follow logs
-#   docker compose down           # stop
+#   docker compose up -d                              # convex-backend only
+#   docker compose --profile dev up -d                # full stack (mirrors Sevalla)
+#   docker compose --profile dev --profile dashboard up -d  # + dashboard
+#   docker compose down --remove-orphans              # stop everything
 #
-# The museum app is available at http://localhost:3000
-# LibreTranslate is available at http://localhost:5000
-# Convex Dashboard is available at http://localhost:6791
-#
-# After first start, generate the Convex admin key:
+# First-time setup:
+#   docker compose up -d convex-backend
 #   docker compose exec convex-backend ./generate_admin_key.sh
-# Then add it to .env as CONVEX_SELF_HOSTED_ADMIN_KEY=<key>
+#   # Add the key to .env.local as CONVEX_SELF_HOSTED_ADMIN_KEY=<key>
+#
+# The museum app is available at http://localhost:3000  (profile: dev)
+# Vite dev server is at            http://localhost:5173 (npm run dev:full)
+# LibreTranslate is at             http://localhost:5000
+# Convex Dashboard is at           http://localhost:6791
 
 services:
-  museum:
-    build: .
-    container_name: museum-rodenberg
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    volumes:
-      # Persist user-uploaded media across rebuilds
-      - ./public/uploads:/app/public/uploads
-    environment:
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-museum2025}
-      - LIBRETRANSLATE_API_URL=http://libretranslate:5000/translate
-      - CONVEX_URL=http://convex-backend:3210
-      - PORT=3000
-    depends_on:
-      libretranslate:
-        condition: service_started
-      convex-backend:
-        condition: service_healthy
-
+  # ── Convex Backend (always starts) ─────────────────────────────
   convex-backend:
     image: ghcr.io/get-convex/convex-backend:latest
     container_name: museum-convex-backend
@@ -54,6 +44,57 @@ services:
       interval: 5s
       start_period: 10s
 
+  # ── Convex Schema Push (runs once, then exits) ────────────────
+  # Automatically pushes the Convex schema after backend is healthy.
+  # Reads credentials from .env.local on the host.
+  convex-setup:
+    image: node:20-alpine
+    container_name: museum-convex-setup
+    working_dir: /app
+    volumes:
+      - .:/app
+    env_file:
+      - .env.local
+    environment:
+      # Override URL to use Docker network name (not localhost)
+      - CONVEX_SELF_HOSTED_URL=http://convex-backend:3210
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    entrypoint: ["sh", "-c", "npm install --prefer-offline --no-audit --ignore-scripts 2>/dev/null; npx convex dev --once --typecheck=disable"]
+    restart: "no"
+    profiles: ["dev"]
+
+  # ── Museum App (Docker build, mirrors Sevalla) ────────────────
+  museum:
+    build:
+      context: .
+      args:
+        # In Docker Compose, the browser connects to the reverse proxy
+        # on the same origin, so VITE_CONVEX_URL points to /convex path
+        # which the Express server proxies to convex-backend:3210.
+        VITE_CONVEX_URL: http://localhost:3000/convex
+    container_name: museum-rodenberg
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./public/uploads:/app/public/uploads
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-museum2025}
+      - LIBRETRANSLATE_API_URL=http://libretranslate:5000/translate
+      - CONVEX_BACKEND_URL=http://convex-backend:3210
+      - PORT=3000
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+      convex-setup:
+        condition: service_completed_successfully
+      libretranslate:
+        condition: service_started
+    profiles: ["dev"]
+
+  # ── Convex Dashboard ──────────────────────────────────────────
   convex-dashboard:
     image: ghcr.io/get-convex/convex-dashboard:latest
     container_name: museum-convex-dashboard
@@ -67,7 +108,9 @@ services:
     depends_on:
       convex-backend:
         condition: service_healthy
+    profiles: ["dashboard"]
 
+  # ── LibreTranslate ────────────────────────────────────────────
   libretranslate:
     image: libretranslate/libretranslate:latest
     container_name: museum-libretranslate
@@ -77,12 +120,10 @@ services:
     volumes:
       - lt-data:/home/libretranslate/.local
     environment:
-      # Only load the 7 languages the museum uses (saves RAM & startup time)
       - LT_LOAD_ONLY=de,en,fr,es,it,nl,pl
-      # Disable API key requirement (internal network only)
       - LT_API_KEYS=false
-      # Disable rate limiting (internal network only)
       - LT_DISABLE_WEB_UI=false
+    profiles: ["dev", "translate"]
 
 volumes:
   lt-data:

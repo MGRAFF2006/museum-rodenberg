@@ -4,19 +4,18 @@
 #
 # Starts all services needed for local development:
 #   1. Convex backend  (Docker)
-#   2. Convex dev      (schema push + watcher)
-#   3. Vite dev server (app + Express API)
+#   2. Push Convex schema (automatic)
+#   3. Vite dev server (app + Express API via dev plugin)
 #
 # Usage:
-#   npm run dev:full
-#   # or directly:
-#   bash scripts/dev.sh
+#   npm run dev:full                    # standard dev (HMR + Convex)
+#   npm run dev:full -- --translate     # + LibreTranslate
+#   npm run dev:full -- --dashboard     # + Convex dashboard
+#   npm run dev:full -- --all           # everything
+#   npm run dev:full -- --no-docker     # skip Docker (manage containers yourself)
 #
-# Options:
-#   --no-docker   Skip Docker startup (if you manage containers yourself)
-#   --dashboard   Also start the Convex dashboard (port 6791)
-#   --translate   Also start LibreTranslate (port 5000)
-#   --all         Start everything including dashboard and LibreTranslate
+# For a production-like local stack (Docker Compose only, no HMR):
+#   npm run dev:docker
 #
 # Stop: Ctrl+C (kills all background processes)
 # ──────────────────────────────────────────────────────────────────
@@ -26,7 +25,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 SKIP_DOCKER=false
 START_DASHBOARD=false
@@ -72,13 +71,21 @@ if [ "$SKIP_DOCKER" = false ]; then
     exit 1
   fi
 
-  # Build the list of services to start
+  # Build the list of services to start (convex-backend has no profile, always starts)
   SERVICES="convex-backend"
-  [ "$START_DASHBOARD" = true ] && SERVICES="$SERVICES convex-dashboard"
-  [ "$START_TRANSLATE" = true ] && SERVICES="$SERVICES libretranslate"
+  [ "$START_DASHBOARD" = true ] && SERVICES="$SERVICES --profile dashboard"
+  [ "$START_TRANSLATE" = true ] && SERVICES="$SERVICES --profile translate"
 
-  echo -e "${CYAN}Starting Docker services: ${SERVICES}${NC}"
-  $DC up -d $SERVICES
+  # Start Docker services
+  echo -e "${CYAN}Starting Docker services...${NC}"
+  if [ "$START_DASHBOARD" = true ] || [ "$START_TRANSLATE" = true ]; then
+    PROFILES=""
+    [ "$START_DASHBOARD" = true ] && PROFILES="$PROFILES --profile dashboard"
+    [ "$START_TRANSLATE" = true ] && PROFILES="$PROFILES --profile translate"
+    $DC $PROFILES up -d convex-backend $([ "$START_DASHBOARD" = true ] && echo "convex-dashboard") $([ "$START_TRANSLATE" = true ] && echo "libretranslate")
+  else
+    $DC up -d convex-backend
+  fi
 
   # Wait for Convex backend health
   echo -e "${CYAN}Waiting for Convex backend to be healthy...${NC}"
@@ -104,24 +111,29 @@ else
 fi
 
 # ── 2. Check for admin key ───────────────────────────────────────
-if [ ! -f .env.local ] || ! grep -q 'CONVEX_SELF_HOSTED_ADMIN_KEY' .env.local 2>/dev/null; then
+if [ ! -f .env.local ] || ! grep -q '^CONVEX_SELF_HOSTED_ADMIN_KEY=' .env.local 2>/dev/null; then
   echo -e "${YELLOW}No admin key found in .env.local${NC}"
   echo "Generate one with:"
-  echo "  $DC exec convex-backend ./generate_admin_key.sh"
+  echo "  docker compose exec convex-backend ./generate_admin_key.sh"
   echo "Then add to .env.local:"
   echo "  CONVEX_SELF_HOSTED_ADMIN_KEY=<key>"
   exit 1
 fi
 
-# ── 3. Start Convex dev (schema push + watcher) ─────────────────
+# ── 3. Push Convex schema ───────────────────────────────────────
+echo -e "${CYAN}Pushing Convex schema...${NC}"
+npx convex dev --once --typecheck=disable
+echo -e "${GREEN}Schema pushed.${NC}"
+
+# ── 4. Start Convex dev watcher (watches for schema changes) ────
 echo -e "${CYAN}Starting Convex dev watcher...${NC}"
-npx convex dev &
+npx convex dev --typecheck=disable &
 PIDS+=($!)
 
-# Give Convex dev a moment to push schema before Vite starts
-sleep 3
+# Give Convex dev a moment to start before Vite
+sleep 2
 
-# ── 4. Start Vite dev server ────────────────────────────────────
+# ── 5. Start Vite dev server ────────────────────────────────────
 echo -e "${CYAN}Starting Vite dev server...${NC}"
 npx vite &
 PIDS+=($!)
