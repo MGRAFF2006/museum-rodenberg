@@ -4,8 +4,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['Cormorant Garamond', 'Georgia', 'serif'],
-        sans: ['Lexend', 'system-ui', '-apple-system', 'sans-serif'],
+        serif: ['Cormorant Garamond Variable', 'Georgia', 'serif'],
+        sans: ['Lexend Variable', 'system-ui', '-apple-system', 'sans-serif'],
       },
       colors: {
         // Primary palette - Museum brand colors (Sophisticated Navy)

@@ -7,6 +7,11 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { ContentProvider } from './contexts/ContentContext';
 import { TextToSpeechProvider } from './hooks/useTextToSpeech';
 import App from './App.tsx';
+
+// Self-hosted fonts via @fontsource (no external requests)
+import '@fontsource-variable/cormorant-garamond';
+import '@fontsource-variable/lexend';
+
 import './index.css';
 
 // Connect to self-hosted Convex backend.

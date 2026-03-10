@@ -117,12 +117,29 @@ export interface RawAssetsData {
 /** Loosely-typed record used in editor forms and bulk operations. */
 export interface EntityRecord {
   id?: string;
-  translations?: Record<string, Record<string, string>>;
+  title?: string;
+  translations?: Record<string, Record<string, string | undefined>>;
   detailedContent?: Record<string, string>;
   _hashes?: Record<string, string>;
   media?: RequiredMedia;
   enabledAttributes?: string[];
   image?: string;
+  // Shared / artifact fields
+  qrCode?: string;
+  artist?: string;
+  exhibition?: string;
+  dimensions?: string;
+  provenance?: string;
+  materials?: string[];
+  tags?: string[];
+  // Exhibition fields
+  dateRange?: string;
+  location?: string;
+  curator?: string;
+  organizer?: string;
+  sponsor?: string;
+  isFeatured?: boolean;
+  artifacts?: string[];
   [key: string]: unknown;
 }
 

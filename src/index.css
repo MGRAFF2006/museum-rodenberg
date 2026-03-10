@@ -1,4 +1,4 @@
-/* Import Dyslexie font */
+/* Fonts loaded via @fontsource-variable in main.tsx */
 
 @tailwind base;
 @tailwind components;
@@ -382,19 +382,19 @@
 
 /* Dyslexie font - better dyslexia-friendly font */
 [data-font-family="dyslexie"] {
-  font-family: 'Lexend', sans-serif !important;
+  font-family: 'Lexend Variable', sans-serif !important;
   letter-spacing: 0.05em;
   line-height: 1.6;
 }
 
 [data-font-family="dyslexie"] * {
-  font-family: 'Lexend', sans-serif !important;
+  font-family: 'Lexend Variable', sans-serif !important;
   letter-spacing: 0.05em;
   line-height: 1.6;
 }
 
 .font-dyslexie {
-  font-family: 'Lexend', sans-serif !important;
+  font-family: 'Lexend Variable', sans-serif !important;
   letter-spacing: 0.05em;
   line-height: 1.6;
 }
