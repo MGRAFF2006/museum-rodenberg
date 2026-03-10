@@ -30,6 +30,9 @@ RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY server ./server
 
+# Copy entrypoint (seeds persistent disk with build-time uploads on first run)
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+
 # Content and uploads are bind-mounted at runtime (see docker-compose.yml),
 # but we copy defaults so the image works standalone too.
 COPY src/content ./src/content
@@ -37,4 +40,4 @@ COPY public/uploads ./public/uploads
 
 EXPOSE 3000
 
-CMD ["node", "server/index.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]

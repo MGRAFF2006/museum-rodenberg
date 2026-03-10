@@ -420,6 +420,7 @@ builds, Docker image deployments, persistent storage, and internal connections.
 3. Add a **persistent disk**: path `/convex/data`, size 10 GB
 4. Under **Networking** → expose a **TCP proxy** on port `3210`
    - Note the TCP proxy hostname (e.g. `tcp-convex-abc123.sevalla.app:3210`)
+   - **Important**: Sevalla TCP proxies are NOT TLS-terminated — use `http://`, not `https://`
    - Browsers need this URL to connect via WebSocket
 5. Alternatively, give it a domain (e.g. `convex.museum-rodenberg.de`) and
    expose port 3210 publicly
@@ -428,14 +429,14 @@ builds, Docker image deployments, persistent storage, and internal connections.
 
 1. Use the **Web Terminal** in Sevalla to open a shell on the Convex container
 2. Run: `./generate_admin_key.sh`
-3. Save the output — you'll need it to push the schema
+3. Save the output — you'll need it to push the schema (store in `.env.local`, never commit)
 
 ### Step 3: Push the Convex Schema
 
 From your local machine (with the Convex CLI):
 
 ```bash
-CONVEX_SELF_HOSTED_URL=https://convex.museum-rodenberg.de:3210 \
+CONVEX_SELF_HOSTED_URL=http://tcp-convex-abc123.sevalla.app:3210 \
 CONVEX_SELF_HOSTED_ADMIN_KEY=<admin-key-from-step-2> \
 npx convex deploy
 ```
@@ -445,7 +446,7 @@ This pushes the schema and functions to the remote Convex backend.
 ### Step 4: Migrate Data
 
 ```bash
-CONVEX_SELF_HOSTED_URL=https://convex.museum-rodenberg.de:3210 \
+CONVEX_SELF_HOSTED_URL=http://tcp-convex-abc123.sevalla.app:3210 \
 CONVEX_SELF_HOSTED_ADMIN_KEY=<admin-key-from-step-2> \
 node scripts/migrate-to-convex.mjs
 ```
@@ -460,7 +461,7 @@ node scripts/migrate-to-convex.mjs
 
    | Variable | Availability | Value |
    |----------|-------------|-------|
-   | `VITE_CONVEX_URL` | **Build time** | `https://convex.museum-rodenberg.de:3210` (the public Convex URL) |
+   | `VITE_CONVEX_URL` | **Build time** | `http://tcp-convex-abc123.sevalla.app:3210` (the public Convex TCP proxy URL) |
    | `ADMIN_PASSWORD` | Runtime | Your strong admin password |
    | `LIBRETRANSLATE_API_URL` | Runtime | Internal hostname of LibreTranslate (if deployed), or omit |
    | `LIBRETRANSLATE_API_KEY` | Runtime | API key if required, or omit |
