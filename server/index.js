@@ -199,11 +199,33 @@ app.delete('/api/delete-image', requireAuth, (req, res) => {
 // ── Serve static files (production) ─────────────────────────────
 
 const distDir = path.resolve(ROOT_DIR, 'dist');
+const distUploadsDir = path.join(distDir, 'uploads');
+const publicUploadsDir = path.resolve(ROOT_DIR, 'public/uploads');
+
+// Debug: log what upload directories contain at startup
+console.log(`  dist/uploads:   ${fs.existsSync(distUploadsDir) ? fs.readdirSync(distUploadsDir).length + ' files' : 'MISSING'}`);
+console.log(`  public/uploads: ${fs.existsSync(publicUploadsDir) ? fs.readdirSync(publicUploadsDir).length + ' files' : 'MISSING'}`);
+
+// Temporary debug endpoint — remove after deployment is verified
+app.get('/api/debug-uploads', (_req, res) => {
+  const distFiles = fs.existsSync(distUploadsDir) ? fs.readdirSync(distUploadsDir) : [];
+  const publicFiles = fs.existsSync(publicUploadsDir) ? fs.readdirSync(publicUploadsDir) : [];
+  res.json({
+    distDir,
+    distUploadsDir,
+    distUploadsExists: fs.existsSync(distUploadsDir),
+    distUploadsFiles: distFiles,
+    publicUploadsDir,
+    publicUploadsExists: fs.existsSync(publicUploadsDir),
+    publicUploadsFiles: publicFiles,
+  });
+});
+
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
 }
 // Always serve public/uploads for media files
-app.use('/uploads', express.static(path.resolve(ROOT_DIR, 'public/uploads')));
+app.use('/uploads', express.static(publicUploadsDir));
 
 // SPA fallback — serve index.html for any non-API, non-static route
 app.get('{*path}', (_req, res) => {
