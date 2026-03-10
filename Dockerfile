@@ -15,7 +15,7 @@ RUN npm ci
 
 # Copy source and build the Vite frontend
 COPY . .
-RUN npm run build
+RUN echo "Building with VITE_CONVEX_URL=${VITE_CONVEX_URL:-<not set>}" && npm run build
 
 # ── Production stage ───────────────────────────────────────────
 FROM node:20-alpine AS production
