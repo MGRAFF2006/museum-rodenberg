@@ -13,6 +13,7 @@
  *   ADMIN_PASSWORD             - Admin panel password (server-side only)
  *   LIBRETRANSLATE_API_KEY     - API key for LibreTranslate
  *   LIBRETRANSLATE_API_URL     - LibreTranslate endpoint (default: http://localhost:5000/translate)
+ *   CONVEX_BACKEND_URL         - Internal Convex backend URL for reverse proxy (e.g. http://convex-internal:3210)
  *   PORT                       - HTTP port (default: 3000)
  */
 
@@ -23,6 +24,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 import {
   uploadMedia,
@@ -42,9 +44,30 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.LIBRETRANSLATE_API_KEY;
 const API_URL = process.env.LIBRETRANSLATE_API_URL || 'http://localhost:5000/translate';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const CONVEX_BACKEND_URL = process.env.CONVEX_BACKEND_URL;
 
 if (!ADMIN_PASSWORD) {
   console.warn('WARNING: ADMIN_PASSWORD is not set. Admin API endpoints will reject all requests.');
+}
+
+// ── Convex reverse proxy (HTTPS → internal HTTP) ────────────────
+// Browsers require wss:// from https:// pages. This proxy lets the
+// Convex client connect to /convex on the museum app's own origin,
+// and forwards both HTTP and WebSocket traffic to the internal
+// Convex backend over plain HTTP (server-to-server).
+if (CONVEX_BACKEND_URL) {
+  console.log(`Convex reverse proxy: /convex → ${CONVEX_BACKEND_URL}`);
+  app.use(
+    '/convex',
+    createProxyMiddleware({
+      target: CONVEX_BACKEND_URL,
+      changeOrigin: true,
+      ws: true,
+      pathRewrite: { '^/convex': '' },
+    })
+  );
+} else {
+  console.log('CONVEX_BACKEND_URL not set — Convex reverse proxy disabled (direct connection).');
 }
 
 app.use(cors());
@@ -179,8 +202,11 @@ app.get('{*path}', (_req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Museum Rodenberg server listening on http://localhost:${PORT}`);
   console.log(`  API endpoints:  /api/*`);
   console.log(`  Static files:   ${fs.existsSync(distDir) ? distDir : '(not built yet — run "npm run build")'}`);
+  if (CONVEX_BACKEND_URL) {
+    console.log(`  Convex proxy:   /convex → ${CONVEX_BACKEND_URL}`);
+  }
 });
