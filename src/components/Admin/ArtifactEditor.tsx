@@ -1,7 +1,10 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useContentData } from '../../hooks/useContentData';
 import { useLanguage } from '../../hooks/useLanguage';
 import { useEditorForm, TranslatableField } from '../../hooks/useEditorForm';
+import { convexArtifactToRaw, type ConvexArtifact } from '../../utils/convexConverters';
 import { AssetSelector } from './AssetSelector';
 import {
   EditorToolbar,
@@ -26,8 +29,28 @@ const INITIAL_TRANSLATION_FIELDS = {
 const DEFAULT_ENABLED = ['title', 'description', 'period', 'dimensions', 'materials', 'provenance', 'significance'];
 
 export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) => {
-  const { getArtifactById, exhibitions } = useContentData();
+  const { exhibitions, artifacts } = useContentData();
   const { t } = useLanguage();
+
+  // Fetch full artifact data (all languages) directly via getBySlug.
+  // ContentContext only has the current language; editors need all translations.
+  const fullArtifact = useQuery(
+    api.artifacts.getBySlug,
+    id !== 'new' ? { slug: id } : 'skip'
+  ) as ConvexArtifact | null | undefined;
+
+  // Convert to legacy raw shape with all translations for the editor form
+  const rawArtifact = useMemo(() => {
+    if (!fullArtifact) return undefined;
+    return convexArtifactToRaw(fullArtifact) as Record<string, unknown>;
+  }, [fullArtifact]);
+
+  const loadEntity = useCallback((entityId: string) => {
+    if (rawArtifact && rawArtifact.id === entityId) return rawArtifact;
+    // Fallback to context data (only has current language, but works for display)
+    const art = artifacts.find(a => a.id === entityId);
+    return art as Record<string, unknown> | undefined;
+  }, [rawArtifact, artifacts]);
 
   const getFieldsToTranslate = useCallback((formData: Record<string, any>): TranslatableField[] => {
     const de = formData.translations?.de || {};
@@ -51,7 +74,7 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
     defaultEnabledAttributes: DEFAULT_ENABLED,
     contentMediaFields: ['description', 'significance'],
     getFieldsToTranslate,
-    loadEntity: getArtifactById,
+    loadEntity: loadEntity,
     deleteConfirmKey: 'deleteArtifactConfirm',
   });
 

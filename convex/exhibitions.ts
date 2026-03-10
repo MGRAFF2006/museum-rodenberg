@@ -3,25 +3,81 @@ import { v } from "convex/values";
 
 // ── Queries ──────────────────────────────────────────────────────
 
-/** List all exhibitions with their translations and media. */
+/** List all exhibitions with ALL translations and media (admin use). */
 export const list = query({
   handler: async (ctx) => {
-    const exhibitions = await ctx.db.query("exhibitions").collect();
-    const result = [];
-    for (const ex of exhibitions) {
-      const translations = await ctx.db
-        .query("exhibition_translations")
-        .withIndex("by_exhibition", (q) => q.eq("exhibitionId", ex._id))
-        .collect();
-      const mediaItems = await ctx.db
+    const [exhibitions, allTranslations, allMedia] = await Promise.all([
+      ctx.db.query("exhibitions").collect(),
+      ctx.db.query("exhibition_translations").collect(),
+      ctx.db
         .query("media")
-        .withIndex("by_parent", (q) =>
-          q.eq("parentType", "exhibition").eq("parentSlug", ex.slug)
-        )
-        .collect();
-      result.push({ ...ex, translations, media: mediaItems });
+        .withIndex("by_parent", (q) => q.eq("parentType", "exhibition"))
+        .collect(),
+    ]);
+
+    // Build lookup maps
+    const translationsByExId = new Map<string, typeof allTranslations>();
+    for (const t of allTranslations) {
+      const key = t.exhibitionId;
+      const arr = translationsByExId.get(key) ?? [];
+      arr.push(t);
+      translationsByExId.set(key, arr);
     }
-    return result;
+    const mediaBySlug = new Map<string, typeof allMedia>();
+    for (const m of allMedia) {
+      const arr = mediaBySlug.get(m.parentSlug) ?? [];
+      arr.push(m);
+      mediaBySlug.set(m.parentSlug, arr);
+    }
+
+    return exhibitions.map((ex) => ({
+      ...ex,
+      translations: translationsByExId.get(ex._id) ?? [],
+      media: mediaBySlug.get(ex.slug) ?? [],
+    }));
+  },
+});
+
+/** List exhibitions with only the requested language (+ de fallback).
+ *  Returns ~1/7th the translation data compared to the full list query.
+ *  Omits detailedContent from translations (only needed on detail pages). */
+export const listForLanguage = query({
+  args: { language: v.string() },
+  handler: async (ctx, args) => {
+    const langs = new Set([args.language, "de"]);
+
+    const [exhibitions, allTranslations, allMedia] = await Promise.all([
+      ctx.db.query("exhibitions").collect(),
+      ctx.db.query("exhibition_translations").collect(),
+      ctx.db
+        .query("media")
+        .withIndex("by_parent", (q) => q.eq("parentType", "exhibition"))
+        .collect(),
+    ]);
+
+    // Build lookup maps — filter to requested languages only
+    const translationsByExId = new Map<string, typeof allTranslations>();
+    for (const t of allTranslations) {
+      if (!langs.has(t.language)) continue;
+      const key = t.exhibitionId;
+      const arr = translationsByExId.get(key) ?? [];
+      // Strip detailedContent to reduce payload (only needed on detail pages)
+      const { detailedContent: _, ...rest } = t;
+      arr.push(rest as typeof t);
+      translationsByExId.set(key, arr);
+    }
+    const mediaBySlug = new Map<string, typeof allMedia>();
+    for (const m of allMedia) {
+      const arr = mediaBySlug.get(m.parentSlug) ?? [];
+      arr.push(m);
+      mediaBySlug.set(m.parentSlug, arr);
+    }
+
+    return exhibitions.map((ex) => ({
+      ...ex,
+      translations: translationsByExId.get(ex._id) ?? [],
+      media: mediaBySlug.get(ex.slug) ?? [],
+    }));
   },
 });
 

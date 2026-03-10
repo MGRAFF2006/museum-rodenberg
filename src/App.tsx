@@ -2,9 +2,11 @@ import { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunction } from 'react-router-dom';
 import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
-import { ExhibitionDetail } from './components/ExhibitionDetail';
-import { ArtifactDetail } from './components/ArtifactDetail';
 import { MobileMenu } from './components/MobileMenu';
+
+// Lazy-loaded detail pages (pulls in markdown-vendor chunk only when needed)
+const ExhibitionDetail = lazy(() => import('./components/ExhibitionDetail').then(m => ({ default: m.ExhibitionDetail })));
+const ArtifactDetail = lazy(() => import('./components/ArtifactDetail').then(m => ({ default: m.ArtifactDetail })));
 import { useLanguage } from './hooks/useLanguage';
 import { useContentData } from './hooks/useContentData';
 import { useSearch } from './hooks/useSearch';

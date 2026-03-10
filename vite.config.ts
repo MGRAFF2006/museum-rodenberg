@@ -94,7 +94,7 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'markdown-vendor': ['react-markdown', 'remark-gfm'],
-          'ui-vendor': ['lucide-react', 'html5-qrcode'],
+          'ui-vendor': ['lucide-react'],
         },
       },
     },

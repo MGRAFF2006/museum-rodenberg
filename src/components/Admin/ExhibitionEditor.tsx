@@ -1,7 +1,10 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useContentData } from '../../hooks/useContentData';
 import { useLanguage } from '../../hooks/useLanguage';
 import { useEditorForm, TranslatableField } from '../../hooks/useEditorForm';
+import { convexExhibitionToRaw, type ConvexExhibition } from '../../utils/convexConverters';
 import { AssetSelector } from './AssetSelector';
 import {
   EditorToolbar,
@@ -26,8 +29,28 @@ const INITIAL_TRANSLATION_FIELDS = {
 const DEFAULT_ENABLED = ['title', 'description', 'subtitle', 'dateRange', 'location', 'curator', 'organizer', 'sponsor', 'tags', 'media', 'detailedContent'];
 
 export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }) => {
-  const { getExhibitionById } = useContentData();
+  const { exhibitions } = useContentData();
   const { t } = useLanguage();
+
+  // Fetch full exhibition data (all languages) directly via getBySlug.
+  // ContentContext only has the current language; editors need all translations.
+  const fullExhibition = useQuery(
+    api.exhibitions.getBySlug,
+    id !== 'new' ? { slug: id } : 'skip'
+  ) as ConvexExhibition | null | undefined;
+
+  // Convert to legacy raw shape with all translations for the editor form
+  const rawExhibition = useMemo(() => {
+    if (!fullExhibition) return undefined;
+    return convexExhibitionToRaw(fullExhibition) as Record<string, unknown>;
+  }, [fullExhibition]);
+
+  const loadEntity = useCallback((entityId: string) => {
+    if (rawExhibition && rawExhibition.id === entityId) return rawExhibition;
+    // Fallback to context data (only has current language, but works for display)
+    const ex = exhibitions.find(e => e.id === entityId);
+    return ex as Record<string, unknown> | undefined;
+  }, [rawExhibition, exhibitions]);
 
   const getFieldsToTranslate = useCallback((formData: Record<string, any>): TranslatableField[] => {
     const de = formData.translations?.de || {};
@@ -52,7 +75,7 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
     defaultEnabledAttributes: DEFAULT_ENABLED,
     contentMediaFields: ['description'],
     getFieldsToTranslate,
-    loadEntity: getExhibitionById,
+    loadEntity: loadEntity,
     deleteConfirmKey: 'deleteExhibitionConfirm',
   });
 

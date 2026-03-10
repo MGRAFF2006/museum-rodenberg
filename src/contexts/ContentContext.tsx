@@ -3,6 +3,13 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useLanguage } from '../hooks/useLanguage';
 import { getTranslatedContent } from '../utils/translationUtils';
+import {
+  convexExhibitionToRaw,
+  convexArtifactToRaw,
+  type ConvexExhibition,
+  type ConvexArtifact,
+  type ConvexAsset,
+} from '../utils/convexConverters';
 import type { Exhibition, Artifact, Asset, RawExhibitionsData, RawArtifactsData } from '../types';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -25,191 +32,22 @@ interface ContentContextType {
 
 const ContentContext = createContext<ContentContextType | undefined>(undefined);
 
-// ── Helpers to reconstruct old JSON shapes from Convex data ──────
-
-type ConvexExhibition = {
-  _id: string;
-  slug: string;
-  qrCode: string;
-  image: string;
-  dateRange?: string;
-  location?: string;
-  curator?: string;
-  organizer?: string;
-  sponsor?: string;
-  tags?: string[];
-  enabledAttributes?: string[];
-  isFeatured: boolean;
-  artifactSlugs: string[];
-  translations: Array<{
-    language: string;
-    title: string;
-    subtitle?: string;
-    description: string;
-    detailedContent?: string;
-  }>;
-  media: Array<{
-    mediaType: string;
-    url: string;
-    title?: string;
-    description?: string;
-    sortOrder: number;
-  }>;
-};
-
-type ConvexArtifact = {
-  _id: string;
-  slug: string;
-  qrCode: string;
-  exhibitionSlug?: string;
-  image: string;
-  materials?: string[];
-  dimensions?: string;
-  provenance?: string;
-  tags?: string[];
-  enabledAttributes?: string[];
-  translations: Array<{
-    language: string;
-    title: string;
-    period?: string;
-    artist?: string;
-    description: string;
-    significance?: string;
-    detailedContent?: string;
-  }>;
-  media: Array<{
-    mediaType: string;
-    url: string;
-    title?: string;
-    description?: string;
-    sortOrder: number;
-  }>;
-};
-
-type ConvexAsset = {
-  _id: string;
-  assetId: string;
-  name: string;
-  alt: string;
-  url: string;
-  type: 'image' | 'audio' | 'video' | 'other';
-};
-
-/**
- * Convert a Convex exhibition + its translations/media into the old
- * JSON shape that `getTranslatedContent` expects.
- */
-function convexExhibitionToRaw(ex: ConvexExhibition): Record<string, unknown> {
-  const translations: Record<string, Record<string, string>> = {};
-  const detailedContent: Record<string, string> = {};
-
-  for (const t of ex.translations) {
-    translations[t.language] = {
-      title: t.title,
-      ...(t.subtitle ? { subtitle: t.subtitle } : {}),
-      description: t.description,
-    };
-    if (t.detailedContent) {
-      detailedContent[t.language] = t.detailedContent;
-    }
-  }
-
-  // Reconstruct media in old shape
-  const images: string[] = [];
-  const videos: Array<{ url: string; title: string; description: string }> = [];
-  const audio: Array<{ url: string; title: string; description: string }> = [];
-
-  const sorted = [...ex.media].sort((a, b) => a.sortOrder - b.sortOrder);
-  for (const m of sorted) {
-    if (m.mediaType === 'image') {
-      images.push(m.url);
-    } else if (m.mediaType === 'video') {
-      videos.push({ url: m.url, title: m.title || '', description: m.description || '' });
-    } else if (m.mediaType === 'audio') {
-      audio.push({ url: m.url, title: m.title || '', description: m.description || '' });
-    }
-  }
-
-  return {
-    id: ex.slug,
-    qrCode: ex.qrCode,
-    image: ex.image,
-    dateRange: ex.dateRange,
-    location: ex.location,
-    curator: ex.curator,
-    organizer: ex.organizer,
-    sponsor: ex.sponsor,
-    tags: ex.tags,
-    enabledAttributes: ex.enabledAttributes,
-    artifacts: ex.artifactSlugs,
-    translations,
-    detailedContent: Object.keys(detailedContent).length > 0 ? detailedContent : undefined,
-    media: { images, videos, audio },
-  };
-}
-
-/**
- * Convert a Convex artifact + its translations/media into the old
- * JSON shape that `getTranslatedContent` expects.
- */
-function convexArtifactToRaw(art: ConvexArtifact): Record<string, unknown> {
-  const translations: Record<string, Record<string, string>> = {};
-  const detailedContent: Record<string, string> = {};
-
-  for (const t of art.translations) {
-    const langObj: Record<string, string> = {
-      title: t.title,
-      description: t.description,
-    };
-    if (t.period) langObj.period = t.period;
-    if (t.artist) langObj.artist = t.artist;
-    if (t.significance) langObj.significance = t.significance;
-    translations[t.language] = langObj;
-    if (t.detailedContent) {
-      detailedContent[t.language] = t.detailedContent;
-    }
-  }
-
-  // Reconstruct media in old shape
-  const images: string[] = [];
-  const videos: Array<{ url: string; title: string; description: string }> = [];
-  const audio: Array<{ url: string; title: string; description: string }> = [];
-
-  const sorted = [...art.media].sort((a, b) => a.sortOrder - b.sortOrder);
-  for (const m of sorted) {
-    if (m.mediaType === 'image') {
-      images.push(m.url);
-    } else if (m.mediaType === 'video') {
-      videos.push({ url: m.url, title: m.title || '', description: m.description || '' });
-    } else if (m.mediaType === 'audio') {
-      audio.push({ url: m.url, title: m.title || '', description: m.description || '' });
-    }
-  }
-
-  return {
-    id: art.slug,
-    qrCode: art.qrCode,
-    exhibition: art.exhibitionSlug,
-    image: art.image,
-    materials: art.materials,
-    dimensions: art.dimensions,
-    provenance: art.provenance,
-    tags: art.tags,
-    enabledAttributes: art.enabledAttributes,
-    translations,
-    detailedContent: Object.keys(detailedContent).length > 0 ? detailedContent : undefined,
-    media: { images, videos, audio },
-  };
-}
-
 // ── Provider ─────────────────────────────────────────────────────
 
 export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { currentLanguage } = useLanguage();
 
-  // Reactive Convex queries
-  const convexExhibitions = useQuery(api.exhibitions.list) as ConvexExhibition[] | undefined;
-  const convexArtifacts = useQuery(api.artifacts.list) as ConvexArtifact[] | undefined;
+  // Language-filtered queries — only fetch current language + de fallback.
+  // This sends ~1/7th the translation data vs the full list query.
+  // DetailedContent is stripped server-side (only needed on detail pages).
+  const convexExhibitions = useQuery(
+    api.exhibitions.listForLanguage,
+    { language: currentLanguage }
+  ) as ConvexExhibition[] | undefined;
+  const convexArtifacts = useQuery(
+    api.artifacts.listForLanguage,
+    { language: currentLanguage }
+  ) as ConvexArtifact[] | undefined;
   const convexAssets = useQuery(api.assets.list) as ConvexAsset[] | undefined;
   const featuredSlug = useQuery(api.exhibitions.getFeatured) as string | null | undefined;
 
@@ -217,29 +55,34 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
     || convexArtifacts === undefined
     || convexAssets === undefined;
 
-  // Build asset lookup map
-  const assetsMap = useMemo<Record<string, Asset>>(() => {
-    if (!convexAssets) return {};
-    const map: Record<string, Asset> = {};
+  // Build asset lookup maps — both by ID and by URL for O(1) resolveAsset
+  const { assetsMap, urlToAsset } = useMemo(() => {
+    if (!convexAssets) return { assetsMap: {} as Record<string, Asset>, urlToAsset: new Map<string, Asset>() };
+    const byId: Record<string, Asset> = {};
+    const byUrl = new Map<string, Asset>();
     for (const a of convexAssets) {
-      map[a.assetId] = {
+      const asset: Asset = {
         id: a.assetId,
         name: a.name,
         alt: a.alt,
         url: a.url,
         type: a.type,
       };
+      byId[a.assetId] = asset;
+      byUrl.set(a.url, asset);
     }
-    return map;
+    return { assetsMap: byId, urlToAsset: byUrl };
   }, [convexAssets]);
 
   const resolveAsset = useCallback((idOrUrl: string): Asset | undefined => {
     if (!idOrUrl) return undefined;
+    // O(1) lookup by asset ID
     if (assetsMap[idOrUrl]) return assetsMap[idOrUrl];
-    return Object.values(assetsMap).find((a) => a.url === idOrUrl);
-  }, [assetsMap]);
+    // O(1) lookup by URL (was previously O(n) linear scan)
+    return urlToAsset.get(idOrUrl);
+  }, [assetsMap, urlToAsset]);
 
-  // Build raw maps for admin getRaw* functions
+  // Build raw maps once — reused by both getRaw* functions and translated data
   const rawExhibitionsMap = useMemo<Record<string, Record<string, unknown>>>(() => {
     if (!convexExhibitions) return {};
     const map: Record<string, Record<string, unknown>> = {};
@@ -258,21 +101,23 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
     return map;
   }, [convexArtifacts]);
 
-  // Translated exhibitions
+  // Translated exhibitions — reuses rawExhibitionsMap (no double conversion)
   const exhibitions = useMemo<Exhibition[]>(() => {
-    if (!convexExhibitions) return [];
-    return convexExhibitions.map(ex =>
-      getTranslatedContent(convexExhibitionToRaw(ex), currentLanguage, 'de', resolveAsset)
+    const rawEntries = Object.values(rawExhibitionsMap);
+    if (rawEntries.length === 0) return [];
+    return rawEntries.map(raw =>
+      getTranslatedContent(raw, currentLanguage, 'de', resolveAsset)
     ) as Exhibition[];
-  }, [convexExhibitions, currentLanguage, resolveAsset]);
+  }, [rawExhibitionsMap, currentLanguage, resolveAsset]);
 
-  // Translated artifacts
+  // Translated artifacts — reuses rawArtifactsMap (no double conversion)
   const artifacts = useMemo<Artifact[]>(() => {
-    if (!convexArtifacts) return [];
-    return convexArtifacts.map(art =>
-      getTranslatedContent(convexArtifactToRaw(art), currentLanguage, 'de', resolveAsset)
+    const rawEntries = Object.values(rawArtifactsMap);
+    if (rawEntries.length === 0) return [];
+    return rawEntries.map(raw =>
+      getTranslatedContent(raw, currentLanguage, 'de', resolveAsset)
     ) as Artifact[];
-  }, [convexArtifacts, currentLanguage, resolveAsset]);
+  }, [rawArtifactsMap, currentLanguage, resolveAsset]);
 
   const featuredExhibitionId = featuredSlug ?? '';
 
@@ -303,6 +148,8 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
   }, [artifacts, exhibitions]);
 
+  // getRaw* returns language-filtered data (current lang + de).
+  // Admin editors that need all languages use useQuery(api.*.getBySlug) directly.
   const getRawArtifactById = useCallback((id: string): Record<string, unknown> | undefined => {
     return rawArtifactsMap[id];
   }, [rawArtifactsMap]);
@@ -332,16 +179,11 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
     isLoading,
   };
 
+  // No longer blocks rendering — children render immediately with empty arrays
+  // while Convex data loads. The app shell (header, navigation) appears instantly.
   return (
     <ContentContext.Provider value={value}>
-      {isLoading ? (
-        <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block h-10 w-10 border-4 border-primary-200 border-t-primary-700 rounded-full animate-spin mb-4" />
-            <p className="text-neutral-500 text-sm">Museum Rodenberg</p>
-          </div>
-        </div>
-      ) : children}
+      {children}
     </ContentContext.Provider>
   );
 };
