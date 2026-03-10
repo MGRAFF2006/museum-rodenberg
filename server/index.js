@@ -44,7 +44,12 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.LIBRETRANSLATE_API_KEY;
 const API_URL = process.env.LIBRETRANSLATE_API_URL || 'http://localhost:5000/translate';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const CONVEX_BACKEND_URL = process.env.CONVEX_BACKEND_URL;
+// Auto-prepend http:// if someone forgets the protocol (common with Sevalla internal URLs)
+let CONVEX_BACKEND_URL = process.env.CONVEX_BACKEND_URL || '';
+if (CONVEX_BACKEND_URL && !CONVEX_BACKEND_URL.startsWith('http://') && !CONVEX_BACKEND_URL.startsWith('https://')) {
+  CONVEX_BACKEND_URL = `http://${CONVEX_BACKEND_URL}`;
+  console.log(`CONVEX_BACKEND_URL was missing protocol — auto-prepended http://`);
+}
 
 if (!ADMIN_PASSWORD) {
   console.warn('WARNING: ADMIN_PASSWORD is not set. Admin API endpoints will reject all requests.');
@@ -55,17 +60,25 @@ if (!ADMIN_PASSWORD) {
 // Convex client connect to /convex on the museum app's own origin,
 // and forwards both HTTP and WebSocket traffic to the internal
 // Convex backend over plain HTTP (server-to-server).
+let convexProxy = null;
 if (CONVEX_BACKEND_URL) {
   console.log(`Convex reverse proxy: /convex → ${CONVEX_BACKEND_URL}`);
-  app.use(
-    '/convex',
-    createProxyMiddleware({
-      target: CONVEX_BACKEND_URL,
-      changeOrigin: true,
-      ws: true,
-      pathRewrite: { '^/convex': '' },
-    })
-  );
+  convexProxy = createProxyMiddleware({
+    target: CONVEX_BACKEND_URL,
+    changeOrigin: true,
+    ws: true,
+    pathRewrite: { '^/convex': '' },
+    on: {
+      error: (err, _req, res) => {
+        console.error('Convex proxy error:', err.message);
+        if (res.writeHead) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Convex backend unreachable' }));
+        }
+      },
+    },
+  });
+  app.use('/convex', convexProxy);
 } else {
   console.log('CONVEX_BACKEND_URL not set — Convex reverse proxy disabled (direct connection).');
 }
@@ -210,3 +223,18 @@ const server = app.listen(PORT, () => {
     console.log(`  Convex proxy:   /convex → ${CONVEX_BACKEND_URL}`);
   }
 });
+
+// ── WebSocket upgrade handling ──────────────────────────────────
+// http-proxy-middleware v3 requires explicit upgrade event handling.
+// Without this, only HTTP requests are proxied; WebSocket upgrades
+// (which Convex uses for real-time sync) are silently dropped.
+if (convexProxy) {
+  server.on('upgrade', (req, socket, head) => {
+    if (req.url?.startsWith('/convex')) {
+      convexProxy.upgrade(req, socket, head);
+    } else {
+      socket.destroy();
+    }
+  });
+  console.log('  WebSocket upgrade handler registered for /convex');
+}
