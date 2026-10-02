@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="180" viewBox="0 0 720 180" role="img" aria-labelledby="title desc">
+  <title id="title">Museum Rodenberg</title>
+  <desc id="desc">A classical museum facade beside the Museum Rodenberg wordmark</desc>
+  <rect width="720" height="180" rx="28" fill="#fffaf5"/>
+  <g transform="translate(30 24)" fill="none" stroke="#7c2d12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 48 78 12l60 36H18Z" fill="#7c2d12" stroke-width="6"/>
+    <path d="M29 56h98M35 116h86M25 128h106" stroke-width="8"/>
+    <path d="M43 59v54M66 59v54M90 59v54M113 59v54" stroke-width="10"/>
+  </g>
+  <text x="190" y="84" fill="#292524" font-family="Georgia, serif" font-size="48" font-weight="700">Museum Rodenberg</text>
+  <text x="193" y="122" fill="#78716c" font-family="Arial, sans-serif" font-size="22" letter-spacing="2">DIGITALE AUSSTELLUNGEN</text>
+</svg>
