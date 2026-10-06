@@ -52,8 +52,8 @@ const isGecko = (): boolean =>
   typeof navigator !== 'undefined' && /Gecko\/\d/i.test(navigator.userAgent) && !/like Gecko/i.test(navigator.userAgent);
 
 interface TextToSpeechContextType {
-  speak: (text: string, language?: string) => void;
-  stop: () => void;
+  speak: (text: string, language?: string, source?: symbol) => void;
+  stop: (source?: symbol) => void;
   isSpeaking: boolean;
   isSupported: boolean;
   availableVoices: TTSVoice[];
@@ -77,6 +77,9 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
   // lose their prototype by round-tripping through React state.
   const nativeVoicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const resumeTimerRef = useRef<number | null>(null);
+  const activeSourceRef = useRef<symbol>();
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechRequestRef = useRef(0);
   // Track whether voices have been loaded at least once (including async load)
   const voicesLoadedRef = useRef(false);
 
@@ -139,6 +142,10 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
 
       return () => {
         clearInterval(pollId);
+        window.speechSynthesis.onvoiceschanged = null;
+        activeSourceRef.current = undefined;
+        utteranceRef.current = null;
+        speechRequestRef.current++;
         window.speechSynthesis.cancel();
         if (resumeTimerRef.current !== null) {
           clearInterval(resumeTimerRef.current);
@@ -194,6 +201,7 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
       setError(null);
 
       const utterance = new SpeechSynthesisUtterance(text);
+      utteranceRef.current = utterance;
       const locale = (languageToLocale[language as keyof typeof languageToLocale] || language);
 
       utterance.lang = locale;
@@ -218,12 +226,20 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
         utterance.voice = defaultVoice;
       }
 
-      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onstart = () => {
+        if (utteranceRef.current === utterance) setIsSpeaking(true);
+      };
       utterance.onend = () => {
+        if (utteranceRef.current !== utterance) return;
+        utteranceRef.current = null;
+        activeSourceRef.current = undefined;
         setIsSpeaking(false);
         clearResumeTimer();
       };
       utterance.onerror = (event) => {
+        if (utteranceRef.current !== utterance) return;
+        utteranceRef.current = null;
+        activeSourceRef.current = undefined;
         // 'canceled' is not a real error — it fires when we call cancel()
         if (event.error !== 'canceled') {
           console.error('[TTS] Speech synthesis error:', event.error);
@@ -255,10 +271,13 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
   );
 
   const speak = useCallback(
-    (text: string, language: string = 'de') => {
+    (text: string, language: string = 'de', source?: symbol) => {
       if (!isSupported || !text) return;
 
       const synth = window.speechSynthesis;
+      const request = ++speechRequestRef.current;
+      activeSourceRef.current = source;
+      utteranceRef.current = null;
 
       // Clear resume keepalive from a previous utterance
       clearResumeTimer();
@@ -284,7 +303,7 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
           // within the user-activation window (unlike setTimeout), so
           // Firefox will accept the speak() call.
           void Promise.resolve().then(() => {
-            fireUtterance(text, language);
+            if (speechRequestRef.current === request) fireUtterance(text, language);
           });
         } else {
           fireUtterance(text, language);
@@ -299,8 +318,12 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
     [isSupported, fireUtterance, clearResumeTimer]
   );
 
-  const stop = useCallback(() => {
+  const stop = useCallback((source?: symbol) => {
     if (!isSupported) return;
+    if (source && activeSourceRef.current !== source) return;
+    speechRequestRef.current++;
+    activeSourceRef.current = undefined;
+    utteranceRef.current = null;
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
     clearResumeTimer();
