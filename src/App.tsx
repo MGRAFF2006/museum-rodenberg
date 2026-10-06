@@ -15,7 +15,7 @@ import { useLanguage } from './hooks/useLanguage';
 import { useContentData } from './hooks/useContentData';
 import { useSearch } from './hooks/useSearch';
 import type { Artifact, Exhibition } from './types';
-import { mediaSelection, mediaViewerSearch } from './utils/mediaGallery';
+import { getMediaGallery, mediaViewerSearch } from './utils/mediaGallery';
 
 // Lazy-loaded routes (not needed on initial page load)
 const SearchResults = lazy(() => import('./components/SearchResults').then(m => ({ default: m.SearchResults })));
@@ -182,7 +182,6 @@ function App() {
           element={
             <MediaViewerRoute
               type="exhibition"
-              getExhibitionById={getExhibitionById}
               navigate={navigate}
             />
           }
@@ -193,7 +192,6 @@ function App() {
           element={
             <MediaViewerRoute
               type="artifact"
-              getArtifactById={getArtifactById}
               navigate={navigate}
             />
           }
@@ -326,31 +324,43 @@ function DetailedContentRoute({ type, navigate }: DetailedContentRouteProps) {
 
 interface MediaViewerRouteProps {
   type: 'exhibition' | 'artifact';
-  getExhibitionById?: (id: string) => Exhibition | undefined;
-  getArtifactById?: (id: string) => Artifact | undefined;
   navigate: NavigateFunction;
 }
 
-function MediaViewerRoute({ type, getExhibitionById, getArtifactById, navigate }: MediaViewerRouteProps) {
+function MediaViewerRoute({ type, navigate }: MediaViewerRouteProps) {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab');
+  const requestedTab = searchParams.get('tab');
+  const initialTab = requestedTab === 'images' || requestedTab === 'videos' || requestedTab === 'audio'
+    ? requestedTab : undefined;
   const initialUrl = searchParams.get('url');
+  const { currentLanguage } = useLanguage();
+  const { resolveAsset } = useContentData();
+  // Full content is needed to include media embedded only in detailed Markdown.
+  const exhibition = useQuery(api.exhibitions.getBySlug, type === 'exhibition' && id ? { slug: id } : 'skip');
+  const artifact = useQuery(api.artifacts.getBySlug, type === 'artifact' && id ? { slug: id } : 'skip');
+  const raw = type === 'exhibition'
+    ? exhibition && convexExhibitionToRaw(exhibition)
+    : artifact && convexArtifactToRaw(artifact);
+  const item = raw ? getTranslatedContent(raw, currentLanguage, 'de', resolveAsset) as Exhibition | Artifact : raw;
   
   if (!id) return <div>Media not found</div>;
-  
-  const item = type === 'exhibition' 
-    ? getExhibitionById?.(id)
-    : getArtifactById?.(id);
-    
-  if (!item || (!item.media && !mediaSelection(initialTab, initialUrl))) return <div>Media not found</div>;
+  if (item === undefined) return <LazyFallback />;
+  if (!item) return <div>Media not found</div>;
+  const isEnabled = (attribute: string) => !item.enabledAttributes || item.enabledAttributes.includes(attribute);
+  const gallery = getMediaGallery(
+    isEnabled('media') ? item.media : undefined,
+    isEnabled('description') ? item.description : undefined,
+    isEnabled('significance') ? item.significance as string | undefined : undefined,
+    isEnabled('detailedContent') ? item.detailedContent?.[currentLanguage] || item.detailedContent?.de : undefined
+  );
   
   return (
     <MediaViewerPage
       key={`${type}/${id}`}
-      images={item.media?.images || []}
-      videos={item.media?.videos || []}
-      audio={item.media?.audio || []}
+      images={gallery.images}
+      videos={gallery.videos}
+      audio={gallery.audio}
       onBack={() => navigate(`/${type}/${id}`)}
       initialTab={initialTab}
       initialUrl={initialUrl}
