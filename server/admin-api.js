@@ -1,0 +1,93 @@
+import express from 'express';
+import crypto from 'node:crypto';
+import { ConvexHttpClient } from 'convex/browser';
+import { makeFunctionReference } from 'convex/server';
+import { uploadMedia, translate, validateAssets, listUploads, deleteImage } from './api-handlers.js';
+
+const CONTENT_WRITES = new Set([
+  'artifacts:save', 'artifacts:remove', 'assets:save', 'assets:remove',
+  'exhibitions:save', 'exhibitions:remove', 'exhibitions:setFeatured',
+]);
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** The same password, session checks, and protected routes in production and Vite. */
+export function createAdminApi(rootDir, env) {
+  const router = express();
+  const sessions = new Map();
+  const backendUrl = env.CONVEX_BACKEND_URL || env.CONVEX_SELF_HOSTED_URL;
+  const client = backendUrl ? new ConvexHttpClient(backendUrl) : null;
+  router.use(express.json({ limit: '10mb' }));
+
+  router.post('/login', (req, res) => {
+    if (!env.ADMIN_PASSWORD || req.body?.password !== env.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+    for (const [token, expiry] of sessions) {
+      if (Date.now() >= expiry) sessions.delete(token);
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    sessions.set(token, Date.now() + SESSION_TTL_MS);
+    res.json({ token });
+  });
+  router.post('/logout', (req, res) => {
+    sessions.delete(req.headers.authorization?.replace(/^Bearer /, ''));
+    res.json({ success: true });
+  });
+  router.use((req, res, next) => {
+    const token = req.headers.authorization?.startsWith('Bearer ')
+      ? req.headers.authorization.slice(7) : undefined;
+    const expiry = sessions.get(token);
+    if (!expiry || Date.now() >= expiry) {
+      sessions.delete(token);
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    sessions.set(token, Date.now() + SESSION_TTL_MS);
+    next();
+  });
+
+  router.post('/content-write', async (req, res) => {
+    const { operation, args } = req.body || {};
+    if (!CONTENT_WRITES.has(operation) || !args || typeof args !== 'object' || Array.isArray(args)) {
+      return res.status(400).json({ error: 'Invalid content operation' });
+    }
+    if (!client || !env.CONVEX_WRITE_SECRET) {
+      return res.status(503).json({ error: 'Content writes are not configured' });
+    }
+    try {
+      const result = await client.mutation(makeFunctionReference(operation), {
+        ...args, serverSecret: env.CONVEX_WRITE_SECRET,
+      });
+      res.json({ result: result ?? null });
+    } catch {
+      // Convex errors can include function arguments. Never echo or log credentials.
+      res.status(502).json({ error: 'Failed to write content' });
+    }
+  });
+
+  router.post(['/upload-media', '/upload-image'], async (req, res) => {
+    try { res.json(await uploadMedia(rootDir, req.headers, req)); }
+    catch { res.status(500).json({ error: 'Failed to upload media' }); }
+  });
+  router.post('/translate', async (req, res) => {
+    try {
+      const result = await translate(req.body, env.LIBRETRANSLATE_API_URL || 'http://localhost:5000/translate', env.LIBRETRANSLATE_API_KEY);
+      res.status(result.status).json(result.body);
+    } catch { res.status(500).json({ error: 'Failed to translate' }); }
+  });
+  router.post('/validate-assets', (req, res) => {
+    const result = validateAssets(rootDir, req.body);
+    res.status(result.status).json(result.body);
+  });
+  router.get('/list-uploads', (_req, res) => {
+    const result = listUploads(rootDir);
+    res.status(result.status).json(result.body);
+  });
+  router.delete('/delete-image', (req, res) => {
+    const result = deleteImage(rootDir, req.query.path);
+    res.status(result.status).json(result.body);
+  });
+  router.use((_err, _req, res, _next) => {
+    res.status(500).json({ error: 'Admin API request failed' });
+  });
+  return router;
+}

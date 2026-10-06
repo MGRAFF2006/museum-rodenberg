@@ -66,3 +66,26 @@ src/hooks/       Content, language, search, and accessibility hooks
 ## License
 
 Licensed under the [MIT License](LICENSE).
+
+### Authenticated content writes
+
+Editor saves, deletes, asset metadata, and bulk translation saves use the existing
+Express login session through `/api/content-write`. Visitor Convex queries remain
+public. Direct Convex mutations require a separate server-only `CONVEX_WRITE_SECRET`.
+
+Before deploying this change, generate a strong random credential and set the same
+`CONVEX_WRITE_SECRET` in the museum Express runtime and the target Convex deployment
+environment. For local Vite development put it in ignored `.env` together with
+`ADMIN_PASSWORD` and `CONVEX_SELF_HOSTED_URL`; Vite uses the same authenticated API.
+Docker Compose passes `.env`'s credential to the museum service. Set the Convex
+**deployment** variable via `npx convex env set CONVEX_WRITE_SECRET` using its
+interactive prompt (select the target deployment using the existing CLI credentials).
+Setting an environment variable on the backend container alone does not configure
+Convex functions. For production use the target deployment's CLI environment or
+Dashboard environment settings, and the museum host's runtime environment settings.
+
+Deploy the Convex mutation guards and museum application together. Missing or
+mismatched credentials deliberately reject writes. Never use a `VITE_` variable,
+Docker build argument, or browser-side credential. The trusted migration CLI also
+requires `CONVEX_WRITE_SECRET` in ignored `.env`/`.env.local` or its process environment.
+No deployed service is modified by the regression tests.

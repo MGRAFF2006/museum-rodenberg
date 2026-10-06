@@ -3,7 +3,7 @@
  *
  * In development, these same endpoints are served via the Vite dev-server plugin
  * (scripts/dev-server-plugin.ts) for convenience. Both use the shared handler
- * logic in server/api-handlers.js.
+ * routes in server/admin-api.js.
  *
  * Usage:
  *   node server/index.js                  # serves API + static dist/
@@ -14,25 +14,20 @@
  *   LIBRETRANSLATE_API_KEY     - API key for LibreTranslate
  *   LIBRETRANSLATE_API_URL     - LibreTranslate endpoint (default: http://localhost:5000/translate)
  *   CONVEX_BACKEND_URL         - Internal Convex backend URL for reverse proxy (e.g. http://convex-internal:3210)
+ *   CONVEX_WRITE_SECRET        - Server-only credential matching the Convex deployment
+ *   CONVEX_SELF_HOSTED_URL      - Direct Convex URL when no reverse proxy is configured
  *   PORT                       - HTTP port (default: 3000)
  */
 
 import express from 'express';
 import cors from 'cors';
-import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
-import {
-  uploadMedia,
-  translate,
-  validateAssets,
-  listUploads,
-  deleteImage,
-} from './api-handlers.js';
+import { createAdminApi } from './admin-api.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -41,18 +36,11 @@ dotenv.config({ path: path.join(ROOT_DIR, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.LIBRETRANSLATE_API_KEY;
-const API_URL = process.env.LIBRETRANSLATE_API_URL || 'http://localhost:5000/translate';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 // Auto-prepend http:// if someone forgets the protocol (common with Sevalla internal URLs)
 let CONVEX_BACKEND_URL = process.env.CONVEX_BACKEND_URL || '';
 if (CONVEX_BACKEND_URL && !CONVEX_BACKEND_URL.startsWith('http://') && !CONVEX_BACKEND_URL.startsWith('https://')) {
   CONVEX_BACKEND_URL = `http://${CONVEX_BACKEND_URL}`;
   console.log(`CONVEX_BACKEND_URL was missing protocol — auto-prepended http://`);
-}
-
-if (!ADMIN_PASSWORD) {
-  console.warn('WARNING: ADMIN_PASSWORD is not set. Admin API endpoints will reject all requests.');
 }
 
 // ── Convex reverse proxy (HTTPS → internal HTTP) ────────────────
@@ -86,115 +74,7 @@ if (CONVEX_BACKEND_URL) {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// ── Session token store (in-memory; resets on server restart) ───
-const activeSessions = new Map(); // token -> expiry timestamp
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-function generateToken() {
-  return crypto.randomBytes(32).toString('hex');
-}
-
-function cleanExpiredSessions() {
-  const now = Date.now();
-  for (const [token, expiry] of activeSessions) {
-    if (now > expiry) activeSessions.delete(token);
-  }
-}
-
-// ── Auth endpoints ──────────────────────────────────────────────
-
-app.post('/api/login', (req, res) => {
-  const { password } = req.body;
-  if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Invalid password' });
-  }
-
-  cleanExpiredSessions();
-  const token = generateToken();
-  activeSessions.set(token, Date.now() + SESSION_TTL_MS);
-  res.json({ token });
-});
-
-app.post('/api/logout', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (token) activeSessions.delete(token);
-  res.json({ success: true });
-});
-
-// ── Auth middleware for protected routes ─────────────────────────
-
-function requireAuth(req, res, next) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  cleanExpiredSessions();
-  const expiry = activeSessions.get(token);
-  if (!expiry || Date.now() > expiry) {
-    activeSessions.delete(token);
-    return res.status(401).json({ error: 'Session expired' });
-  }
-
-  // Refresh session TTL on activity
-  activeSessions.set(token, Date.now() + SESSION_TTL_MS);
-  next();
-}
-
-// ── Protected API routes (file operations, translation) ─────────
-
-app.post('/api/upload-media', requireAuth, async (req, res) => {
-  try {
-    const result = await uploadMedia(ROOT_DIR, req.headers, req);
-    res.json(result);
-  } catch (error) {
-    console.error('Error uploading media:', error);
-    res.status(500).json({ error: 'Failed to upload media' });
-  }
-});
-
-// Legacy alias
-app.post('/api/upload-image', requireAuth, (req, res, next) => {
-  req.url = '/api/upload-media';
-  next();
-});
-
-app.post('/api/translate', requireAuth, async (req, res) => {
-  try {
-    const result = await translate(req.body, API_URL, API_KEY);
-    res.status(result.status).json(result.body);
-  } catch (error) {
-    console.error('Error translating:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to translate' });
-  }
-});
-
-app.post('/api/validate-assets', requireAuth, (req, res) => {
-  try {
-    const result = validateAssets(ROOT_DIR, req.body);
-    res.status(result.status).json(result.body);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to validate assets' });
-  }
-});
-
-app.get('/api/list-uploads', requireAuth, (_req, res) => {
-  try {
-    const result = listUploads(ROOT_DIR);
-    res.status(result.status).json(result.body);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to list uploads' });
-  }
-});
-
-app.delete('/api/delete-image', requireAuth, (req, res) => {
-  try {
-    const result = deleteImage(ROOT_DIR, req.query.path);
-    res.status(result.status).json(result.body);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete image' });
-  }
-});
+app.use('/api', createAdminApi(ROOT_DIR, { ...process.env, CONVEX_BACKEND_URL }));
 
 // ── Serve static files (production) ─────────────────────────────
 

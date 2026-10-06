@@ -82,6 +82,7 @@ services:
       - ./public/uploads:/app/public/uploads
     environment:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-museum2025}
+      - CONVEX_WRITE_SECRET=${CONVEX_WRITE_SECRET:-}
       - LIBRETRANSLATE_API_URL=http://libretranslate:5000/translate
       - CONVEX_BACKEND_URL=http://convex-backend:3210
       - PORT=3000
