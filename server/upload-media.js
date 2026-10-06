@@ -87,7 +87,7 @@ export async function uploadMedia(rootDir, headers, reqStream) {
   parser.on('file', (_name, file, { filename, mimeType }) => {
     // Rejected parts may still be open when Busboy destroys them with an error.
     // They need a listener even when no output pipeline will be created.
-    file.once('error', fail);
+    file.once('error', (error) => fail(error instanceof UploadError || error.code ? error : new UploadError('Malformed multipart upload')));
     if (failure) return file.resume();
     if (typeof filename !== 'string' || !filename.trim()) {
       file.resume();
