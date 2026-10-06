@@ -204,7 +204,7 @@ export function useEditorForm(config: EditorConfig) {
 
   const handleMediaChange = useCallback((type: 'images' | 'videos' | 'audio', index: number, field: string, value: string) => {
     const currentMediaArray = formData.media?.[type];
-    if (!currentMediaArray || !currentMediaArray[index]) return;
+    if (!currentMediaArray || !Number.isInteger(index) || index < 0 || index >= currentMediaArray.length) return;
 
     const item = currentMediaArray[index];
     const url = type === 'images' ? (item as string) : (item as MediaItem).url;
@@ -257,7 +257,7 @@ export function useEditorForm(config: EditorConfig) {
 
   const removeMediaItem = useCallback((type: 'images' | 'videos' | 'audio', index: number) => {
     const currentMediaArray = formData.media?.[type];
-    if (!currentMediaArray || !currentMediaArray[index]) return;
+    if (!currentMediaArray || !Number.isInteger(index) || index < 0 || index >= currentMediaArray.length) return;
 
     const item = currentMediaArray[index];
     const urlToRemove = type === 'images' ? (item as string) : (item as MediaItem).url;
