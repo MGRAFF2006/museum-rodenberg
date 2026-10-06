@@ -96,9 +96,9 @@ describe('featured exhibition consistency', () => {
   it('creates a featured exhibition and its setting when neither exists', async () => {
     const { ctx, rows, featured, flagged } = fixture();
     rows.settings = rows.settings.filter(row => row.key !== 'featured_exhibition');
-    await handler(exhibitions.save)(ctx, { ...saveArgs, slug: 'new', isFeatured: true });
-    expect(featured()).toBe('new');
-    expect(flagged()).toEqual(['new']);
+    await handler(exhibitions.save)(ctx, { ...saveArgs, slug: 'created', isFeatured: true });
+    expect(featured()).toBe('created');
+    expect(flagged()).toEqual(['created']);
   });
 
   it('explicitly unfeaturing the current exhibition clears the singleton and stale flags', async () => {
