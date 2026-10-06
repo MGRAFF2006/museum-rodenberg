@@ -32,6 +32,7 @@ function publicPage(path: string) {
 }
 
 beforeEach(() => {
+  vi.mocked(useQuery).mockClear();
   language = 'en';
   mobile = true;
   record = {
