@@ -17,9 +17,15 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
 }) => {
   const { t } = useLanguage();
   return (
-    <div
-      onClick={() => onClick(exhibition.id)}
-      className={featured ? 'card-featured' : 'card-interactive'}
+    <a
+      href={`/exhibition/${encodeURIComponent(exhibition.id)}`}
+      aria-label={exhibition.title}
+      onClick={event => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        onClick(exhibition.id);
+      }}
+      className={`${featured ? 'card-featured' : 'card-interactive'} block focus-ring-sm`}
     >
       {/* Image */}
       <div className="relative w-full h-48 md:h-56 overflow-hidden bg-neutral-100 flex items-center justify-center">
@@ -82,6 +88,6 @@ export const ExhibitionCard: React.FC<ExhibitionCardProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </a>
   );
 };
