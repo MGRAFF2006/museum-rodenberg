@@ -317,15 +317,23 @@ export const save = mutation({
 
 /** Delete an artifact and its translations/media. */
 export const remove = mutation({
-  args: { serverSecret: v.optional(v.string()), slug: v.string() },
+  args: {
+    serverSecret: v.optional(v.string()),
+    slug: v.string(),
+    expectedRevision: v.optional(v.number()),
+    expectedDocumentId: v.optional(v.string()),
+  },
   handler: async (ctx, { serverSecret, ...args }) => {
     requireServerSecret(serverSecret);
     const artifact = await ctx.db
       .query("artifacts")
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
+    if (!artifact || args.expectedRevision !== (artifact.revision ?? 0) ||
+      args.expectedDocumentId !== artifact._id) {
+      throw new ConvexError({ code: "STALE_CONTENT" });
+    }
     await syncExhibitionMembership(ctx, args.slug);
-    if (!artifact) return;
 
     // Delete translations
     const translations = await ctx.db
