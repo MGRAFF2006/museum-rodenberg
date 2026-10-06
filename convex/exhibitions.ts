@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { requireServerSecret } from "./auth";
+import { clearNullFields } from "./contentFields";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -127,13 +128,13 @@ export const save = mutation({
     expectedDocumentId: v.optional(v.string()),
     qrCode: v.string(),
     image: v.string(),
-    dateRange: v.optional(v.string()),
-    location: v.optional(v.string()),
-    curator: v.optional(v.string()),
-    organizer: v.optional(v.string()),
-    sponsor: v.optional(v.string()),
-    tags: v.optional(v.array(v.string())),
-    enabledAttributes: v.optional(v.array(v.string())),
+    dateRange: v.optional(v.union(v.string(), v.null())),
+    location: v.optional(v.union(v.string(), v.null())),
+    curator: v.optional(v.union(v.string(), v.null())),
+    organizer: v.optional(v.union(v.string(), v.null())),
+    sponsor: v.optional(v.union(v.string(), v.null())),
+    tags: v.optional(v.union(v.array(v.string()), v.null())),
+    enabledAttributes: v.optional(v.union(v.array(v.string()), v.null())),
     isFeatured: v.boolean(),
     artifactSlugs: v.array(v.string()),
     // Translations as an array of objects
@@ -141,9 +142,9 @@ export const save = mutation({
       v.object({
         language: v.string(),
         title: v.string(),
-        subtitle: v.optional(v.string()),
+        subtitle: v.optional(v.union(v.string(), v.null())),
         description: v.string(),
-        detailedContent: v.optional(v.string()),
+        detailedContent: v.optional(v.union(v.string(), v.null())),
       })
     ),
     // Media items
@@ -165,7 +166,8 @@ export const save = mutation({
   },
   handler: async (ctx, { serverSecret, ...args }) => {
     requireServerSecret(serverSecret);
-    const { translations, mediaItems, expectedRevision, expectedDocumentId, ...exhibitionData } = args;
+    const { translations, mediaItems, expectedRevision, expectedDocumentId, ...fields } = args;
+    const exhibitionData = clearNullFields(fields);
 
     // Check if exhibition already exists
     const existing = await ctx.db
@@ -204,7 +206,8 @@ export const save = mutation({
     }
 
     // Upsert translations
-    for (const t of translations) {
+    for (const translation of translations) {
+      const t = clearNullFields(translation);
       const existingT = await ctx.db
         .query("exhibition_translations")
         .withIndex("by_exhibition_lang", (q) =>

@@ -22,7 +22,8 @@ export function memoryDatabase(initial: Record<string, Row[]> = {}) {
     },
     async insert(table: string, data: Record<string, unknown>) {
       const _id = `${table}:new-${++sequence}`;
-      (tables[table] ||= []).push({ ...structuredClone(data), _id });
+      const stored = jsonToConvex(convexToJson(data as Record<string, Value | undefined>)) as Record<string, unknown>;
+      (tables[table] ||= []).push({ ...stored, _id });
       writes.push(['insert', table, data]);
       return _id;
     },

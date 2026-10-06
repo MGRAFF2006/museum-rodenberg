@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { requireServerSecret } from "./auth";
+import { clearNullFields } from "./contentFields";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -165,23 +166,23 @@ export const save = mutation({
     expectedRevision: v.optional(v.number()),
     expectedDocumentId: v.optional(v.string()),
     qrCode: v.string(),
-    exhibitionSlug: v.optional(v.string()),
+    exhibitionSlug: v.optional(v.union(v.string(), v.null())),
     image: v.string(),
-    materials: v.optional(v.array(v.string())),
-    dimensions: v.optional(v.string()),
-    provenance: v.optional(v.string()),
-    tags: v.optional(v.array(v.string())),
-    enabledAttributes: v.optional(v.array(v.string())),
+    materials: v.optional(v.union(v.array(v.string()), v.null())),
+    dimensions: v.optional(v.union(v.string(), v.null())),
+    provenance: v.optional(v.union(v.string(), v.null())),
+    tags: v.optional(v.union(v.array(v.string()), v.null())),
+    enabledAttributes: v.optional(v.union(v.array(v.string()), v.null())),
     // Translations as an array
     translations: v.array(
       v.object({
         language: v.string(),
         title: v.string(),
-        period: v.optional(v.string()),
-        artist: v.optional(v.string()),
+        period: v.optional(v.union(v.string(), v.null())),
+        artist: v.optional(v.union(v.string(), v.null())),
         description: v.string(),
-        significance: v.optional(v.string()),
-        detailedContent: v.optional(v.string()),
+        significance: v.optional(v.union(v.string(), v.null())),
+        detailedContent: v.optional(v.union(v.string(), v.null())),
       })
     ),
     // Media items
@@ -203,7 +204,8 @@ export const save = mutation({
   },
   handler: async (ctx, { serverSecret, ...args }) => {
     requireServerSecret(serverSecret);
-    const { translations, mediaItems, expectedRevision, expectedDocumentId, ...artifactData } = args;
+    const { translations, mediaItems, expectedRevision, expectedDocumentId, ...fields } = args;
+    const artifactData = clearNullFields(fields);
 
     // Check if artifact already exists
     const existing = await ctx.db
@@ -226,7 +228,8 @@ export const save = mutation({
     }
 
     // Upsert translations
-    for (const t of translations) {
+    for (const translation of translations) {
+      const t = clearNullFields(translation);
       const existingT = await ctx.db
         .query("artifact_translations")
         .withIndex("by_artifact_lang", (q) =>

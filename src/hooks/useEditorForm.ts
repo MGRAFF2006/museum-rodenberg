@@ -428,9 +428,10 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              subtitle: t.subtitle || undefined,
+              subtitle: 'subtitle' in t ? t.subtitle || null : undefined,
               description: t.description || '',
-              detailedContent: formData.detailedContent?.[lang] || undefined,
+              detailedContent: formData.detailedContent && lang in formData.detailedContent
+                ? formData.detailedContent[lang] || null : undefined,
             };
           });
 
@@ -440,13 +441,13 @@ export function useEditorForm(config: EditorConfig) {
           expectedDocumentId: id === 'new' ? undefined : formData.documentId,
           qrCode: (formData.qrCode as string) || slug,
           image: formData.image || '',
-          dateRange: (formData.dateRange as string) || undefined,
-          location: (formData.location as string) || undefined,
-          curator: (formData.curator as string) || undefined,
-          organizer: (formData.organizer as string) || undefined,
-          sponsor: (formData.sponsor as string) || undefined,
-          tags: (formData.tags as string[]) || undefined,
-          enabledAttributes: formData.enabledAttributes || undefined,
+          dateRange: formData.dateRange || null,
+          location: formData.location || null,
+          curator: formData.curator || null,
+          organizer: formData.organizer || null,
+          sponsor: formData.sponsor || null,
+          tags: formData.tags || null,
+          enabledAttributes: formData.enabledAttributes || null,
           isFeatured: (formData.isFeatured as boolean) || false,
           artifactSlugs: (formData.artifacts as string[]) || [],
           translations,
@@ -461,11 +462,12 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              period: t.period || undefined,
-              artist: t.artist || undefined,
+              period: 'period' in t ? t.period || null : undefined,
+              artist: 'artist' in t ? t.artist || null : undefined,
               description: t.description || '',
-              significance: t.significance || undefined,
-              detailedContent: formData.detailedContent?.[lang] || undefined,
+              significance: 'significance' in t ? t.significance || null : undefined,
+              detailedContent: formData.detailedContent && lang in formData.detailedContent
+                ? formData.detailedContent[lang] || null : undefined,
             };
           });
 
@@ -474,13 +476,13 @@ export function useEditorForm(config: EditorConfig) {
           expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
           expectedDocumentId: id === 'new' ? undefined : formData.documentId,
           qrCode: (formData.qrCode as string) || slug,
-          exhibitionSlug: (formData.exhibition as string) || undefined,
+          exhibitionSlug: formData.exhibition || null,
           image: formData.image || '',
-          materials: (formData.materials as string[]) || undefined,
-          dimensions: (formData.dimensions as string) || undefined,
-          provenance: (formData.provenance as string) || undefined,
-          tags: (formData.tags as string[]) || undefined,
-          enabledAttributes: formData.enabledAttributes || undefined,
+          materials: formData.materials || null,
+          dimensions: formData.dimensions || null,
+          provenance: formData.provenance || null,
+          tags: formData.tags || null,
+          enabledAttributes: formData.enabledAttributes || null,
           translations,
           mediaItems,
         });
