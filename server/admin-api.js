@@ -91,7 +91,10 @@ export function createAdminApi(rootDir, env) {
 
   router.post(['/upload-media', '/upload-image'], async (req, res) => {
     try { res.json(await uploadMedia(rootDir, req.headers, req)); }
-    catch { res.status(500).json({ error: 'Failed to upload media' }); }
+    catch (error) {
+      const status = [400, 413, 415].includes(error.status) ? error.status : 500;
+      res.status(status).json({ error: status === 500 ? 'Failed to upload media' : error.message });
+    }
   });
   router.post('/translate', async (req, res) => {
     try {
@@ -111,8 +114,9 @@ export function createAdminApi(rootDir, env) {
     const result = deleteImage(rootDir, req.query.path);
     res.status(result.status).json(result.body);
   });
-  router.use((_err, _req, res, _next) => {
-    res.status(500).json({ error: 'Admin API request failed' });
+  router.use((err, _req, res, _next) => {
+    const status = [400, 413].includes(err.status) ? err.status : 500;
+    res.status(status).json({ error: status === 413 ? 'Request body too large' : status === 400 ? 'Invalid request body' : 'Admin API request failed' });
   });
   return router;
 }

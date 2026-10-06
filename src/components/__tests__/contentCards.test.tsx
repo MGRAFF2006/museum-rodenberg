@@ -1,0 +1,23 @@
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, expect, it, vi } from 'vitest';
+import { ArtifactCard } from '../ArtifactCard';
+import { ExhibitionCard } from '../ExhibitionCard';
+vi.mock('../../hooks/useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
+afterEach(cleanup);
+it.each(['artifact', 'exhibition'] as const)('provides keyboard and native link navigation for %s cards', async type => {
+  const onClick = vi.fn();
+  const item = { id: 'fixture', qrCode: 'fixture', title: 'Museum object', description: 'Description', image: '/uploads/fixture.jpg' };
+  render(type === 'artifact' ? <ArtifactCard artifact={item} onClick={onClick} /> : <ExhibitionCard exhibition={item} onClick={onClick} />);
+  const user = userEvent.setup();
+  const link = screen.getByRole('link');
+  expect(link).toHaveAttribute('href', `/${type}/fixture`);
+  await user.tab();
+  expect(link).toHaveFocus();
+  await user.keyboard('{Enter}');
+  expect(onClick).toHaveBeenCalledExactlyOnceWith('fixture');
+  const modifiedClick = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
+  link.dispatchEvent(modifiedClick);
+  expect(modifiedClick.defaultPrevented).toBe(false);
+  expect(onClick).toHaveBeenCalledTimes(1);
+});
