@@ -1,4 +1,4 @@
-import { useProtectedMutation } from './useProtectedMutation';
+import { ContentConflictError, useProtectedMutation } from './useProtectedMutation';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
 import { api } from '../../convex/_generated/api';
@@ -436,6 +436,8 @@ export function useEditorForm(config: EditorConfig) {
 
         await saveExhibition({
           slug,
+          expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
+          expectedDocumentId: id === 'new' ? undefined : formData.documentId,
           qrCode: (formData.qrCode as string) || slug,
           image: formData.image || '',
           dateRange: (formData.dateRange as string) || undefined,
@@ -469,6 +471,8 @@ export function useEditorForm(config: EditorConfig) {
 
         await saveArtifact({
           slug,
+          expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
+          expectedDocumentId: id === 'new' ? undefined : formData.documentId,
           qrCode: (formData.qrCode as string) || slug,
           exhibitionSlug: (formData.exhibition as string) || undefined,
           image: formData.image || '',
@@ -486,10 +490,15 @@ export function useEditorForm(config: EditorConfig) {
       refreshData();
       onBack(true);
     } catch (error) {
+      if (error instanceof ContentConflictError) {
+        setValidationErrors([t('contentChangedReload')]);
+        alert(t('contentChangedReload'));
+        return;
+      }
       console.error('Error saving:', error);
       alert(t('errorSaving'));
     }
-  }, [formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t]);
+  }, [id, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t, setValidationErrors]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm(t(deleteConfirmKey))) return;

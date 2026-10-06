@@ -5,6 +5,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { ConvexHttpClient } from 'convex/browser';
 import { getFunctionName } from 'convex/server';
+import { ConvexError } from 'convex/values';
 import { createAdminApi } from '../../server/admin-api.js';
 import * as artifacts from '../../convex/artifacts';
 import * as assets from '../../convex/assets';
@@ -75,7 +76,7 @@ describe('Convex content authorization', () => {
     const ctx = { db: { query: () => chain, insert, patch, delete: del } };
     for (const write of writes) {
       const handler = (write as unknown as { _handler: (ctx: unknown, args: unknown) => Promise<unknown> })._handler;
-      await handler(ctx, { serverSecret: credential, slug: 'fixture', assetId: 'fixture', translations: [], isFeatured: true });
+      await handler(ctx, { serverSecret: credential, slug: 'fixture', assetId: 'fixture', expectedRevision: 0, expectedDocumentId: row._id, translations: [], isFeatured: true });
     }
     expect(patch).toHaveBeenCalled();
     expect(del).toHaveBeenCalled();
@@ -117,6 +118,10 @@ for (const mode of ['express', 'vite'] as const) {
     const failed = await request('/content-write', body, token);
     expect(failed.status).toBe(502);
     expect(await failed.text()).not.toContain(credential);
+    mutation.mockRejectedValueOnce(new ConvexError({ code: 'STALE_CONTENT', sensitiveDetail: credential }));
+    const stale = await request('/content-write', body, token);
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toEqual({ code: 'STALE_CONTENT', error: 'Content changed. Reopen it before saving.' });
     await request('/logout', {}, token);
     expect((await request('/content-write', body, token)).status).toBe(401);
     const loggedIn = await (await request('/login', { password: 'fixture-password' })).json();
