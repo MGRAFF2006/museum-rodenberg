@@ -45,7 +45,7 @@ Never commit `.env` or `.env.local`, and replace the example admin password befo
 ## Checks
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npm test -- --run
 npm run build
 ```

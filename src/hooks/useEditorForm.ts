@@ -105,7 +105,7 @@ export function useEditorForm(config: EditorConfig) {
     };
 
     // Extract from configured translation fields
-    Object.values(formData.translations || {}).forEach((trans: Record<string, string>) => {
+    Object.values(formData.translations || {}).forEach((trans: Record<string, string | undefined>) => {
       contentMediaFields.forEach(field => {
         extractFromText(trans?.[field] || '');
       });
@@ -184,7 +184,7 @@ export function useEditorForm(config: EditorConfig) {
           m.audio.forEach(a => currentContent.audio.add(a.url));
         };
 
-        Object.values(entity.translations || {}).forEach((trans: Record<string, string>) => {
+        Object.values(entity.translations || {}).forEach((trans: Record<string, string | undefined>) => {
           contentMediaFields.forEach(field => extract(trans?.[field] || ''));
         });
         Object.values(entity.detailedContent || {}).forEach((c: string) => extract(c));

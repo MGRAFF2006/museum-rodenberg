@@ -31,7 +31,7 @@ export const useAssetValidation = () => {
     
     // Add from translations
     if (data.translations) {
-      Object.values(data.translations).forEach((trans: Record<string, string>) => {
+      Object.values(data.translations).forEach((trans: Record<string, string | undefined>) => {
         // Collect all fields that might contain markdown or URLs
         const fieldsToExtract = ['description', 'significance'];
         fieldsToExtract.forEach(field => {

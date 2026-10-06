@@ -19,6 +19,7 @@
     "convex:push:prod": "bash scripts/push-convex.sh --prod",
     "backup": "node scripts/backup-convex.mjs",
     "backup:prod": "node scripts/backup-convex.mjs --prod",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p convex/tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
