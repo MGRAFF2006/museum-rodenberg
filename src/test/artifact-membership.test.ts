@@ -81,7 +81,7 @@ describe('artifact exhibition membership', () => {
 
   it('adds a newly created artifact to its parent without disturbing other entries', async () => {
     const { ctx, rows, exhibitions } = fixture();
-    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'created', expectedRevision: undefined, expectedDocumentId: undefined, exhibitionSlug: 'b' });
+    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'created', qrCode: 'CREATED', expectedRevision: undefined, expectedDocumentId: undefined, exhibitionSlug: 'b' });
     expect(rows.artifacts.some(art => art.slug === 'created' && art.exhibitionSlug === 'b')).toBe(true);
     expect(exhibitions[1].artifactSlugs).toEqual(['other', 'created']);
   });
@@ -115,7 +115,7 @@ describe('artifact exhibition membership', () => {
 
   it('still permits migration-style creation before the target exhibition exists', async () => {
     const { ctx, rows } = fixture();
-    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'future-child', expectedRevision: undefined, expectedDocumentId: undefined, exhibitionSlug: 'future-exhibition' });
+    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'future-child', qrCode: 'FUTURE-CHILD', expectedRevision: undefined, expectedDocumentId: undefined, exhibitionSlug: 'future-exhibition' });
     expect(rows.artifacts.some(art => art.slug === 'future-child' && art.exhibitionSlug === 'future-exhibition')).toBe(true);
   });
 
