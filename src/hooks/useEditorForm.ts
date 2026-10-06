@@ -34,8 +34,8 @@ export interface EditorConfig {
   contentMediaFields: string[];
   /** Returns the fields to translate from German source */
   getFieldsToTranslate: (formData: EntityRecord) => TranslatableField[];
-  /** Loads existing entity data by ID; returns undefined if not found */
-  loadEntity: (id: string) => EntityRecord | undefined;
+  /** Full raw entity: undefined while loading, null when not found. */
+  entity: EntityRecord | null | undefined;
   /** Confirm message key for delete */
   deleteConfirmKey: string;
 }
@@ -49,7 +49,7 @@ export function useEditorForm(config: EditorConfig) {
     defaultEnabledAttributes,
     contentMediaFields,
     getFieldsToTranslate: getFieldsToTranslateFn,
-    loadEntity,
+    entity,
     deleteConfirmKey,
   } = config;
 
@@ -66,21 +66,19 @@ export function useEditorForm(config: EditorConfig) {
 
   const [activeLang, setActiveLang] = useState<Language>('de');
 
-  const initialTranslations = LANGUAGES.reduce((acc, lang) => ({
-    ...acc,
-    [lang]: { ...initialTranslationFields }
-  }), {} as Record<string, Record<string, string>>);
-
-  const initialDetailedContent = LANGUAGES.reduce((acc, lang) => ({
-    ...acc,
-    [lang]: ''
-  }), {} as Record<string, string>);
-
-  const [formData, setFormData] = useState<EntityRecord>({
-    translations: initialTranslations,
-    detailedContent: initialDetailedContent,
+  const emptyForm = useMemo<EntityRecord>(() => ({
+    translations: Object.fromEntries(LANGUAGES.map(lang => [lang, { ...initialTranslationFields }])),
+    detailedContent: Object.fromEntries(LANGUAGES.map(lang => [lang, ''])),
+    enabledAttributes: defaultEnabledAttributes,
+    media: { images: [], videos: [], audio: [] },
     _hashes: {},
-  });
+  }), [initialTranslationFields, defaultEnabledAttributes]);
+
+  const [formData, setFormData] = useState<EntityRecord>(emptyForm);
+  const [draftId, setDraftId] = useState(id);
+  const [initializedId, setInitializedId] = useState<string | null>(id === 'new' ? id : null);
+  const isReady = initializedId === id && (id === 'new' || entity?.id === id);
+  const isNotFound = id !== 'new' && entity === null;
 
   const [manualMedia, setManualMedia] = useState<{
     images: string[];
@@ -106,7 +104,7 @@ export function useEditorForm(config: EditorConfig) {
     };
 
     // Extract from configured translation fields
-    Object.values(formData.translations || {}).forEach((trans: Record<string, string>) => {
+    Object.values(formData.translations || {}).forEach((trans) => {
       contentMediaFields.forEach(field => {
         extractFromText(trans?.[field] || '');
       });
@@ -155,49 +153,58 @@ export function useEditorForm(config: EditorConfig) {
     }
   }, [contentMedia, manualMedia, formData.media]);
 
-  // Load existing entity
+  // Hydrate only once per selected ID; subscription updates must preserve drafts.
   useEffect(() => {
-    if (id !== 'new') {
-      const entity = loadEntity(id);
-      if (entity) {
-        const normalizedMedia = {
-          images: entity.media?.images || [],
-          videos: entity.media?.videos || [],
-          audio: entity.media?.audio || [],
-        };
-        setFormData({
-          ...entity,
-          media: normalizedMedia,
-          enabledAttributes: entity.enabledAttributes || defaultEnabledAttributes,
-        });
-
-        // Initialize manual media by filtering out what's already in content
-        const currentContent = {
-          images: new Set<string>(),
-          videos: new Set<string>(),
-          audio: new Set<string>(),
-        };
-
-        const extract = (text: string) => {
-          const m = extractMediaFromMarkdown(text || '');
-          m.images.forEach(i => currentContent.images.add(i));
-          m.videos.forEach(v => currentContent.videos.add(v.url));
-          m.audio.forEach(a => currentContent.audio.add(a.url));
-        };
-
-        Object.values(entity.translations || {}).forEach((trans: Record<string, string>) => {
-          contentMediaFields.forEach(field => extract(trans?.[field] || ''));
-        });
-        Object.values(entity.detailedContent || {}).forEach((c: string) => extract(c));
-
-        setManualMedia({
-          images: normalizedMedia.images.filter((img: string) => !currentContent.images.has(img)),
-          videos: normalizedMedia.videos.filter((v: MediaItem) => !currentContent.videos.has(v.url)),
-          audio: normalizedMedia.audio.filter((a: MediaItem) => !currentContent.audio.has(a.url)),
-        });
-      }
+    if (draftId !== id) {
+      setDraftId(id);
+      setInitializedId(null);
+      setFormData(emptyForm);
+      setManualMedia({ images: [], videos: [], audio: [] });
+    } else if (initializedId === id) {
+      return;
     }
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    if (id === 'new') {
+      setInitializedId(id);
+    } else if (entity?.id === id) {
+      const normalizedMedia = {
+        images: entity.media?.images || [],
+        videos: entity.media?.videos || [],
+        audio: entity.media?.audio || [],
+      };
+      setFormData({
+        ...entity,
+        media: normalizedMedia,
+        enabledAttributes: entity.enabledAttributes || defaultEnabledAttributes,
+      });
+
+      // Initialize manual media by filtering out what's already in content
+      const currentContent = {
+        images: new Set<string>(),
+        videos: new Set<string>(),
+        audio: new Set<string>(),
+      };
+
+      const extract = (text: string) => {
+        const m = extractMediaFromMarkdown(text || '');
+        m.images.forEach(i => currentContent.images.add(i));
+        m.videos.forEach(v => currentContent.videos.add(v.url));
+        m.audio.forEach(a => currentContent.audio.add(a.url));
+      };
+
+      Object.values(entity.translations || {}).forEach((trans) => {
+        contentMediaFields.forEach(field => extract(trans?.[field] || ''));
+      });
+      Object.values(entity.detailedContent || {}).forEach((c: string) => extract(c));
+
+      setManualMedia({
+        images: normalizedMedia.images.filter((img: string) => !currentContent.images.has(img)),
+        videos: normalizedMedia.videos.filter((v: MediaItem) => !currentContent.videos.has(v.url)),
+        audio: normalizedMedia.audio.filter((a: MediaItem) => !currentContent.audio.has(a.url)),
+      });
+      setInitializedId(id);
+    }
+  }, [id, draftId, initializedId, entity, emptyForm, defaultEnabledAttributes, contentMediaFields]);
 
   const handleChange = useCallback((field: string, value: unknown) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -205,7 +212,7 @@ export function useEditorForm(config: EditorConfig) {
 
   const handleMediaChange = useCallback((type: 'images' | 'videos' | 'audio', index: number, field: string, value: string) => {
     const currentMediaArray = formData.media?.[type];
-    if (!currentMediaArray || !currentMediaArray[index]) return;
+    if (!currentMediaArray || !Number.isInteger(index) || index < 0 || index >= currentMediaArray.length) return;
 
     const item = currentMediaArray[index];
     const url = type === 'images' ? (item as string) : (item as MediaItem).url;
@@ -258,7 +265,7 @@ export function useEditorForm(config: EditorConfig) {
 
   const removeMediaItem = useCallback((type: 'images' | 'videos' | 'audio', index: number) => {
     const currentMediaArray = formData.media?.[type];
-    if (!currentMediaArray || !currentMediaArray[index]) return;
+    if (!currentMediaArray || !Number.isInteger(index) || index < 0 || index >= currentMediaArray.length) return;
 
     const item = currentMediaArray[index];
     const urlToRemove = type === 'images' ? (item as string) : (item as MediaItem).url;
@@ -378,6 +385,8 @@ export function useEditorForm(config: EditorConfig) {
   }, [getFieldsToTranslate, getUnifiedTranslations, formData._hashes, handleTranslationUpdate, t, translateFields]);
 
   const handleSave = useCallback(async () => {
+    if (!isReady || isTranslating) return;
+
     const isValid = await validateAssets(formData);
     if (!isValid) {
       alert(t('validationErrors'));
@@ -398,9 +407,11 @@ export function useEditorForm(config: EditorConfig) {
       }> = [];
       let sortIdx = 0;
       for (const img of formData.media?.images || []) {
+        if (!img.trim()) continue;
         mediaItems.push({ mediaType: 'image', url: img, sortOrder: sortIdx++ });
       }
       for (const vid of formData.media?.videos || []) {
+        if (!vid.url.trim()) continue;
         mediaItems.push({
           mediaType: 'video',
           url: vid.url,
@@ -410,6 +421,7 @@ export function useEditorForm(config: EditorConfig) {
         });
       }
       for (const aud of formData.media?.audio || []) {
+        if (!aud.url.trim()) continue;
         mediaItems.push({
           mediaType: 'audio',
           url: aud.url,
@@ -507,7 +519,7 @@ export function useEditorForm(config: EditorConfig) {
       console.error('Error saving:', error);
       alert(t('errorSaving'));
     }
-  }, [id, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t, setValidationErrors]);
+  }, [isReady, isTranslating, id, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t, setValidationErrors]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm(t(deleteConfirmKey))) return;
@@ -533,6 +545,8 @@ export function useEditorForm(config: EditorConfig) {
     // State
     formData,
     setFormData,
+    isReady,
+    isNotFound,
     activeLang,
     setActiveLang,
     contentMedia,

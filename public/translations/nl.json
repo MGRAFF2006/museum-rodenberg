@@ -98,6 +98,7 @@
   "altText": "Alt-tekst",
   "name": "Naam",
   "logout": "Uitloggen",
+  "qrCameraUnavailable": "De camera kon niet starten of stoppen. Sluit de scanner en probeer opnieuw.",
   "contentChangedReload": "Deze inhoud is gewijzigd of verwijderd. Uw niet-opgeslagen wijzigingen blijven hier bewaard. Ga terug naar het overzicht en open het item opnieuw om de nieuwste versie te laden.",
   "qrCodeAlreadyAssigned": "Deze QR-code is al gekoppeld aan een ander object of een andere tentoonstelling. Kies een andere QR-code."
 }

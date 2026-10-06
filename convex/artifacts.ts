@@ -42,7 +42,7 @@ export const list = query({
 });
 
 /** List artifacts with only the requested language (+ de fallback).
- *  Returns ~1/7th the translation data compared to the full list query.
+ *  Reads only those languages through the translation language index.
  *  Omits detailedContent from translations (only needed on detail pages). */
 export const listForLanguage = query({
   args: { language: v.string() },
@@ -51,17 +51,26 @@ export const listForLanguage = query({
 
     const [artifacts, allTranslations, allMedia] = await Promise.all([
       ctx.db.query("artifacts").collect(),
-      ctx.db.query("artifact_translations").collect(),
+      Promise.all(
+        [...langs].map((language) =>
+          ctx.db
+            .query("artifact_translations")
+            .withIndex("by_language", (q) => q.eq("language", language))
+            .collect()
+        )
+      ).then((rows) => rows.flat().sort((a, b) =>
+        // Match the original full-table creation order when merging language ranges.
+        a._creationTime - b._creationTime || (a._id < b._id ? -1 : a._id > b._id ? 1 : 0)
+      )),
       ctx.db
         .query("media")
         .withIndex("by_parent", (q) => q.eq("parentType", "artifact"))
         .collect(),
     ]);
 
-    // Build lookup maps — filter to requested languages only
+    // Build lookup maps for the requested language and German fallback
     const translationsByArtId = new Map<string, typeof allTranslations>();
     for (const t of allTranslations) {
-      if (!langs.has(t.language)) continue;
       const key = t.artifactId;
       const arr = translationsByArtId.get(key) ?? [];
       // Strip detailedContent to reduce payload (only needed on detail pages)
@@ -108,8 +117,7 @@ export const getBySlug = query({
   },
 });
 
-/** Get all artifacts belonging to an exhibition (by exhibition slug).
- *  Bulk-fetches translations and media to avoid N+1 queries. */
+/** Get all artifacts belonging to an exhibition (by exhibition slug). */
 export const getByExhibition = query({
   args: { exhibitionSlug: v.string() },
   handler: async (ctx, args) => {
@@ -120,40 +128,18 @@ export const getByExhibition = query({
       )
       .collect();
 
-    if (artifacts.length === 0) return [];
-
-    // Bulk-fetch all artifact translations and media for these artifacts
-    const artIds = new Set(artifacts.map((a) => a._id));
-    const artSlugs = new Set(artifacts.map((a) => a.slug));
-
-    const [allTranslations, allMedia] = await Promise.all([
-      ctx.db.query("artifact_translations").collect(),
-      ctx.db
-        .query("media")
-        .withIndex("by_parent", (q) => q.eq("parentType", "artifact"))
-        .collect(),
-    ]);
-
-    // Filter to only relevant items and build lookup maps
-    const translationsByArtId = new Map<string, typeof allTranslations>();
-    for (const t of allTranslations) {
-      if (!artIds.has(t.artifactId)) continue;
-      const arr = translationsByArtId.get(t.artifactId) ?? [];
-      arr.push(t);
-      translationsByArtId.set(t.artifactId, arr);
-    }
-    const mediaBySlug = new Map<string, typeof allMedia>();
-    for (const m of allMedia) {
-      if (!artSlugs.has(m.parentSlug)) continue;
-      const arr = mediaBySlug.get(m.parentSlug) ?? [];
-      arr.push(m);
-      mediaBySlug.set(m.parentSlug, arr);
-    }
-
-    return artifacts.map((art) => ({
-      ...art,
-      translations: translationsByArtId.get(art._id) ?? [],
-      media: mediaBySlug.get(art.slug) ?? [],
+    return Promise.all(artifacts.map(async (artifact) => {
+      const [translations, media] = await Promise.all([
+        ctx.db.query("artifact_translations")
+          .withIndex("by_artifact", (q) => q.eq("artifactId", artifact._id))
+          .collect(),
+        ctx.db.query("media")
+          .withIndex("by_parent", (q) =>
+            q.eq("parentType", "artifact").eq("parentSlug", artifact.slug)
+          )
+          .collect(),
+      ]);
+      return { ...artifact, translations, media };
     }));
   },
 });

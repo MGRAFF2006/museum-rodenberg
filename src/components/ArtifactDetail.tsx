@@ -9,13 +9,14 @@ import { Artifact, MediaItem, RequiredMedia } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { TranslationWarning } from './TranslationWarning';
 import { stripMarkdown } from '../utils/markdownUtils';
+import { getMediaGallery, type MediaSelection } from '../utils/mediaGallery';
 
 interface ArtifactDetailProps {
   artifact: Artifact;
   onBack: () => void;
   exhibitionTitle?: string;
   onDetailedContentClick?: (type: 'artifact' | 'exhibition', id: string) => void;
-  onMediaViewerClick?: (images: string[], videos: MediaItem[], audio: MediaItem[]) => void;
+  onMediaViewerClick?: (images: string[], videos: MediaItem[], audio: MediaItem[], selection?: MediaSelection) => void;
 }
 
 export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
@@ -36,20 +37,25 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
     return artifact.enabledAttributes.includes(attr);
   };
 
-  const hasMedia = isEnabled('media') && artifact.media && (
-    (artifact.media.images && artifact.media.images.length > 0) ||
-    (artifact.media.videos && artifact.media.videos.length > 0) ||
-    (artifact.media.audio && artifact.media.audio.length > 0)
+  const gallery = getMediaGallery(
+    isEnabled('media') ? artifact.media : undefined,
+    isEnabled('description') ? artifact.description : undefined,
+    isEnabled('significance') ? artifact.significance : undefined,
+    isEnabled('detailedContent') ? artifact.detailedContent?.[currentLanguage] || artifact.detailedContent?.de : undefined
   );
+  const hasMedia = gallery.images.length > 0 || gallery.videos.length > 0 || gallery.audio.length > 0;
 
-  const hasDetailedContent = isEnabled('detailedContent') && artifact.detailedContent && artifact.detailedContent[currentLanguage];
+  const hasDescription = isEnabled('description') && artifact.description;
+  const detailedContent = artifact.detailedContent?.[currentLanguage] || artifact.detailedContent?.de;
+  const hasDetailedContent = isEnabled('detailedContent') && detailedContent;
 
   const handleMediaClick = (type: 'image' | 'video' | 'audio', url: string) => {
     if (isMobile && onMediaViewerClick) {
       onMediaViewerClick(
-        artifact.media?.images || [],
-        artifact.media?.videos || [],
-        artifact.media?.audio || []
+        gallery.images || [],
+        gallery.videos || [],
+        gallery.audio || [],
+        { type, url }
       );
     } else {
       setMediaViewerInitialItem({ type, url });
@@ -122,21 +128,25 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
           <div className="lg:col-span-2 space-y-6">
 
             {/* Description Card */}
-            {isEnabled('description') && artifact.description && (
+            {(hasDescription || hasDetailedContent) && (
               <section className="card-lg p-5 md:p-6">
-                <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-neutral-200">
-                  <h2 className="text-heading-lg font-serif font-bold text-neutral-900">
-                    {t('description')}
-                  </h2>
-                  <TextToSpeechButton
-                    text={stripMarkdown(artifact.description)}
-                    language={currentLanguage}
-                    size="md"
-                  />
-                </div>
-                <div className="mb-4">
-                  <MarkdownRenderer content={artifact.description} onMediaClick={handleMediaClick} />
-                </div>
+                {hasDescription && (
+                  <>
+                    <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-neutral-200">
+                      <h2 className="text-heading-lg font-serif font-bold text-neutral-900">
+                        {t('description')}
+                      </h2>
+                      <TextToSpeechButton
+                        text={stripMarkdown(artifact.description)}
+                        language={currentLanguage}
+                        size="md"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <MarkdownRenderer content={artifact.description} onMediaClick={handleMediaClick} />
+                    </div>
+                  </>
+                )}
                 {hasDetailedContent && (
                   <button
                     onClick={() => {
@@ -188,9 +198,9 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                     onClick={() => {
                       if (isMobile && onMediaViewerClick) {
                         onMediaViewerClick(
-                          artifact.media!.images || [],
-                          artifact.media!.videos || [],
-                          artifact.media!.audio || []
+                          gallery.images || [],
+                          gallery.videos || [],
+                          gallery.audio || []
                         );
                       } else {
                         setIsMediaViewerOpen(true);
@@ -204,7 +214,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {/* Images */}
-                  {artifact.media!.images && artifact.media!.images.slice(0, 8).map((image, index) => (
+                  {gallery.images && gallery.images.slice(0, 8).map((image, index) => (
                     <div
                       key={`img-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-neutral-100 group cursor-pointer border border-neutral-200"
@@ -220,7 +230,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                   ))}
                   
                   {/* Videos Preview */}
-                  {artifact.media!.videos && artifact.media!.videos.slice(0, 4).map((video, index) => (
+                  {gallery.videos && gallery.videos.slice(0, 4).map((video, index) => (
                     <div
                       key={`vid-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-neutral-900 group cursor-pointer flex flex-col items-center justify-center relative border border-neutral-200"
@@ -237,7 +247,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                   ))}
 
                   {/* Audio Preview */}
-                  {artifact.media!.audio && artifact.media!.audio.slice(0, 4).map((audio, index) => (
+                  {gallery.audio && gallery.audio.slice(0, 4).map((audio, index) => (
                     <div
                       key={`aud-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-primary-50 group cursor-pointer flex flex-col items-center justify-center border border-primary-100"
@@ -354,11 +364,11 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
         </div>
       </div>
       
-      {hasMedia && !isMobile && (
+      {(hasMedia || mediaViewerInitialItem) && !isMobile && (
         <MediaViewer
-          images={artifact.media!.images || []}
-          videos={artifact.media!.videos || []}
-          audio={artifact.media!.audio || []}
+          images={gallery.images || []}
+          videos={gallery.videos || []}
+          audio={gallery.audio || []}
           isOpen={isMediaViewerOpen}
           onClose={() => {
             setIsMediaViewerOpen(false);
@@ -373,7 +383,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
           isOpen={isDetailedContentOpen}
           onClose={() => setIsDetailedContentOpen(false)}
           title={artifact.title}
-          content={artifact.detailedContent![currentLanguage] || ''}
+          content={detailedContent || ''}
           media={artifact.media as RequiredMedia}
         />
       )}
