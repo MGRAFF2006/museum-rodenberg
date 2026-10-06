@@ -24,7 +24,8 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "start:server": "node server/index.js"
+    "start:server": "node server/index.js",
+    "test:node": "node scripts/run-node-tests.mjs"
   },
   "dependencies": {
     "@fontsource-variable/cormorant-garamond": "^5.2.6",

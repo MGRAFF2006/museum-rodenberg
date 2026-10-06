@@ -47,10 +47,15 @@ Never commit `.env` or `.env.local`, and replace the example admin password befo
 ```bash
 npx tsc --noEmit
 npm test -- --run
+npm run test:node
 npm run build
 ```
 
 The existing GitHub Actions workflow runs type checking, tests, and the production build. A push to `main` also publishes the Convex schema when the production secrets are configured.
+
+`npm test` runs the visitor/application Vitest suites. `npm run test:node` also
+runs native Node suites under `scripts/` and `server/`, including nested test
+directories; it skips empty trees and excludes nested `node_modules`.
 
 ## Project layout
 
