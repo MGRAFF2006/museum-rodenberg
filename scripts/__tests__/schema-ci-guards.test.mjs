@@ -19,6 +19,15 @@ async function fixture(t) {
   return dir;
 }
 
+test('schema guards retain the supported runtime and native regression gate', () => {
+  for (const currentJob of Object.values(workflow.jobs)) {
+    for (const step of currentJob.steps.filter((item) => item.uses === 'actions/setup-node@v4')) {
+      assert.equal(step.with['node-version'], 22);
+    }
+  }
+  assert.ok(workflow.jobs.test.steps.some((step) => step.run === 'npm run test:node'));
+});
+
 test('production schema jobs serialize and only gated steps can deploy', () => {
   assert.equal(job.concurrency.group, 'convex-production-schema');
   assert.equal(job.concurrency['cancel-in-progress'], false);
