@@ -4,6 +4,12 @@ import { useEditorForm, type EditorConfig } from '../useEditorForm';
 
 const save = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('convex/react', () => ({ useMutation: () => save }));
+vi.mock('../../utils/auth', () => ({ authFetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
+  const request = JSON.parse(String(init?.body));
+  expect(['artifacts:save', 'exhibitions:save']).toContain(request.operation);
+  const result = await save(request.args);
+  return new Response(JSON.stringify({ result }));
+} }));
 vi.mock('../useContentData', () => ({ useContentData: () => ({ refreshData: vi.fn() }) }));
 vi.mock('../useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
 vi.mock('../useContentTranslation', () => ({ useContentTranslation: () => ({ isTranslating: false, translationProgress: null, translateFields: vi.fn() }) }));
@@ -12,7 +18,7 @@ vi.mock('../useAssetValidation', () => ({ useAssetValidation: () => ({ isValidat
 const config: EditorConfig = {
   contentType: 'artifact', id: 'new', onBack: vi.fn(), initialTranslationFields: { title: '', description: '' },
   defaultEnabledAttributes: [], contentMediaFields: ['description'], getFieldsToTranslate: () => [],
-  loadEntity: () => undefined, deleteConfirmKey: 'delete',
+  entity: undefined, deleteConfirmKey: 'delete',
 };
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
@@ -21,6 +27,7 @@ it.each(['artifact', 'exhibition'] as const)('saves only completed %s media rows
   const { result } = renderHook(() => useEditorForm({ ...config, contentType }));
   act(() => {
     result.current.handleChange('id', 'item');
+    result.current.handleTranslationChange('de', 'title', 'Objekt');
     result.current.addMediaItem('images');
     result.current.addMediaItem('videos');
     result.current.addMediaItem('audio');
