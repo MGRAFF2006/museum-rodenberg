@@ -1,11 +1,21 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AudioPlayer } from './AudioPlayer';
 
 interface MarkdownRendererProps {
   content: string;
   onMediaClick?: (type: 'image' | 'video' | 'audio', url: string, title?: string) => void;
+}
+
+function mediaUrlTransform(url: string): string {
+  const media = /^(audio|video|image):(.+)$/i.exec(url);
+  if (!media) return defaultUrlTransform(url);
+  const [, type, target] = media;
+  const safeTarget = defaultUrlTransform(target);
+  const scheme = /^[a-z][a-z\d+.-]*:/i.exec(target)?.[0].toLowerCase();
+  if (!safeTarget || (scheme && scheme !== 'http:' && scheme !== 'https:')) return '';
+  return `${type.toLowerCase()}:${safeTarget}`;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ 
@@ -16,6 +26,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     <div className="prose prose-lg max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={mediaUrlTransform}
         components={{
           a: ({ href, children }) => {
             const isMedia = href?.startsWith('audio:') || href?.startsWith('video:') || href?.startsWith('image:');
@@ -32,16 +43,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               };
 
               return (
-                <span 
+                <button
+                  type="button"
                   onClick={() => onMediaClick?.(type, url || '', title)}
                   className="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm font-medium cursor-pointer hover:bg-blue-200 transition-colors my-2"
                 >
                   <span className="mr-2">{icons[type]}</span>
                   {title}
-                </span>
+                </button>
               );
             }
             
+            if (!href) return <span>{children}</span>;
             return (
               <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 underline">
                 {children}
