@@ -117,6 +117,30 @@ describe.each(['artifact', 'exhibition'] as const)('%s asynchronous save ownersh
     expect(payload).not.toHaveProperty('replaceTranslations');
   });
 
+  it('keeps the original removal snapshot when selection changes during asset validation', async () => {
+    let complete!: (valid: boolean) => void;
+    mocks.validateAssets.mockImplementationOnce(() => new Promise<boolean>(resolve => { complete = resolve; }));
+    const config: Omit<EditorConfig, 'id' | 'entity'> = {
+      contentType, onBack: vi.fn(), initialTranslationFields: { title: '', description: '' },
+      defaultEnabledAttributes: [], contentMediaFields: ['description'], getFieldsToTranslate: () => [], deleteConfirmKey: 'delete',
+    };
+    const { result, rerender } = renderHook(({ id, entity }: { id: string; entity: EntityRecord }) => useEditorForm({ ...config, id, entity }), {
+      initialProps: { id: 'original', entity: { id: 'original', documentId: 'old-id', revision: 3,
+        translations: { de: { title: 'Deutsch', description: '' }, fr: { title: 'French', description: '' } } } },
+    });
+    act(() => result.current.handleTranslationChange('fr', 'title', ''));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.handleSave(); });
+    rerender({ id: 'next', entity: { id: 'next', documentId: 'next-id', revision: 9,
+      translations: { de: { title: 'Next', description: '' }, it: { title: 'Italian', description: '' } } } });
+    await act(async () => { complete(true); await pending; });
+    const write = contentType === 'artifact' ? mocks.saveArtifact : mocks.saveExhibition;
+    expect(write).toHaveBeenCalledOnce();
+    expect(write.mock.calls[0][0]).toMatchObject({
+      slug: 'original', expectedDocumentId: 'old-id', expectedRevision: 3, removeLanguages: ['fr'],
+    });
+  });
+
   it('keeps unseen languages and details outside a partial accepted record out of the clearing payload', async () => {
     const { result, rerender } = mount();
     rerender({ id: 'existing', documentId: 'original-id', revision: 3,

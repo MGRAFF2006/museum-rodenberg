@@ -391,6 +391,7 @@ export function useEditorForm(config: EditorConfig) {
   const handleSave = useCallback(async () => {
     if (!isReady || isTranslating) return;
 
+    const removeLanguages = loadedLanguages.current.filter(lang => !formData.translations?.[lang]?.title);
     const isValid = await validateAssets(formData);
     if (!isValid) {
       alert(t('validationErrors'));
@@ -400,7 +401,6 @@ export function useEditorForm(config: EditorConfig) {
     try {
       const slug = id === 'new' ? (formData.id || '').toLowerCase() : id;
       const LANGS: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
-      const removeLanguages = loadedLanguages.current.filter(lang => !formData.translations?.[lang]?.title);
 
       // Build media items array from formData.media
       const mediaItems: Array<{
