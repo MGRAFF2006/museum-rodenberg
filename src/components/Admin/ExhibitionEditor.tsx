@@ -23,7 +23,7 @@ interface ExhibitionEditorProps {
 }
 
 const INITIAL_TRANSLATION_FIELDS = {
-  title: '', subtitle: '', description: '', location: '', curator: '', organizer: '', sponsor: '', dateRange: '',
+  title: '', subtitle: '', description: '',
 };
 
 const DEFAULT_ENABLED = ['title', 'description', 'subtitle', 'dateRange', 'location', 'curator', 'organizer', 'sponsor', 'tags', 'media', 'detailedContent'];
@@ -50,11 +50,6 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
       { key: 'title', text: de.title || '', type: 'translation', isMarkdown: false },
       { key: 'subtitle', text: de.subtitle || '', type: 'translation', isMarkdown: false },
       { key: 'description', text: de.description || '', type: 'translation', isMarkdown: true },
-      { key: 'location', text: de.location || '', type: 'translation', isMarkdown: false },
-      { key: 'curator', text: de.curator || '', type: 'translation', isMarkdown: false },
-      { key: 'organizer', text: de.organizer || '', type: 'translation', isMarkdown: false },
-      { key: 'sponsor', text: de.sponsor || '', type: 'translation', isMarkdown: false },
-      { key: 'dateRange', text: de.dateRange || '', type: 'translation', isMarkdown: false },
       { key: 'detailed', text: formData.detailedContent?.de || '', type: 'detailed', isMarkdown: true },
     ].filter(f => f.text) as TranslatableField[];
   }, []);
@@ -139,6 +134,12 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
               <input type="text" className="input w-full px-3 py-2 border rounded-md" value={formData.location || ''} onChange={(e) => handleChange('location', e.target.value)} />
             </div>
           )}
+          {formData.enabledAttributes?.includes('curator') && (
+            <div>
+              <label htmlFor="exhibition-curator" className="block text-sm font-medium text-neutral-700 mb-1">{t('curator')}</label>
+              <input id="exhibition-curator" type="text" className="input w-full px-3 py-2 border rounded-md" value={formData.curator || ''} onChange={(e) => handleChange('curator', e.target.value)} />
+            </div>
+          )}
           {formData.enabledAttributes?.includes('organizer') && (
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">{t('organizer')}</label>
@@ -165,21 +166,6 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
             <TranslatableTextField label={t('title')} lang={activeLang} value={formData.translations?.[activeLang]?.title || ''} onChange={(v) => handleTranslationChange(activeLang, 'title', v)} />
             {formData.enabledAttributes?.includes('subtitle') && (
               <TranslatableTextField label={t('museumHeaderSubtitle')} lang={activeLang} value={formData.translations?.[activeLang]?.subtitle || ''} onChange={(v) => handleTranslationChange(activeLang, 'subtitle', v)} />
-            )}
-            {formData.enabledAttributes?.includes('dateRange') && (
-              <TranslatableTextField label={t('period')} lang={activeLang} value={formData.translations?.[activeLang]?.dateRange || ''} onChange={(v) => handleTranslationChange(activeLang, 'dateRange', v)} />
-            )}
-            {formData.enabledAttributes?.includes('location') && (
-              <TranslatableTextField label={t('location')} lang={activeLang} value={formData.translations?.[activeLang]?.location || ''} onChange={(v) => handleTranslationChange(activeLang, 'location', v)} />
-            )}
-            {formData.enabledAttributes?.includes('curator') && (
-              <TranslatableTextField label={t('curator')} lang={activeLang} value={formData.translations?.[activeLang]?.curator || ''} onChange={(v) => handleTranslationChange(activeLang, 'curator', v)} />
-            )}
-            {formData.enabledAttributes?.includes('organizer') && (
-              <TranslatableTextField label={t('organizer')} lang={activeLang} value={formData.translations?.[activeLang]?.organizer || ''} onChange={(v) => handleTranslationChange(activeLang, 'organizer', v)} />
-            )}
-            {formData.enabledAttributes?.includes('sponsor') && (
-              <TranslatableTextField label={t('sponsor')} lang={activeLang} value={formData.translations?.[activeLang]?.sponsor || ''} onChange={(v) => handleTranslationChange(activeLang, 'sponsor', v)} />
             )}
             <TranslatableMarkdownField id={id} label={t('description')} lang={activeLang} value={formData.translations?.[activeLang]?.description || ''} onChange={(v) => handleTranslationChange(activeLang, 'description', v)} editorKeySuffix="description" />
             {formData.enabledAttributes?.includes('detailedContent') && (

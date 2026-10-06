@@ -24,7 +24,7 @@ interface ArtifactEditorProps {
 }
 
 const INITIAL_TRANSLATION_FIELDS = {
-  title: '', description: '', significance: '', period: '', provenance: '', dimensions: '', artist: '',
+  title: '', description: '', significance: '', period: '', artist: '',
 };
 
 const DEFAULT_ENABLED = ['title', 'description', 'period', 'dimensions', 'materials', 'provenance', 'significance'];
@@ -54,8 +54,6 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
       { key: 'significance', text: de.significance || '', type: 'translation', isMarkdown: true },
       { key: 'artist', text: de.artist || '', type: 'translation', isMarkdown: false },
       { key: 'period', text: de.period || '', type: 'translation', isMarkdown: false },
-      { key: 'provenance', text: de.provenance || '', type: 'translation', isMarkdown: false },
-      { key: 'dimensions', text: de.dimensions || '', type: 'translation', isMarkdown: false },
       { key: 'detailed', text: formData.detailedContent?.de || '', type: 'detailed', isMarkdown: true },
     ].filter(f => f.text) as TranslatableField[];
   }, []);
@@ -129,12 +127,6 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
             <label className="block text-sm font-medium text-neutral-700 mb-1">{t('qrCodeKey')}</label>
             <input type="text" className="input w-full px-3 py-2 border rounded-md" value={formData.qrCode || ''} onChange={(e) => handleChange('qrCode', e.target.value)} />
           </div>
-          {formData.enabledAttributes?.includes('artist') && (
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">{t('artistCreator')}</label>
-              <input type="text" className="input w-full px-3 py-2 border rounded-md" value={formData.artist || ''} onChange={(e) => handleChange('artist', e.target.value)} />
-            </div>
-          )}
           <div className="md:col-span-2">
             <AssetSelector label={t('thumbnailImage')} value={formData.image || ''} onChange={(url) => handleChange('image', url)} assetType="image" />
           </div>
@@ -176,12 +168,6 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
             )}
             {formData.enabledAttributes?.includes('period') && (
               <TranslatableTextField label={t('period')} lang={activeLang} value={formData.translations?.[activeLang]?.period || ''} onChange={(v) => handleTranslationChange(activeLang, 'period', v)} />
-            )}
-            {formData.enabledAttributes?.includes('dimensions') && (
-              <TranslatableTextField label={t('dimensions')} lang={activeLang} value={formData.translations?.[activeLang]?.dimensions || ''} onChange={(v) => handleTranslationChange(activeLang, 'dimensions', v)} />
-            )}
-            {formData.enabledAttributes?.includes('provenance') && (
-              <TranslatableTextField label={t('provenance')} lang={activeLang} value={formData.translations?.[activeLang]?.provenance || ''} onChange={(v) => handleTranslationChange(activeLang, 'provenance', v)} />
             )}
             <TranslatableMarkdownField id={id} label={t('description')} lang={activeLang} value={formData.translations?.[activeLang]?.description || ''} onChange={(v) => handleTranslationChange(activeLang, 'description', v)} editorKeySuffix="description" />
             {formData.enabledAttributes?.includes('significance') && (
