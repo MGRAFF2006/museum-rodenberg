@@ -94,9 +94,14 @@ export function uploadMedia(rootDir, headers, reqStream) {
 // ── Translation proxy ───────────────────────────────────────────
 
 export async function translate(body, apiUrl, apiKey) {
-  const { text, target } = body;
-  if (!text || !target) {
+  const { text, target } = body || {};
+  if (typeof text !== 'string' || !text.trim() || typeof target !== 'string' || !target.trim()) {
     return { status: 400, body: { error: 'Text and target language are required' } };
+  }
+  try {
+    if (!['http:', 'https:'].includes(new URL(apiUrl).protocol)) throw new Error('Invalid protocol');
+  } catch {
+    return { status: 503, body: { error: 'Translation service URL is not configured correctly', retryable: false } };
   }
 
   // Protect Markdown URLs and images
@@ -108,33 +113,54 @@ export async function translate(body, apiUrl, apiKey) {
     return `${bracketed}(${token})`;
   });
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    body: JSON.stringify({
-      q: protectedText,
-      source: 'de',
-      target,
-      format: 'text',
-      api_key: apiKey,
-    }),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        q: protectedText,
+        source: 'de',
+        target,
+        format: 'text',
+        api_key: apiKey,
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(`LibreTranslate Error: ${response.status} ${JSON.stringify(errorData)}`);
-  }
+    if (!response.ok) {
+      return {
+        status: response.status === 429 ? 429 : 502,
+        body: {
+          error: `Translation service rejected the request (${response.status})`,
+          retryable: response.status === 408 || response.status === 429 || response.status >= 500,
+        },
+      };
+    }
 
-  const data = await response.json();
-  let translatedText = data.translatedText;
+    const data = await response.json();
+    let translatedText = data.translatedText;
+    if (typeof translatedText !== 'string' || !translatedText.trim()) {
+      return { status: 502, body: { error: 'Invalid translation service response', retryable: false } };
+    }
 
-  // Restore URLs
-  placeholders.forEach(({ token, url }) => {
-    if (!translatedText.includes(token)) throw new Error('Translation did not preserve protected links');
-    translatedText = translatedText.replaceAll(token, () => url);
-  });
+    // Restore URLs
+    placeholders.forEach(({ token, url }) => {
+      if (!translatedText.includes(token)) throw new Error('Translation did not preserve protected links');
+      translatedText = translatedText.replaceAll(token, () => url);
+    });
 
-  return { status: 200, body: { translatedText } };
+    return { status: 200, body: { translatedText } };
+  } catch (error) {
+    return {
+      status: controller.signal.aborted ? 504 : 502,
+      body: {
+        error: controller.signal.aborted ? 'Translation service timed out' : 'Translation service failed',
+        retryable: controller.signal.aborted || error instanceof TypeError,
+      },
+    };
+  } finally { clearTimeout(timer); controller.abort(); }
 }
 
 // ── Asset validation ────────────────────────────────────────────

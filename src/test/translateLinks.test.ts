@@ -28,6 +28,6 @@ it('preserves link separators, paragraph boundaries, and literal old placeholder
 
 it('fails rather than returning corrupted links if the service alters an opaque placeholder', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ translatedText: '[link](altered)' })));
-  await expect(translate({ text: '[link](https://example.test/a)', target: 'en' }, 'http://translation.test', undefined))
-    .rejects.toThrow('did not preserve protected links');
+  expect(await translate({ text: '[link](https://example.test/a)', target: 'en' }, 'http://translation.test', undefined))
+    .toMatchObject({ status: 502, body: { retryable: false } });
 });

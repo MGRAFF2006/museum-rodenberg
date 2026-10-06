@@ -196,7 +196,7 @@ async function sleep(ms: number) {
 
 const sessionCache = new Map<string, string>();
 
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 1000;
 
 /**
@@ -239,30 +239,42 @@ export async function translateText(text: string, targetLang: string, attempt = 
     return sessionCache.get(cacheKey)!;
   }
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25_000);
   try {
     const response = await authFetch('/api/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, target: targetLang })
+      body: JSON.stringify({ text, target: targetLang }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
-      throw new Error(`Translation failed: ${response.status} ${response.statusText}`);
+      const data = await response.json().catch(() => ({}));
+      throw Object.assign(new Error(typeof data.error === 'string' ? data.error : `Translation failed (${response.status})`), {
+        retryable: typeof data.retryable === 'boolean'
+          ? data.retryable : response.status === 408 || response.status === 429 || response.status >= 500,
+      });
     }
 
     const data = await response.json();
     const result = data.translatedText;
+    if (typeof result !== 'string' || !result.trim()) {
+      throw Object.assign(new Error('Invalid translation response'), { retryable: false });
+    }
     
     sessionCache.set(cacheKey, result);
     return result;
   } catch (error) {
-    if (attempt >= MAX_RETRIES) {
-      console.error(`Translation failed after ${MAX_RETRIES} retries:`, error);
+    const retryable = error instanceof Error && ('retryable' in error
+      ? error.retryable === true : controller.signal.aborted || error instanceof TypeError);
+    if (!retryable || attempt >= MAX_RETRIES) {
       throw error;
     }
+    clearTimeout(timer);
     const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
     console.warn(`Translation attempt ${attempt + 1} failed, retrying in ${delay}ms...`, error);
     await sleep(delay);
     return translateText(text, targetLang, attempt + 1);
-  }
+  } finally { clearTimeout(timer); }
 }
