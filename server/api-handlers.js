@@ -16,6 +16,7 @@
 import fs from 'fs';
 import path from 'path';
 import busboy from 'busboy';
+import { randomUUID } from 'node:crypto';
 
 function isWithinDirectory(directory, candidate) {
   const relative = path.relative(directory, candidate);
@@ -100,9 +101,11 @@ export async function translate(body, apiUrl, apiKey) {
 
   // Protect Markdown URLs and images
   const placeholders = [];
+  const prefix = `__${randomUUID().replaceAll('-', '')}_`;
   const protectedText = text.replace(/(!?\[.*?\])\((.*?)\)/g, (_match, bracketed, url) => {
-    placeholders.push(url);
-    return `${bracketed}(ASSETURL${placeholders.length - 1})`;
+    const token = `${prefix}${placeholders.length}__`;
+    placeholders.push({ token, url });
+    return `${bracketed}(${token})`;
   });
 
   const response = await fetch(apiUrl, {
@@ -126,13 +129,10 @@ export async function translate(body, apiUrl, apiKey) {
   let translatedText = data.translatedText;
 
   // Restore URLs
-  placeholders.forEach((url, i) => {
-    const regex = new RegExp(`(ASSET\\s*URL\\s*${i})|(_*\\s*URL\\s*_*\\s*${i}\\s*_*)|(URL\\s*${i})`, 'gi');
-    translatedText = translatedText.replace(regex, url);
+  placeholders.forEach(({ token, url }) => {
+    if (!translatedText.includes(token)) throw new Error('Translation did not preserve protected links');
+    translatedText = translatedText.replaceAll(token, () => url);
   });
-
-  // Fix potential broken Markdown syntax
-  translatedText = translatedText.replace(/(!?)\s*\[\s*(.*?)\s*\]\s*\(\s*(.*?)\s*\)/g, '$1[$2]($3)');
 
   return { status: 200, body: { translatedText } };
 }
