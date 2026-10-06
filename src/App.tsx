@@ -11,6 +11,7 @@ import { useLanguage } from './hooks/useLanguage';
 import { useContentData } from './hooks/useContentData';
 import { useSearch } from './hooks/useSearch';
 import type { Artifact, Exhibition } from './types';
+import { mediaSelection, mediaViewerSearch } from './utils/mediaGallery';
 
 // Lazy-loaded routes (not needed on initial page load)
 const SearchResults = lazy(() => import('./components/SearchResults').then(m => ({ default: m.SearchResults })));
@@ -251,7 +252,7 @@ function ExhibitionRoute({ getExhibitionById, getArtifactsByExhibition, navigate
       onBack={() => navigate('/')}
       onArtifactClick={(artId) => navigate(`/artifact/${artId}`)}
       onDetailedContentClick={() => navigate(`/exhibition/${id}/details`)}
-      onMediaViewerClick={() => navigate(`/exhibition/${id}/media`)}
+      onMediaViewerClick={(_images, _videos, _audio, selection) => navigate(`/exhibition/${id}/media${mediaViewerSearch(selection)}`)}
     />
   );
 }
@@ -277,7 +278,7 @@ function ArtifactRoute({ getArtifactById, getExhibitionById, navigate }: Artifac
       onBack={() => artifact.exhibition ? navigate(`/exhibition/${artifact.exhibition}`) : navigate('/')}
       exhibitionTitle={exhibition?.title}
       onDetailedContentClick={() => navigate(`/artifact/${id}/details`)}
-      onMediaViewerClick={() => navigate(`/artifact/${id}/media`)}
+      onMediaViewerClick={(_images, _videos, _audio, selection) => navigate(`/artifact/${id}/media${mediaViewerSearch(selection)}`)}
     />
   );
 }
@@ -306,8 +307,7 @@ function DetailedContentRoute({ type, getExhibitionById, getArtifactById, naviga
       content={item.detailedContent[currentLanguage] || item.detailedContent['de'] || ''}
       onBack={() => navigate(`/${type}/${id}`)}
       onMediaClick={(mediaType, url) => {
-        const tabMap = { 'image': 'images', 'video': 'videos', 'audio': 'audio' };
-        navigate(`/${type}/${id}/media?tab=${tabMap[mediaType]}&url=${encodeURIComponent(url)}`);
+        navigate(`/${type}/${id}/media${mediaViewerSearch({ type: mediaType, url })}`);
       }}
     />
   );
@@ -323,7 +323,7 @@ interface MediaViewerRouteProps {
 function MediaViewerRoute({ type, getExhibitionById, getArtifactById, navigate }: MediaViewerRouteProps) {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') as 'images' | 'videos' | 'audio' | undefined;
+  const initialTab = searchParams.get('tab');
   const initialUrl = searchParams.get('url');
   
   if (!id) return <div>Media not found</div>;
@@ -332,13 +332,14 @@ function MediaViewerRoute({ type, getExhibitionById, getArtifactById, navigate }
     ? getExhibitionById?.(id)
     : getArtifactById?.(id);
     
-  if (!item || !item.media) return <div>Media not found</div>;
+  if (!item || (!item.media && !mediaSelection(initialTab, initialUrl))) return <div>Media not found</div>;
   
   return (
     <MediaViewerPage
-      images={item.media.images || []}
-      videos={item.media.videos || []}
-      audio={item.media.audio || []}
+      key={`${type}/${id}`}
+      images={item.media?.images || []}
+      videos={item.media?.videos || []}
+      audio={item.media?.audio || []}
       onBack={() => navigate(`/${type}/${id}`)}
       initialTab={initialTab}
       initialUrl={initialUrl}

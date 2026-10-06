@@ -97,11 +97,11 @@ export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
       </div>
 
       {/* Media Viewer */}
-      {hasMedia && (
+      {(hasMedia || mediaViewerInitialItem) && (
         <MediaViewer
-          images={media!.images}
-          videos={media!.videos}
-          audio={media!.audio}
+          images={media?.images || []}
+          videos={media?.videos || []}
+          audio={media?.audio || []}
           isOpen={isMediaViewerOpen}
           onClose={() => {
             setIsMediaViewerOpen(false);
