@@ -37,7 +37,7 @@ it.each([['artifact', ArtifactEditor], ['exhibition', ExhibitionEditor]] as cons
     fireEvent.change(screen.getByDisplayValue('Initial title'), { target: { value: 'Unsaved curator draft' } });
     mocks.query.mockReturnValue(record(0, 'replacement-document'));
     rerender(<Editor id="Legacy_Object" onBack={onBack} />);
-    mocks.fetch.mockResolvedValue(new Response('{}', { status: 409 }));
+    mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ code: 'STALE_CONTENT' }), { status: 409 }));
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'delete' })); });
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toEqual({ operation: `${type}s:remove`, args: {
       slug: 'Legacy_Object', expectedRevision: 4, expectedDocumentId: 'original-document',
