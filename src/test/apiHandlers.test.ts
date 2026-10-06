@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deleteImage, validateAssets } from '../../server/api-handlers.js';
 
 describe('upload filesystem paths', () => {
@@ -20,6 +20,7 @@ describe('upload filesystem paths', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
@@ -31,6 +32,7 @@ describe('upload filesystem paths', () => {
     expect(validateAssets(rootDir, { paths: [url] }).body).toEqual({ invalid: [] });
     expect(deleteImage(rootDir, url)).toEqual({ status: 200, body: { success: true } });
     expect(fs.existsSync(file)).toBe(false);
+    expect(deleteImage(rootDir, url)).toEqual({ status: 200, body: { success: true } });
   });
 
   it.each([
@@ -87,7 +89,7 @@ describe('upload filesystem paths', () => {
 
   it('keeps missing uploads and non-upload input behavior', () => {
     for (const url of ['/uploads/missing.jpg', '/uploads/missing/photo.jpg']) {
-      expect(deleteImage(rootDir, url).status).toBe(404);
+      expect(deleteImage(rootDir, url)).toEqual({ status: 200, body: { success: true } });
       expect(validateAssets(rootDir, { paths: [url] }).body).toEqual({ invalid: [url] });
     }
     for (const url of [null, '', '/other/photo.jpg']) {
@@ -98,6 +100,30 @@ describe('upload filesystem paths', () => {
     expect(validateAssets(rootDir, { paths: 'not an array' }).status).toBe(400);
 
     fs.rmSync(uploadDir, { recursive: true });
-    expect(deleteImage(rootDir, '/uploads/missing.jpg').status).toBe(404);
+    expect(deleteImage(rootDir, '/uploads/missing.jpg')).toEqual({ status: 200, body: { success: true } });
+  });
+
+  it('rejects directories as assets or deletion targets without deleting their contents', () => {
+    const sentinel = path.join(uploadDir, 'nested/photo.jpg');
+    fs.writeFileSync(sentinel, 'museum media');
+    expect(validateAssets(rootDir, { paths: ['/uploads/nested', '/uploads/nested/'] }).body)
+      .toEqual({ invalid: ['/uploads/nested', '/uploads/nested/'] });
+    expect(deleteImage(rootDir, '/uploads/nested').status).toBe(400);
+    expect(fs.readFileSync(sentinel, 'utf8')).toBe('museum media');
+  });
+
+  it('keeps deletion idempotent if another request removes the file after validation', () => {
+    const file = path.join(uploadDir, 'photo.jpg');
+    fs.writeFileSync(file, 'museum media');
+    vi.spyOn(fs, 'unlinkSync').mockImplementation(() => { throw Object.assign(new Error('Already removed'), { code: 'ENOENT' }); });
+    expect(deleteImage(rootDir, '/uploads/photo.jpg')).toEqual({ status: 200, body: { success: true } });
+  });
+
+  it('does not turn a storage permission error into successful deletion', () => {
+    const file = path.join(uploadDir, 'photo.jpg');
+    fs.writeFileSync(file, 'museum media');
+    vi.spyOn(fs, 'unlinkSync').mockImplementation(() => { throw Object.assign(new Error('Denied'), { code: 'EACCES' }); });
+    expect(() => deleteImage(rootDir, '/uploads/photo.jpg')).toThrow('Denied');
+    expect(fs.readFileSync(file, 'utf8')).toBe('museum media');
   });
 });

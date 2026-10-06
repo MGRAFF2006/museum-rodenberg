@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Image as ImageIcon, Video, Music } from 'lucide-react';
 import { useLanguage } from '../hooks/useLanguage';
 import { AudioPlayer } from './AudioPlayer';
+import { availableMediaTab, mediaSelection, withSelectedMedia, type MediaSelection, type MediaTab } from '../utils/mediaGallery';
 
 interface MediaItem {
   url: string;
@@ -15,48 +16,55 @@ interface MediaViewerProps {
   audio: MediaItem[];
   isOpen: boolean;
   onClose: () => void;
-  initialItem?: { type: 'image' | 'video' | 'audio'; url: string };
+  initialItem?: MediaSelection;
 }
 
 export const MediaViewer: React.FC<MediaViewerProps> = ({
-  images,
-  videos,
-  audio,
+  images: galleryImages,
+  videos: galleryVideos,
+  audio: galleryAudio,
   isOpen,
   onClose,
   initialItem
 }) => {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'images' | 'videos' | 'audio'>('images');
-  const [selectedImage, setSelectedImage] = useState(0);
+  const { images, videos, audio } = withSelectedMedia({ images: galleryImages, videos: galleryVideos, audio: galleryAudio }, initialItem);
+  const initialTab: MediaTab = initialItem?.type === 'video' ? 'videos' : initialItem?.type === 'audio' ? 'audio' : 'images';
+  const [preferredTab, setActiveTab] = useState<MediaTab>(initialTab);
+  const activeTab = availableMediaTab(preferredTab, { images, videos, audio });
+  const [selectedUrl, setSelectedUrl] = useState(initialItem?.url);
+  const selectedImage = Math.max(0, images.indexOf(selectedUrl ?? ''));
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
-    if (isOpen && initialItem) {
-      if (initialItem.type === 'image') {
-        setActiveTab('images');
-        const index = images.indexOf(initialItem.url);
-        if (index !== -1) setSelectedImage(index);
-      } else if (initialItem.type === 'video') {
-        setActiveTab('videos');
-      } else if (initialItem.type === 'audio') {
-        setActiveTab('audio');
-      }
+    if (isOpen) {
+      setActiveTab(initialTab);
+      setSelectedUrl(initialItem?.url);
+    }
+  }, [isOpen, initialTab, initialItem?.url]);
 
+  useEffect(() => {
+    const selection = mediaSelection(activeTab, initialItem?.url);
+    if (isOpen && selection) {
+      let highlightTimeout: ReturnType<typeof setTimeout>;
       // Small delay to allow tab switching and rendering before scrolling
-      setTimeout(() => {
-        const ref = itemRefs.current.get(initialItem.url);
+      const scrollTimeout = setTimeout(() => {
+        const ref = itemRefs.current.get(selection.url);
         if (ref) {
           ref.scrollIntoView({ behavior: 'smooth', block: 'center' });
           ref.classList.add('ring-2', 'ring-primary-500', 'ring-offset-2');
-          setTimeout(() => {
+          highlightTimeout = setTimeout(() => {
             ref.classList.remove('ring-2', 'ring-primary-500', 'ring-offset-2');
           }, 3000);
         }
       }, 100);
+      return () => {
+        clearTimeout(scrollTimeout);
+        clearTimeout(highlightTimeout);
+      };
     }
-  }, [isOpen, initialItem, images]);
+  }, [isOpen, initialItem?.url, activeTab]);
 
   if (!isOpen) return null;
 
@@ -142,7 +150,7 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
                     {images.map((image, index) => (
                       <button
                         key={index}
-                        onClick={() => setSelectedImage(index)}
+                        onClick={() => setSelectedUrl(image)}
                         className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
                           selectedImage === index ? 'border-primary-500 ring-2 ring-primary-200' : 'border-neutral-200 hover:border-neutral-300 hover:scale-105'
                         }`}

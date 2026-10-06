@@ -43,14 +43,20 @@ done
 # Track background PIDs for cleanup
 PIDS=()
 cleanup() {
+  local status=$?
+  trap - EXIT
+  trap '' INT TERM
   echo -e "\n${YELLOW}Shutting down...${NC}"
   for pid in "${PIDS[@]}"; do
     kill "$pid" 2>/dev/null || true
   done
-  wait 2>/dev/null
+  wait 2>/dev/null || true
   echo -e "${GREEN}All processes stopped.${NC}"
+  return "$status"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ── 1. Docker services ───────────────────────────────────────────
 if [ "$SKIP_DOCKER" = false ]; then
@@ -122,20 +128,17 @@ fi
 
 # ── 3. Push Convex schema ───────────────────────────────────────
 echo -e "${CYAN}Pushing Convex schema...${NC}"
-npx convex dev --once --typecheck=disable
+./node_modules/.bin/convex dev --once --typecheck=disable
 echo -e "${GREEN}Schema pushed.${NC}"
 
 # ── 4. Start Convex dev watcher (watches for schema changes) ────
 echo -e "${CYAN}Starting Convex dev watcher...${NC}"
-npx convex dev --typecheck=disable &
+./node_modules/.bin/convex dev --typecheck=disable &
 PIDS+=($!)
-
-# Give Convex dev a moment to start before Vite
-sleep 2
 
 # ── 5. Start Vite dev server ────────────────────────────────────
 echo -e "${CYAN}Starting Vite dev server...${NC}"
-npx vite &
+./node_modules/.bin/vite &
 PIDS+=($!)
 
 # ── Ready ────────────────────────────────────────────────────────
@@ -152,4 +155,11 @@ echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"
 echo ""
 
 # Wait for any background process to exit
-wait
+status=0
+wait -n "${PIDS[@]}" || status=$?
+echo -e "${RED}A required development service exited; stopping its peer.${NC}"
+# A required long-running service exiting successfully still ends the dev session.
+if [ "$status" -eq 0 ]; then
+  status=1
+fi
+exit "$status"

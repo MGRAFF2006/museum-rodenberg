@@ -128,6 +128,7 @@ export function convexExhibitionToRaw(ex: ConvexExhibition): Record<string, unkn
     tags: ex.tags,
     enabledAttributes: ex.enabledAttributes,
     artifacts: ex.artifactSlugs,
+    isFeatured: ex.isFeatured,
     translations,
     detailedContent: Object.keys(detailedContent).length > 0 ? detailedContent : undefined,
     media: reconstructMedia(ex.media),
