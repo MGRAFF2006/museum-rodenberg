@@ -20,6 +20,8 @@ it('replaces typing updates once and returns to the page before search with one 
   fireEvent.change(input, { target: { value: 'Co & berg' } });
   expect(screen.getByRole('status')).toHaveTextContent('/search?q=Co+%26+berg');
   fireEvent.click(screen.getByText('Back fixture'));
+  expect(screen.getByRole('status')).toHaveTextContent(/^\/$/);
+  fireEvent.click(screen.getByText('Back fixture'));
   expect(screen.getByRole('status')).toHaveTextContent('/previous');
 });
 it('clears empty search without adding another history entry', () => {
