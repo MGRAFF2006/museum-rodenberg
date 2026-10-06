@@ -52,6 +52,42 @@ npm run build
 
 The existing GitHub Actions workflow runs type checking, tests, and the production build. A push to `main` also publishes the Convex schema when the production secrets are configured.
 
+## Backups and recovery
+
+Pause all curator and import writes before creating a complete backup. The script
+does not stop services or enforce that pause itself. On the host with the matching
+live upload directory, run:
+
+```bash
+npm run backup -- --writes-paused
+# Set CONVEX_PROD_URL and CONVEX_PROD_ADMIN_KEY in the environment for production:
+npm run backup:prod -- --writes-paused --uploads-dir /path/to/live/uploads
+```
+
+Backups contain a native Convex `convex.zip`, the Express `uploads/` files, and a
+`manifest.json` written only after both succeed. An incomplete directory has no
+manifest and must not be treated as a successful backup. Environment precedence
+is process variables, then `.env.local`, then `.env`. Credentials are required;
+the script does not guess a production target. Keep backups private. Upload sources
+must contain regular files/directories, without symbolic links or special files.
+
+`npm run backup -- --database-only` explicitly exports only the database and
+Convex-managed file storage, excluding Express uploads. Native snapshots preserve
+document IDs and relationships. The seed importer is not a restore tool.
+
+Test recovery in a fresh isolated deployment with matching schema: run
+`npx convex import --env-file /path/to/ignored-recovery.env /path/to/backup/convex.zip`,
+then copy `uploads/` to that deployment's upload volume while its app is stopped.
+The environment file must contain the recovery target's self-hosted URL and admin
+key. Do not add replacement flags unless deliberately replacing existing data.
+Compare record counts, relationships, translations, file checksums, and media
+playback before accepting recovery. This command writes data; never target
+production during a recovery drill.
+
+Run orchestration regression checks with `node --test scripts/backup-convex.test.mjs`.
+See Convex's [export](https://docs.convex.dev/database/import-export/export) and
+[restore](https://docs.convex.dev/database/import-export/import) documentation.
+
 ## Project layout
 
 ```text

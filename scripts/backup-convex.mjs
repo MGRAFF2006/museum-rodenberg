@@ -1,104 +1,91 @@
 #!/usr/bin/env node
-/**
- * Backup all Convex data to JSON files.
- *
- * Exports exhibitions, artifacts, assets, and all translation/media rows
- * from the Convex backend into a timestamped backup directory.
- *
- * Usage:
- *   node scripts/backup-convex.mjs                    # backup local
- *   node scripts/backup-convex.mjs --prod             # backup Sevalla
- *   CONVEX_PROD_URL=... CONVEX_PROD_ADMIN_KEY=... node scripts/backup-convex.mjs --prod
- *
- * Output: backups/YYYY-MM-DDTHH-MM-SS/
- *   exhibitions.json
- *   artifacts.json
- *   assets.json
- *   exhibition_translations.json
- *   artifact_translations.json
- *   media.json
- *   featured.json
- */
-
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { ConvexHttpClient } from 'convex/browser';
-import { api } from '../convex/_generated/api.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
+import childProcess from 'node:child_process';
 import dotenv from 'dotenv';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// Load env files
-dotenv.config({ path: path.join(ROOT, '.env') });
-dotenv.config({ path: path.join(ROOT, '.env.local') });
-
-const isProd = process.argv.includes('--prod') || process.argv.includes('--production');
-
-let convexUrl;
-if (isProd) {
-  convexUrl = process.env.CONVEX_PROD_URL || '';
-  if (!convexUrl) {
-    // Try to parse from .env.local commented section
-    try {
-      const envLocal = fs.readFileSync(path.join(ROOT, '.env.local'), 'utf-8');
-      const match = envLocal.match(/^#?\s*CONVEX_SELF_HOSTED_URL=(.*(?:sevalla|proxy).*)$/m);
-      if (match) convexUrl = match[1].trim();
-    } catch {}
+export function createBackup(args = process.argv.slice(2), root = ROOT, environment = process.env) {
+  const { values } = parseArgs({ args, options: {
+    prod: { type: 'boolean' },
+    production: { type: 'boolean' },
+    'database-only': { type: 'boolean' },
+    'writes-paused': { type: 'boolean' },
+    'uploads-dir': { type: 'string' },
+    'output-dir': { type: 'string' },
+  } });
+  const readEnv = name => {
+    const file = path.join(root, name);
+    return fs.existsSync(file) ? dotenv.parse(fs.readFileSync(file)) : {};
+  };
+  const env = { ...readEnv('.env'), ...readEnv('.env.local'), ...environment };
+  const prod = values.prod || values.production;
+  const url = env[prod ? 'CONVEX_PROD_URL' : 'CONVEX_SELF_HOSTED_URL'];
+  const key = env[prod ? 'CONVEX_PROD_ADMIN_KEY' : 'CONVEX_SELF_HOSTED_ADMIN_KEY'];
+  if (!url || !key || /[\r\n']/.test(url + key)) {
+    throw new Error('Set the target Convex URL and admin key before backing up.');
   }
-  if (!convexUrl) {
-    console.error('No Sevalla URL found. Set CONVEX_PROD_URL or uncomment in .env.local');
-    process.exit(1);
+  if (!values['database-only'] && !values['writes-paused']) {
+    throw new Error('Pause all curator/import writes, then pass --writes-paused; or select --database-only.');
   }
-  console.log(`Backing up from Sevalla: ${convexUrl}`);
-} else {
-  convexUrl = process.env.CONVEX_SELF_HOSTED_URL || 'http://127.0.0.1:3210';
-  console.log(`Backing up from local: ${convexUrl}`);
-}
-
-const client = new ConvexHttpClient(convexUrl);
-
-// ── Create backup directory ──────────────────────────────────────
-
-const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-const backupDir = path.join(ROOT, 'backups', timestamp);
-fs.mkdirSync(backupDir, { recursive: true });
-
-console.log(`Backup directory: ${backupDir}`);
-
-// ── Export tables ────────────────────────────────────────────────
-
-async function exportTable(name, queryFn) {
+  if (prod && !values['database-only'] && !values['uploads-dir']) {
+    throw new Error('Production backups require --uploads-dir pointing to the matching live uploads.');
+  }
+  const uploads = path.resolve(values['uploads-dir'] || path.join(root, 'public/uploads'));
+  if (!values['database-only'] && !fs.statSync(uploads).isDirectory()) {
+    throw new Error('The uploads source must be a directory.');
+  }
+  const output = path.resolve(values['output-dir'] || path.join(root, 'backups'));
+  if (!values['database-only'] && (output === uploads || output.startsWith(uploads + path.sep))) {
+    throw new Error('The backup destination must be outside the uploads source.');
+  }
+  fs.mkdirSync(output, { recursive: true, mode: 0o700 });
+  const directory = fs.mkdtempSync(path.join(output, new Date().toISOString().replace(/[:.]/g, '-') + '-'));
+  const credentials = fs.mkdtempSync(path.join(os.tmpdir(), 'museum-backup-'));
   try {
-    const data = await queryFn();
-    const filePath = path.join(backupDir, `${name}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-    const count = Array.isArray(data) ? data.length : 1;
-    console.log(`  ${name}: ${count} records`);
-    return data;
-  } catch (err) {
-    console.error(`  ${name}: FAILED - ${err.message}`);
-    return null;
+    const envFile = path.join(credentials, 'target.env');
+    fs.writeFileSync(envFile, `CONVEX_SELF_HOSTED_URL='${url}'\nCONVEX_SELF_HOSTED_ADMIN_KEY='${key}'\n`, { mode: 0o600 });
+    const snapshot = path.join(directory, 'convex.zip');
+    const result = childProcess.spawnSync(path.join(root, 'node_modules/.bin/convex'), [
+      'export', '--env-file', envFile, '--path', snapshot, '--include-file-storage',
+    ], { cwd: root, stdio: 'inherit' });
+    if (result.error || result.status !== 0) throw new Error('Convex export failed; backup is incomplete.');
+    if (!fs.statSync(snapshot).isFile() || fs.statSync(snapshot).size === 0) {
+      throw new Error('Convex export did not produce a snapshot.');
+    }
+    if (!values['database-only']) {
+      fs.cpSync(uploads, path.join(directory, 'uploads'), {
+        recursive: true,
+        filter: source => {
+          const stat = fs.lstatSync(source);
+          if (!stat.isDirectory() && !stat.isFile()) throw new Error('Uploads must contain only regular files and directories.');
+          return true;
+        },
+      });
+    }
+    // Written last: a directory without this marker is never a completed backup.
+    fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({
+      format: 1,
+      createdAt: new Date().toISOString(),
+      database: 'convex.zip',
+      uploads: values['database-only'] ? null : 'uploads',
+      writesPaused: !values['database-only'],
+    }, null, 2) + '\n', { mode: 0o600 });
+    return directory;
+  } finally {
+    fs.rmSync(credentials, { recursive: true, force: true });
   }
 }
 
-async function run() {
-  console.log('\nExporting tables...');
-
-  // Use the list queries that return full data (all languages)
-  await Promise.all([
-    exportTable('exhibitions', () => client.query(api.exhibitions.list)),
-    exportTable('artifacts', () => client.query(api.artifacts.list)),
-    exportTable('assets', () => client.query(api.assets.list)),
-    exportTable('featured', () => client.query(api.exhibitions.getFeatured)),
-  ]);
-
-  console.log(`\nBackup complete: ${backupDir}`);
-  console.log('To restore, use scripts/migrate-to-convex.mjs with the backup files as source.');
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  try {
+    console.log(`Backup saved: ${createBackup()}`);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 }
-
-run().catch((err) => {
-  console.error('Backup failed:', err);
-  process.exit(1);
-});
