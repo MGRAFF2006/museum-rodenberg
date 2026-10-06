@@ -98,6 +98,7 @@
   "altText": "Testo alternativo",
   "name": "Nome",
   "logout": "Esci",
+  "qrCameraUnavailable": "Impossibile avviare o arrestare la fotocamera. Chiudi lo scanner e riprova.",
   "audioPlaybackError": "Impossibile riprodurre l’audio. Riprova.",
   "playAudio": "Riproduci audio",
   "pauseAudio": "Metti in pausa l’audio"

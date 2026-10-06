@@ -16,6 +16,15 @@ export const MARKDOWN_REGEX = {
   EMBEDDING: /(!\[.*?\]\(.*?\)|\[(?:Image|Audio|Video):\s*.*?\]\((?:image|audio|video):.*?\))/gi
 };
 
+/** Classify the resource pathname; query strings and fragments are not extensions. */
+export function getMediaType(url: string): 'image' | 'video' | 'audio' {
+  const filename = url.split(/[?#]/, 1)[0].split('/').pop() || '';
+  const extension = filename.split('.').pop()?.toLowerCase();
+  if (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(extension || '')) return 'video';
+  if (['mp3', 'wav', 'aac', 'm4a', 'flac'].includes(extension || '')) return 'audio';
+  return 'image';
+}
+
 /**
  * Extracts all media URLs from a markdown string.
  * Returns an object with arrays for each media type.
@@ -36,13 +45,10 @@ export const extractMediaFromMarkdown = (markdown: string) => {
     const alt = match[1];
     const url = match[2];
     if (url) {
-      const ext = url.split('.').pop()?.toLowerCase();
-      const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
-      const audioExtensions = ['mp3', 'wav', 'aac', 'm4a', 'flac'];
-      
-      if (videoExtensions.includes(ext || '')) {
+      const type = getMediaType(url);
+      if (type === 'video') {
         result.videos.push({ url, title: alt || url.split('/').pop() || 'Video' });
-      } else if (audioExtensions.includes(ext || '')) {
+      } else if (type === 'audio') {
         result.audio.push({ url, title: alt || url.split('/').pop() || 'Audio' });
       } else {
         result.images.push(url);
