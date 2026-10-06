@@ -63,3 +63,17 @@ it('submits no expected revision for a new draft', async () => {
   expect(JSON.parse(mocks.fetch.mock.calls[0][1].body).args).not.toHaveProperty('expectedRevision');
   expect(JSON.parse(mocks.fetch.mock.calls[0][1].body).args).not.toHaveProperty('expectedDocumentId');
 });
+
+
+it.each([['artifact', ArtifactEditor], ['exhibition', ExhibitionEditor]] as const)(
+  'preserves the route identity when saving a mixed-case %s', async (type, Editor) => {
+    mocks.query.mockReturnValue({ ...fixture(4), slug: 'Object', _id: 'mixed-id' });
+    mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ result: 'mixed-id' })));
+    render(<Editor id="Object" onBack={vi.fn()} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'save' })); });
+    expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({
+      operation: `${type}s:save`,
+      args: { slug: 'Object', expectedRevision: 4, expectedDocumentId: 'mixed-id' },
+    });
+  },
+);

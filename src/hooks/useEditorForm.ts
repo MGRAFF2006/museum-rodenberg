@@ -385,7 +385,7 @@ export function useEditorForm(config: EditorConfig) {
     }
 
     try {
-      const slug = (formData.id || '').toLowerCase();
+      const slug = id === 'new' ? (formData.id || '').toLowerCase() : id;
       const LANGS: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
 
       // Build media items array from formData.media
