@@ -16,23 +16,30 @@ const defaultSettings: AccessibilitySettings = {
   contrastMode: 'normal',
 };
 
+function savedSettings(): AccessibilitySettings {
+  try {
+    const saved = JSON.parse(localStorage.getItem('accessibility-settings') || 'null') as Partial<AccessibilitySettings> | null;
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaultSettings;
+    return {
+      fontSize: ['small', 'medium', 'large', 'extra-large'].includes(saved.fontSize || '') ? saved.fontSize as FontSize : defaultSettings.fontSize,
+      fontFamily: saved.fontFamily === 'dyslexie' ? 'dyslexie' : 'default',
+      contrastMode: saved.contrastMode === 'high' ? 'high' : 'normal',
+    };
+  } catch {
+    // Preferences are optional when storage is corrupt or unavailable.
+    return defaultSettings;
+  }
+}
+
 export const useAccessibility = () => {
-  const [settings, setSettings] = useState<AccessibilitySettings>(defaultSettings);
+  const [settings, setSettings] = useState<AccessibilitySettings>(savedSettings);
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('accessibility-settings');
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setSettings({ ...defaultSettings, ...parsed });
-      } catch (error) {
-        console.warn('Failed to parse accessibility settings:', error);
-      }
+    try {
+      localStorage.setItem('accessibility-settings', JSON.stringify(settings));
+    } catch {
+      // Apply settings even when they cannot be persisted.
     }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('accessibility-settings', JSON.stringify(settings));
     
     // Apply settings to document
     const root = document.documentElement;

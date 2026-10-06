@@ -38,11 +38,20 @@ const defaultTTSSettings: TTSSettings = {
 };
 
 const getSettingsFromLocalStorage = (): TTSSettings => {
-  const saved = localStorage.getItem('tts-settings');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {}
+  try {
+    const saved = JSON.parse(localStorage.getItem('tts-settings') || 'null') as Partial<TTSSettings> | null;
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaultTTSSettings;
+    const bounded = (value: unknown, min: number, max: number, fallback: number) =>
+      typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+    return {
+      rate: bounded(saved.rate, 0.5, 2, defaultTTSSettings.rate),
+      pitch: bounded(saved.pitch, 0.5, 2, defaultTTSSettings.pitch),
+      volume: bounded(saved.volume, 0, 1, defaultTTSSettings.volume),
+      selectedVoiceIndex: typeof saved.selectedVoiceIndex === 'number' && Number.isSafeInteger(saved.selectedVoiceIndex) && saved.selectedVoiceIndex >= 0
+        ? saved.selectedVoiceIndex : defaultTTSSettings.selectedVoiceIndex,
+    };
+  } catch {
+    // Invalid or unavailable browser storage must not prevent reading.
   }
   return defaultTTSSettings;
 };
@@ -70,7 +79,7 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<TTSVoice[]>([]);
-  const [settings, setSettings] = useState<TTSSettings>(getSettingsFromLocalStorage());
+  const [settings, setSettings] = useState<TTSSettings>(getSettingsFromLocalStorage);
   const [error, setError] = useState<TTSError>(null);
 
   // Keep a ref to the native SpeechSynthesisVoice objects so we never
@@ -81,7 +90,11 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
   const voicesLoadedRef = useRef(false);
 
   useEffect(() => {
-    localStorage.setItem('tts-settings', JSON.stringify(settings));
+    try {
+      localStorage.setItem('tts-settings', JSON.stringify(settings));
+    } catch {
+      // Keep settings usable in memory if the browser denies storage.
+    }
   }, [settings]);
 
   useEffect(() => {
