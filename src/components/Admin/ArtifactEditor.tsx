@@ -30,7 +30,7 @@ const INITIAL_TRANSLATION_FIELDS = {
 const DEFAULT_ENABLED = ['title', 'description', 'period', 'dimensions', 'materials', 'provenance', 'significance'];
 
 export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) => {
-  const { exhibitions, artifacts } = useContentData();
+  const { exhibitions } = useContentData();
   const { t } = useLanguage();
 
   // Fetch full artifact data (all languages) directly via getBySlug.
@@ -42,16 +42,9 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
 
   // Convert to legacy raw shape with all translations for the editor form
   const rawArtifact = useMemo(() => {
-    if (!fullArtifact) return undefined;
-    return convexArtifactToRaw(fullArtifact) as Record<string, unknown>;
+    if (!fullArtifact) return fullArtifact;
+    return convexArtifactToRaw(fullArtifact) as EntityRecord;
   }, [fullArtifact]);
-
-  const loadEntity = useCallback((entityId: string) => {
-    if (rawArtifact && rawArtifact.id === entityId) return rawArtifact;
-    // Fallback to context data (only has current language, but works for display)
-    const art = artifacts.find(a => a.id === entityId);
-    return art as Record<string, unknown> | undefined;
-  }, [rawArtifact, artifacts]);
 
   const getFieldsToTranslate = useCallback((formData: EntityRecord): TranslatableField[] => {
     const de = formData.translations?.de || {};
@@ -73,12 +66,12 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
     defaultEnabledAttributes: DEFAULT_ENABLED,
     contentMediaFields: ['description', 'significance'],
     getFieldsToTranslate,
-    loadEntity: loadEntity,
+    entity: rawArtifact,
     deleteConfirmKey: 'deleteArtifactConfirm',
   });
 
   const {
-    formData, activeLang, setActiveLang, contentMedia,
+    formData, isReady, isNotFound, activeLang, setActiveLang, contentMedia,
     isTranslating, translationProgress,
     isValidating, validationErrors, setValidationErrors,
     handleChange, handleMediaChange, addMediaItem, removeMediaItem,
@@ -104,9 +97,12 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
         id={id} activeLang={activeLang} isTranslating={isTranslating}
         onBack={() => onBack()} onDelete={handleDelete}
         onTranslate={handleTranslate} onTranslateAll={handleTranslateAll}
-        onSave={handleSave} t={t}
+        onSave={handleSave} isReady={isReady} t={t}
       />
 
+      {!isReady ? (
+        <p role="status" aria-busy={!isNotFound}>{isNotFound ? t('artifactNotFound') : t('edit') + '…'}</p>
+      ) : (<>
       <TranslationProgress isTranslating={isTranslating} progress={translationProgress} t={t} />
       <ValidationBanners isValidating={isValidating} validationErrors={validationErrors} setValidationErrors={setValidationErrors} t={t} />
 
@@ -183,6 +179,7 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
           </div>
         </div>
       </div>
+      </>)}
     </div>
   );
 };
