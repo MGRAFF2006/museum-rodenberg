@@ -17,6 +17,32 @@ import fs from 'fs';
 import path from 'path';
 import busboy from 'busboy';
 
+function isWithinDirectory(directory, candidate) {
+  const relative = path.relative(directory, candidate);
+  return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function resolveUploadPath(rootDir, uploadPath) {
+  if (typeof uploadPath !== 'string' || !uploadPath.startsWith('/uploads/') || uploadPath.includes('\0')) {
+    return null;
+  }
+
+  const uploadDir = path.resolve(rootDir, 'public/uploads');
+  const fullPath = path.resolve(uploadDir, uploadPath.slice('/uploads/'.length));
+  if (!isWithinDirectory(uploadDir, fullPath)) return null;
+
+  try {
+    // Canonical paths also catch symlinked parent directories that escape uploads.
+    const canonicalDir = fs.realpathSync(uploadDir);
+    if (!isWithinDirectory(canonicalDir, fs.realpathSync(fullPath))) return null;
+  } catch (error) {
+    // Missing files still follow the callers' existing 404 / invalid-asset behavior.
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+  }
+
+  return fullPath;
+}
+
 // ── File upload ─────────────────────────────────────────────────
 
 /**
@@ -119,13 +145,11 @@ export function validateAssets(rootDir, body) {
     return { status: 400, body: { error: 'Paths must be an array' } };
   }
 
-  const uploadDir = path.resolve(rootDir, 'public/uploads');
   const invalid = paths.filter((p) => {
     if (!p || typeof p !== 'string') return false;
     if (!p.startsWith('/uploads/')) return false;
-    const relativePath = p.replace('/uploads/', '');
-    const fullPath = path.join(uploadDir, relativePath);
-    return !fs.existsSync(fullPath);
+    const fullPath = resolveUploadPath(rootDir, p);
+    return !fullPath || !fs.existsSync(fullPath);
   });
 
   return { status: 200, body: { invalid } };
@@ -153,11 +177,11 @@ export function listUploads(rootDir) {
  * Convex is handled by the client.
  */
 export function deleteImage(rootDir, imagePath) {
-  if (!imagePath || typeof imagePath !== 'string' || !imagePath.startsWith('/uploads/')) {
+  const fullPath = resolveUploadPath(rootDir, imagePath);
+  if (!fullPath) {
     return { status: 400, body: { error: 'Invalid path' } };
   }
 
-  const fullPath = path.resolve(rootDir, 'public', imagePath.substring(1));
   if (!fs.existsSync(fullPath)) {
     return { status: 404, body: { error: 'File not found' } };
   }
