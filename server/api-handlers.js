@@ -16,6 +16,9 @@
 import fs from 'fs';
 import path from 'path';
 import busboy from 'busboy';
+import { randomUUID } from 'node:crypto';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 function isWithinDirectory(directory, candidate) {
   const relative = path.relative(directory, candidate);
@@ -51,43 +54,114 @@ function resolveUploadPath(rootDir, uploadPath) {
  * Asset metadata is NOT written to any JSON file — the client saves
  * it to Convex after the upload completes.
  */
-export function uploadMedia(rootDir, headers, reqStream) {
-  return new Promise((resolve, reject) => {
-    const bb = busboy({ headers });
-    const urls = [];
-    const assets = [];
-    const uploadDir = path.resolve(rootDir, 'public/uploads');
+function uploadError(status, message) {
+  return Object.assign(new Error(message), { status });
+}
 
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
+// Only passive browser media is served from the museum's origin. Signatures
+// identify the container; full codec decoding remains the browser's job.
+function mediaFormat(filename) {
+  const extension = path.extname(filename).slice(1).toLowerCase();
+  const matches = (bytes, text, offset = 0) => bytes.subarray(offset, offset + text.length).equals(Buffer.from(text));
+  const riff = (bytes, kind) => matches(bytes, 'RIFF') && matches(bytes, kind, 8);
+  const frame = bytes => bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+  const formats = {
+    jpg: ['image', bytes => bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))],
+    png: ['image', bytes => bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))],
+    gif: ['image', bytes => matches(bytes, 'GIF87a') || matches(bytes, 'GIF89a')],
+    webp: ['image', bytes => riff(bytes, 'WEBP')],
+    avif: ['image', bytes => matches(bytes, 'ftyp', 4) && (matches(bytes, 'avif', 8) || matches(bytes, 'avis', 8))],
+    mp3: ['audio', bytes => matches(bytes, 'ID3') || frame(bytes)],
+    wav: ['audio', bytes => riff(bytes, 'WAVE')],
+    ogg: ['audio', bytes => matches(bytes, 'OggS')],
+    flac: ['audio', bytes => matches(bytes, 'fLaC')],
+    aac: ['audio', bytes => frame(bytes)],
+    mp4: ['video', bytes => matches(bytes, 'ftyp', 4)],
+    m4a: ['audio', bytes => matches(bytes, 'ftyp', 4)],
+    mov: ['video', bytes => matches(bytes, 'ftyp', 4)],
+    webm: ['video', bytes => bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))],
+  };
+  const canonical = extension === 'jpeg' ? 'jpg' : extension === 'opus' ? 'ogg' : extension;
+  const format = formats[canonical];
+  if (!format) throw uploadError(415, 'Unsupported media format');
+  return { extension: canonical, type: format[0], matches: format[1] };
+}
 
-    bb.on('file', (_name, file, info) => {
-      const { filename, mimeType } = info;
-      const safeFilename = filename.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
-      const id = safeFilename.replace(/\.[^/.]+$/, '');
-      const saveTo = path.join(uploadDir, safeFilename);
-      const url = `/uploads/${safeFilename}`;
-
-      file.pipe(fs.createWriteStream(saveTo));
-      urls.push(url);
-
-      let type = 'other';
-      if (mimeType.startsWith('image/')) type = 'image';
-      else if (mimeType.startsWith('audio/')) type = 'audio';
-      else if (mimeType.startsWith('video/')) type = 'video';
-
-      assets.push({ id, name: filename, alt: filename, url, type });
-    });
-
-    bb.on('finish', () => {
-      resolve({ urls, url: urls[0], assets });
-    });
-
-    bb.on('error', reject);
-
-    reqStream.pipe(bb);
+function validateMediaHeader(format) {
+  let header = Buffer.alloc(0);
+  let validated = false;
+  const validate = () => {
+    if (!format.matches(header)) throw uploadError(415, 'File contents do not match the media format');
+    validated = true;
+  };
+  return new Transform({
+    transform(chunk, _encoding, callback) {
+      if (validated) return callback(null, chunk);
+      const needed = 64 - header.length;
+      header = Buffer.concat([header, chunk.subarray(0, needed)]);
+      if (header.length < 64) return callback();
+      try { validate(); this.push(header); callback(null, chunk.subarray(needed)); }
+      catch (error) { callback(error); }
+    },
+    flush(callback) {
+      try { if (!validated) { validate(); this.push(header); } callback(); }
+      catch (error) { callback(error); }
+    },
   });
+}
+
+export async function uploadMedia(rootDir, headers, reqStream) {
+  let bb;
+  try { bb = busboy({ headers, limits: { fileSize: 100 * 1024 * 1024, files: 10, fields: 0, parts: 11 } }); }
+  catch { throw uploadError(400, 'A multipart upload is required'); }
+  const uploadDir = path.resolve(rootDir, 'public/uploads');
+  if (reqStream.destroyed || reqStream.aborted) throw uploadError(400, 'Upload interrupted');
+  fs.mkdirSync(uploadDir, { recursive: true });
+  const assets = [], writes = [], created = [];
+  let failure;
+  const fail = error => {
+    failure ||= error;
+    reqStream.unpipe(bb);
+    reqStream.resume();
+    if (!bb.destroyed) bb.destroy(error);
+  };
+  const aborted = () => fail(uploadError(400, 'Upload interrupted'));
+  reqStream.on('aborted', aborted);
+  reqStream.on('error', fail);
+  const parsed = new Promise(resolve => {
+    bb.on('finish', resolve);
+    bb.on('error', () => { fail(failure || uploadError(400, 'Invalid multipart upload')); resolve(); });
+  });
+  bb.on('filesLimit', () => fail(uploadError(413, 'Upload at most 10 files at once')));
+  bb.on('partsLimit', () => fail(uploadError(413, 'Upload at most 10 files at once')));
+  bb.on('fieldsLimit', () => fail(uploadError(400, 'Only media files are accepted')));
+  bb.on('file', (_name, file, { filename }) => {
+    file.on('error', fail);
+    file.on('limit', () => fail(uploadError(413, 'Each media file must be smaller than 100 MiB')));
+    try {
+      if (!filename || filename === '.' || filename === '..') throw uploadError(400, 'A media filename is required');
+      const format = mediaFormat(filename);
+      const id = randomUUID();
+      const saveTo = path.join(uploadDir, `${id}.${format.extension}`);
+      const output = fs.createWriteStream(saveTo, { flags: 'wx' });
+      output.on('open', () => created.push(saveTo));
+      writes.push(pipeline(file, validateMediaHeader(format), output).catch(fail));
+      assets.push({ id, name: filename, alt: filename, url: `/uploads/${id}.${format.extension}`, type: format.type });
+    } catch (error) { fail(error); }
+  });
+  reqStream.pipe(bb);
+  await parsed;
+  await Promise.all(writes);
+  reqStream.off('aborted', aborted);
+  reqStream.off('error', fail);
+  if (failure || assets.length === 0) {
+    await Promise.all(created.map(filename => fs.promises.unlink(filename).catch(error => {
+      if (error.code !== 'ENOENT') throw error;
+    })));
+    throw failure || uploadError(400, 'Select at least one media file');
+  }
+  const urls = assets.map(asset => asset.url);
+  return { urls, url: urls[0], assets };
 }
 
 // ── Translation proxy ───────────────────────────────────────────
