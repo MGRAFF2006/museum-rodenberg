@@ -21,7 +21,13 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
   const { t } = useLanguage();
   const [showError, setShowError] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const sourceRef = useRef(Symbol('reading-source'));
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    const source = sourceRef.current;
+    return () => stop(source);
+  }, [text, language, stop]);
 
   // Hide tooltip when the error clears
   useEffect(() => {
@@ -52,7 +58,7 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
   if (!isSupported || !text) return null;
 
   const handleClick = () => {
-    if (hasError) {
+    if (error === 'no-voices') {
       // Show the error tooltip on click instead of auto-showing
       setShowError(true);
       return;
@@ -60,7 +66,7 @@ export const TextToSpeechButton: React.FC<TextToSpeechButtonProps> = ({
     if (isSpeaking) {
       stop();
     } else {
-      speak(text, language);
+      speak(text, language, sourceRef.current);
     }
   };
 
