@@ -128,5 +128,6 @@
   "heading2": "Heading 2",
   "selectAssetPlaceholder": "Select an asset...",
   "assetLabel": "Asset",
-  "mediaLabel": "Media"
+  "mediaLabel": "Media",
+  "contentChangedReload": "This content was changed or deleted. Your unsaved edits are kept here. Return to the overview and reopen the item to load its latest version."
 }

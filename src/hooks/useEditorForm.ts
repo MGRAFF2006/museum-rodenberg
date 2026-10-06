@@ -1,4 +1,4 @@
-import { useProtectedMutation } from './useProtectedMutation';
+import { ContentConflictError, useProtectedMutation } from './useProtectedMutation';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import { api } from '../../convex/_generated/api';
@@ -388,7 +388,7 @@ export function useEditorForm(config: EditorConfig) {
     }
 
     try {
-      const slug = (formData.id || '').toLowerCase();
+      const slug = id === 'new' ? (formData.id || '').toLowerCase() : id;
       const LANGS: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
       const removeLanguages = loadedLanguages.current.filter(lang => !formData.translations?.[lang]?.title);
 
@@ -442,6 +442,8 @@ export function useEditorForm(config: EditorConfig) {
           createOnly: id === 'new',
           removeLanguages,
           slug,
+          expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
+          expectedDocumentId: id === 'new' ? undefined : formData.documentId,
           qrCode: (formData.qrCode as string) || slug,
           image: formData.image || '',
           dateRange: (formData.dateRange as string) || '',
@@ -477,6 +479,8 @@ export function useEditorForm(config: EditorConfig) {
           createOnly: id === 'new',
           removeLanguages,
           slug,
+          expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
+          expectedDocumentId: id === 'new' ? undefined : formData.documentId,
           qrCode: (formData.qrCode as string) || slug,
           exhibitionSlug: (formData.exhibition as string) || '',
           image: formData.image || '',
@@ -494,10 +498,15 @@ export function useEditorForm(config: EditorConfig) {
       refreshData();
       onBack(true);
     } catch (error) {
+      if (error instanceof ContentConflictError) {
+        setValidationErrors([t('contentChangedReload')]);
+        alert(t('contentChangedReload'));
+        return;
+      }
       console.error('Error saving:', error);
       alert(t('errorSaving'));
     }
-  }, [formData, contentType, id, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t]);
+  }, [id, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t, setValidationErrors]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm(t(deleteConfirmKey))) return;

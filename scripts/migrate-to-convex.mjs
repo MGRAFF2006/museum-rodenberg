@@ -161,8 +161,11 @@ for (const [slug, ex] of Object.entries(exhibitions.exhibitions)) {
     }
   }
 
+  const existing = await client.query(api.exhibitions.getBySlug, { slug });
   await write(api.exhibitions.save, {
     slug,
+    expectedRevision: existing ? existing.revision ?? 0 : undefined,
+    expectedDocumentId: existing?._id,
     qrCode: ex.qrCode || "",
     image: ex.image || "",
     dateRange: ex.dateRange || undefined,
@@ -238,8 +241,11 @@ for (const [slug, art] of Object.entries(artifacts.artifacts)) {
     }
   }
 
+  const existing = await client.query(api.artifacts.getBySlug, { slug });
   await write(api.artifacts.save, {
     slug,
+    expectedRevision: existing ? existing.revision ?? 0 : undefined,
+    expectedDocumentId: existing?._id,
     qrCode: art.qrCode || "",
     exhibitionSlug: art.exhibition || undefined,
     image: art.image || "",

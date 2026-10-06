@@ -53,7 +53,7 @@ function fixture(kind: Kind) {
       for (const name of Object.keys(rows)) rows[name] = rows[name].filter(row => row._id !== id);
     },
   };
-  const args = { serverSecret: credential, slug: 'item', qrCode: 'ITEM', image: '',
+  const args = { serverSecret: credential, expectedRevision: 0, expectedDocumentId: 'item-id', slug: 'item', qrCode: 'ITEM', image: '',
     ...(kind === 'exhibition' ? { isFeatured: false, artifactSlugs: [] } : {}),
     translations: [{ language: 'de', title: 'Titel', description: 'Beschreibung' }], mediaItems: [] };
   const save = (changes: Record<string, unknown>) => handler(kind)({ db }, JSON.parse(JSON.stringify({ ...args, ...changes })));
@@ -100,9 +100,10 @@ describe.each(['artifact', 'exhibition'] as const)('%s editor save contract', ki
 
   it('creates once and permits ordinary updates without persisting operation flags', async () => {
     const { rows, table, save } = fixture(kind);
-    await save({ slug: 'created', createOnly: true, replaceTranslations: true });
+    await save({ slug: 'created', createOnly: true, replaceTranslations: true, expectedRevision: undefined, expectedDocumentId: undefined });
     await expect(save({ slug: 'created', createOnly: true })).rejects.toThrow('already exists');
-    await save({ slug: 'created', image: 'edited' });
+    const created = rows[table].find(row => row.slug === 'created')!;
+    await save({ slug: 'created', image: 'edited', expectedRevision: 0, expectedDocumentId: created._id });
     expect(rows[table].find(row => row.slug === 'created')?.image).toBe('edited');
     expect(JSON.stringify(rows)).not.toContain('createOnly');
     expect(JSON.stringify(rows)).not.toContain('replaceTranslations');
@@ -113,6 +114,6 @@ it('normalizes an explicitly empty artifact parent to a deleted optional field w
   const { rows, save } = fixture('artifact');
   await save({ exhibitionSlug: undefined });
   expect(rows.artifacts[0].exhibitionSlug).toBe('parent');
-  await save({ exhibitionSlug: '' });
+  await save({ exhibitionSlug: '', expectedRevision: 1 });
   expect(rows.artifacts[0]).not.toHaveProperty('exhibitionSlug');
 });
