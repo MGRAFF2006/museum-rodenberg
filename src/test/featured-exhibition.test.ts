@@ -65,7 +65,7 @@ afterEach(() => vi.unstubAllEnvs());
 describe('featured exhibition consistency', () => {
   it('deleting the oldest featured exhibition picks an actual remaining exhibition', async () => {
     const { ctx, rows, featured, flagged } = fixture();
-    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'a' });
+    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'a', expectedRevision: 0, expectedDocumentId: 'ex-a' });
     expect(featured()).toBe('b');
     expect(flagged()).toEqual(['b']);
     expect(rows.exhibitions.map(row => row.slug)).toEqual(['b', 'c']);
@@ -77,7 +77,7 @@ describe('featured exhibition consistency', () => {
   it('deleting the last exhibition clears only its featured setting', async () => {
     const { ctx, rows, featured, flagged } = fixture();
     rows.exhibitions = rows.exhibitions.slice(0, 1);
-    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'a' });
+    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'a', expectedRevision: 0, expectedDocumentId: 'ex-a' });
     expect(featured()).toBeUndefined();
     expect(flagged()).toEqual([]);
     expect(rows.settings).toEqual([{ _id: 'other-setting', key: 'other', value: 'preserve-me' }]);
@@ -111,7 +111,7 @@ describe('featured exhibition consistency', () => {
   it('saving or deleting a different nonfeatured exhibition preserves the selected exhibition', async () => {
     const { ctx, featured, flagged } = fixture();
     await handler(exhibitions.save)(ctx, { ...saveArgs, isFeatured: false });
-    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'b' });
+    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'b', expectedRevision: 1, expectedDocumentId: 'ex-b' });
     expect(featured()).toBe('a');
     expect(flagged()).toEqual(['a']);
   });
@@ -149,7 +149,7 @@ describe('featured exhibition consistency', () => {
 
   it('bumps replacement feature and detached child snapshots when deleting the selected exhibition', async () => {
     const { ctx, rows } = fixture();
-    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'a' });
+    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'a', expectedRevision: 0, expectedDocumentId: 'ex-a' });
     expect(rows.exhibitions.map(row => row.revision)).toEqual([1, undefined]);
     expect(rows.artifacts[0]).toMatchObject({ revision: 1 });
     expect(rows.artifacts[0]).not.toHaveProperty('exhibitionSlug');
