@@ -164,7 +164,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                     className="w-full h-full"
                     preload="metadata"
                   >
-                    <source src={video.url} type="video/mp4" />
+                    <source src={video.url} />
                     {t('videoNotSupported')}
                   </video>
                 </div>
