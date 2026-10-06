@@ -33,7 +33,10 @@ afterEach(async () => {
 });
 
 it('serves current persistent bytes and never resurrects a deleted build copy', async () => {
-  expect(await (await fetch(`${origin}/uploads/seed.jpg`)).text()).toBe('live bytes');
+  const current = await fetch(`${origin}/uploads/seed.jpg`);
+  expect(current.headers.get('content-security-policy')).toBe('sandbox');
+  expect(current.headers.get('x-content-type-options')).toBe('nosniff');
+  expect(await current.text()).toBe('live bytes');
   fs.unlinkSync(path.join(root, 'public/uploads/seed.jpg'));
   const missing = await fetch(`${origin}/uploads/seed.jpg`);
   expect(missing.status).toBe(404);

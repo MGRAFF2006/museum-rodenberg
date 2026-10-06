@@ -7,7 +7,11 @@ export function serveMuseumFiles(app, rootDir) {
   // Persistent media must win over Vite's copied public files, even after deletion.
   app.use('/uploads', express.static(path.join(rootDir, 'public/uploads'), {
     maxAge: '7d',
-    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      // Isolate any active documents already present in persistent storage.
+      res.setHeader('Content-Security-Policy', 'sandbox');
+    },
   }));
   app.use(['/uploads', '/api', '/convex'], (_req, res) => {
     res.status(404).set('Cache-Control', 'no-store').json({ error: 'Not found' });
