@@ -117,6 +117,8 @@ export interface RawAssetsData {
 /** Loosely-typed record used in editor forms and bulk operations. */
 export interface EntityRecord {
   id?: string;
+  documentId?: string;
+  revision?: number;
   title?: string;
   translations?: Record<string, Record<string, string | undefined>>;
   detailedContent?: Record<string, string>;

@@ -96,5 +96,6 @@
   "deleteFileConfirm": "¿Estás seguro de que deseas eliminar este archivo?",
   "altText": "Texto alternativo",
   "name": "Nombre",
-  "logout": "Cerrar sesión"
+  "logout": "Cerrar sesión",
+  "contentChangedReload": "Este contenido fue modificado o eliminado. Sus cambios sin guardar se conservan aquí. Vuelva a la vista general y abra el elemento de nuevo para cargar su versión más reciente."
 }
