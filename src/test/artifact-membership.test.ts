@@ -101,16 +101,14 @@ describe('artifact exhibition membership', () => {
     expect(exhibitions.map(ex => ex.artifactSlugs)).toEqual([['before', 'after'], ['other'], []]);
   });
 
-  it('deletes translations, media and all memberships, including after an already missing artifact', async () => {
+  it('deletes translations, media and all memberships for the captured artifact', async () => {
     const { ctx, rows, exhibitions } = fixture();
-    await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item' });
+    await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item', expectedRevision: 0, expectedDocumentId: 'art-item' });
     expect(rows.artifacts).toEqual([]);
     expect(rows.artifact_translations).toEqual([]);
     expect(rows.media).toEqual([]);
     expect(exhibitions.map(ex => ex.artifactSlugs)).toEqual([['before', 'after'], ['other'], []]);
-    exhibitions[2].artifactSlugs.push('item');
-    await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item' });
-    expect(exhibitions[2].artifactSlugs).toEqual([]);
+
   });
 
   it('still permits migration-style creation before the target exhibition exists', async () => {
@@ -144,10 +142,25 @@ describe('artifact exhibition membership', () => {
 
   it('bumps only changed memberships on deletion and leaves untouched lists unversioned', async () => {
     const { ctx, exhibitions } = fixture();
-    await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item' });
+    await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item', expectedRevision: 0, expectedDocumentId: 'art-item' });
     expect(exhibitions.map(ex => (ex as Record<string, unknown>).revision)).toEqual([1, undefined, 1]);
-    await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item' });
+    await expect(handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item', expectedRevision: 0, expectedDocumentId: 'art-item' })).rejects.toMatchObject({ data: { code: 'STALE_CONTENT' } });
     expect(exhibitions.map(ex => (ex as Record<string, unknown>).revision)).toEqual([1, undefined, 1]);
+  });
+
+
+  it.each(['missing', 'recreated'])('rejects a %s artifact snapshot before repairing any stale memberships', async state => {
+    const { ctx, rows } = fixture();
+    if (state === 'missing') rows.artifacts = [];
+    else rows.artifacts[0]._id = 'replacement-item';
+    const before = JSON.stringify(rows);
+    const patch = vi.spyOn(ctx.db, 'patch');
+    const del = vi.spyOn(ctx.db, 'delete');
+    await expect(handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item', expectedRevision: 0, expectedDocumentId: 'art-item' }))
+      .rejects.toMatchObject({ data: { code: 'STALE_CONTENT' } });
+    expect(JSON.stringify(rows)).toBe(before);
+    expect(patch).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
   });
 
 });
