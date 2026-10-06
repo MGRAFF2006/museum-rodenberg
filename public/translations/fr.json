@@ -97,5 +97,6 @@
   "deleteFileConfirm": "Êtes-vous sûr de vouloir supprimer ce fichier ?",
   "altText": "Texte alternatif",
   "name": "Nom",
-  "logout": "Déconnexion"
+  "logout": "Déconnexion",
+  "onePerLine": "Un élément par ligne"
 }

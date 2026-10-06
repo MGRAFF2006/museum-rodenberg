@@ -170,6 +170,27 @@ export const AttributeCheckboxes: React.FC<AttributeCheckboxesProps> = ({ attrib
   </div>
 );
 
+export const ArrayMetadataField: React.FC<{
+  field: string;
+  label: string;
+  values: string[];
+  onChange: (field: string, value: unknown) => void;
+  t: (key: string) => string;
+}> = ({ field, label, values, onChange, t }) => (
+  <div>
+    <label htmlFor={`metadata-${field}`} className="block text-sm font-medium text-neutral-700 mb-1">{label}</label>
+    <textarea
+      id={`metadata-${field}`}
+      aria-describedby={`metadata-${field}-hint`}
+      className="input w-full px-3 py-2 border rounded-md"
+      rows={3}
+      value={values.join('\n')}
+      onChange={event => onChange(field, event.target.value.split('\n'))}
+    />
+    <p id={`metadata-${field}-hint`} className="text-xs text-neutral-500">{t('onePerLine')}</p>
+  </div>
+);
+
 /* ── Media Section ───────────────────────────────────────────── */
 
 interface MediaSectionProps {

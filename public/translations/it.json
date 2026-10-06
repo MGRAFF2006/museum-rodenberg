@@ -97,5 +97,6 @@
   "deleteFileConfirm": "Sei sicuro di voler eliminare questo file?",
   "altText": "Testo alternativo",
   "name": "Nome",
-  "logout": "Esci"
+  "logout": "Esci",
+  "onePerLine": "Un elemento per riga"
 }

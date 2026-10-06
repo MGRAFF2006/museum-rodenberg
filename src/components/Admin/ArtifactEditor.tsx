@@ -11,6 +11,7 @@ import {
   TranslationProgress,
   ValidationBanners,
   AttributeCheckboxes,
+  ArrayMetadataField,
   MediaSection,
   LanguageTabs,
   TranslatableTextField,
@@ -161,6 +162,12 @@ export const ArtifactEditor: React.FC<ArtifactEditorProps> = ({ id, onBack }) =>
               <label className="block text-sm font-medium text-neutral-700 mb-1">{t('provenance')}</label>
               <input type="text" className="input w-full px-3 py-2 border rounded-md" value={formData.provenance || ''} onChange={(e) => handleChange('provenance', e.target.value)} />
             </div>
+          )}
+          {formData.enabledAttributes?.includes('materials') && (
+            <ArrayMetadataField field="materials" label={t('materials')} values={formData.materials || []} onChange={handleChange} t={t} />
+          )}
+          {formData.enabledAttributes?.includes('tags') && (
+            <ArrayMetadataField field="tags" label={t('tags')} values={formData.tags || []} onChange={handleChange} t={t} />
           )}
         </div>
 

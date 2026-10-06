@@ -97,5 +97,6 @@
   "deleteFileConfirm": "Czy na pewno chcesz usunąć ten plik?",
   "altText": "Tekst alternatywny",
   "name": "Nazwa",
-  "logout": "Wyloguj"
+  "logout": "Wyloguj",
+  "onePerLine": "Jeden element w wierszu"
 }
