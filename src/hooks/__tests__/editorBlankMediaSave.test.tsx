@@ -12,7 +12,7 @@ vi.mock('../useAssetValidation', () => ({ useAssetValidation: () => ({ isValidat
 const config: EditorConfig = {
   contentType: 'artifact', id: 'new', onBack: vi.fn(), initialTranslationFields: { title: '', description: '' },
   defaultEnabledAttributes: [], contentMediaFields: ['description'], getFieldsToTranslate: () => [],
-  loadEntity: () => undefined, deleteConfirmKey: 'delete',
+  entity: undefined, deleteConfirmKey: 'delete',
 };
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);

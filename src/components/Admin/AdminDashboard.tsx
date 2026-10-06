@@ -169,7 +169,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (!original) continue;
 
         // Merge new translations with existing
-        const mergedTranslations: Record<string, Record<string, string>> = {
+        const mergedTranslations: Record<string, Record<string, string | undefined>> = {
           ...(original.translations || {}),
         };
         for (const [lang, fields] of Object.entries(item.translations)) {

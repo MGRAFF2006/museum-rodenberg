@@ -22,7 +22,7 @@ beforeEach(async () => {
   fs.writeFileSync(path.join(root, 'public/uploads/seed.jpg'), 'live bytes');
   const app = express();
   serveMuseumFiles(app, root);
-  await new Promise<void>((resolve) => { server = app.listen(0, '127.0.0.1', resolve); });
+  await new Promise<void>((resolve) => { server = app.listen(0, '127.0.0.1', () => resolve()); });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Missing test port');
   origin = `http://127.0.0.1:${address.port}`;
