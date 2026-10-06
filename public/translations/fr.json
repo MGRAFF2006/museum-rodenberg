@@ -98,5 +98,6 @@
   "altText": "Texte alternatif",
   "name": "Nom",
   "logout": "Déconnexion",
+  "qrCameraUnavailable": "Impossible de démarrer ou d’arrêter la caméra. Fermez le scanner et réessayez.",
   "onePerLine": "Un élément par ligne"
 }

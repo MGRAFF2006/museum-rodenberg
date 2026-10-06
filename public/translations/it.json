@@ -98,5 +98,6 @@
   "altText": "Testo alternativo",
   "name": "Nome",
   "logout": "Esci",
+  "qrCameraUnavailable": "Impossibile avviare o arrestare la fotocamera. Chiudi lo scanner e riprova.",
   "onePerLine": "Un elemento per riga"
 }

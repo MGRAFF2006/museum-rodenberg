@@ -97,5 +97,6 @@
   "altText": "Texto alternativo",
   "name": "Nombre",
   "logout": "Cerrar sesión",
+  "qrCameraUnavailable": "No se pudo iniciar o detener la cámara. Cierre el escáner e inténtelo de nuevo.",
   "onePerLine": "Un elemento por línea"
 }

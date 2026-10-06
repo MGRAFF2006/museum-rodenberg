@@ -98,5 +98,6 @@
   "altText": "Tekst alternatywny",
   "name": "Nazwa",
   "logout": "Wyloguj",
+  "qrCameraUnavailable": "Nie można uruchomić lub zatrzymać kamery. Zamknij skaner i spróbuj ponownie.",
   "onePerLine": "Jeden element w wierszu"
 }

@@ -11,6 +11,7 @@ interface EditorToolbarProps {
   id: string;
   activeLang: Language;
   isTranslating: boolean;
+  isReady: boolean;
   onBack: () => void;
   onDelete: () => void;
   onTranslate: () => void;
@@ -20,7 +21,7 @@ interface EditorToolbarProps {
 }
 
 export const EditorToolbar: React.FC<EditorToolbarProps> = ({
-  id, activeLang, isTranslating, onBack, onDelete, onTranslate, onTranslateAll, onSave, t,
+  id, activeLang, isTranslating, isReady, onBack, onDelete, onTranslate, onTranslateAll, onSave, t,
 }) => (
   <div className="flex justify-between items-center mb-8">
     <button onClick={onBack} className="flex items-center text-neutral-600 hover:text-primary-600 transition-colors">
@@ -31,6 +32,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       {id !== 'new' && (
         <button
           onClick={onDelete}
+          disabled={!isReady}
           className="btn btn-secondary flex items-center bg-white border border-red-200 text-red-600 hover:bg-red-50 mr-4"
         >
           <Trash2 className="h-4 w-4 mr-2" />
@@ -39,7 +41,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       )}
       <button
         onClick={onTranslateAll}
-        disabled={isTranslating}
+        disabled={!isReady || isTranslating}
         className="btn btn-secondary flex items-center bg-white border border-neutral-300 hover:bg-neutral-50"
       >
         {isTranslating ? (
@@ -52,7 +54,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       {activeLang !== 'de' && (
         <button
           onClick={onTranslate}
-          disabled={isTranslating}
+          disabled={!isReady || isTranslating}
           className="btn btn-secondary flex items-center bg-white border border-neutral-300 hover:bg-neutral-50"
         >
           {isTranslating ? (
@@ -63,7 +65,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           {t('translate')}
         </button>
       )}
-      <button onClick={onSave} className="btn btn-primary">
+      <button onClick={onSave} disabled={!isReady || isTranslating} className="btn btn-primary">
         <Save className="h-4 w-4 mr-2" />
         {t('save')}
       </button>
