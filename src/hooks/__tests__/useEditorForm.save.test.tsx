@@ -29,7 +29,7 @@ function setup(contentType: 'artifact' | 'exhibition', id: string, source?: Enti
   const config: EditorConfig = {
     contentType, id, onBack: vi.fn(), initialTranslationFields: { title: '', description: '' },
     defaultEnabledAttributes: [], contentMediaFields: ['description'], getFieldsToTranslate: () => [],
-    loadEntity: () => entity, deleteConfirmKey: 'delete',
+    entity, deleteConfirmKey: 'delete',
   };
   const compatibleConfig = { ...config, entity };
   return renderHook(() => useEditorForm(compatibleConfig));
