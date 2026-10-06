@@ -31,8 +31,8 @@ services:
     stop_grace_period: 10s
     stop_signal: SIGINT
     ports:
-      - "3210:3210"
-      - "3211:3211"
+      - "127.0.0.1:3210:3210"
+      - "127.0.0.1:3211:3211"
     volumes:
       - convex-data:/convex/data
     environment:
@@ -48,20 +48,32 @@ services:
   # Automatically pushes the Convex schema after backend is healthy.
   # Reads credentials from .env.local on the host.
   convex-setup:
-    image: node:20-alpine
+    image: node:22-alpine
     container_name: museum-convex-setup
     working_dir: /app
     volumes:
-      - .:/app
+      - .:/source:ro
+      - convex-setup-deps:/app/node_modules
+    tmpfs:
+      - /app
     env_file:
       - .env.local
     environment:
       # Override URL to use Docker network name (not localhost)
       - CONVEX_SELF_HOSTED_URL=http://convex-backend:3210
+      - CONVEX_DEPLOY_KEY=
+      - CONVEX_DEPLOYMENT=
     depends_on:
       convex-backend:
         condition: service_healthy
-    entrypoint: ["sh", "-c", "npm install --prefer-offline --no-audit --ignore-scripts 2>/dev/null; npx convex dev --once --typecheck=disable"]
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        cp /source/package.json /source/package-lock.json /app/
+        cp -R /source/convex /app/convex
+        npm ci --prefer-offline --no-audit
+        npx --no-install convex deploy --typecheck=disable
     restart: "no"
     profiles: ["dev"]
 
@@ -73,7 +85,7 @@ services:
         # In Docker Compose, the browser connects to the reverse proxy
         # on the same origin, so VITE_CONVEX_URL points to /convex path
         # which the Express server proxies to convex-backend:3210.
-        VITE_CONVEX_URL: http://localhost:3000/convex
+        VITE_CONVEX_URL: /convex
     container_name: museum-rodenberg
     restart: unless-stopped
     ports:
@@ -81,7 +93,7 @@ services:
     volumes:
       - ./public/uploads:/app/public/uploads
     environment:
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-museum2025}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env before starting Compose}
       - CONVEX_WRITE_SECRET=${CONVEX_WRITE_SECRET:-}
       - LIBRETRANSLATE_API_URL=http://libretranslate:5000/translate
       - CONVEX_BACKEND_URL=http://convex-backend:3210
@@ -103,7 +115,7 @@ services:
     stop_grace_period: 10s
     stop_signal: SIGINT
     ports:
-      - "6791:6791"
+      - "127.0.0.1:6791:6791"
     environment:
       - NEXT_PUBLIC_DEPLOYMENT_URL=http://127.0.0.1:3210
     depends_on:
@@ -117,7 +129,7 @@ services:
     container_name: museum-libretranslate
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - lt-data:/home/libretranslate/.local
     environment:
@@ -129,3 +141,4 @@ services:
 volumes:
   lt-data:
   convex-data:
+  convex-setup-deps:

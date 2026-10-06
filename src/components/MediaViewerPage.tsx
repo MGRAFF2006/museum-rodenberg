@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Image as ImageIcon, Video, Music } from 'lucide-react';
 import { useLanguage } from '../hooks/useLanguage';
 import { AudioPlayer } from './AudioPlayer';
+import { availableMediaTab, mediaSelection, withSelectedMedia } from '../utils/mediaGallery';
 
 interface MediaItem {
   url: string;
@@ -14,26 +15,29 @@ interface MediaViewerPageProps {
   videos: MediaItem[];
   audio: MediaItem[];
   onBack: () => void;
-  initialTab?: 'images' | 'videos' | 'audio';
+  initialTab?: string | null;
   initialUrl?: string | null;
 }
 
 export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
-  images,
-  videos,
-  audio,
+  images: galleryImages,
+  videos: galleryVideos,
+  audio: galleryAudio,
   onBack,
   initialTab = 'images',
   initialUrl = null,
 }) => {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'images' | 'videos' | 'audio'>(initialTab);
-  
-  // Set initial selected image if url is provided
-  const initialImageIndex = initialUrl && activeTab === 'images' 
-    ? images.findIndex(img => img === initialUrl) 
-    : 0;
-  const [selectedImage, setSelectedImage] = useState(initialImageIndex >= 0 ? initialImageIndex : 0);
+  const { images, videos, audio } = withSelectedMedia({ images: galleryImages, videos: galleryVideos, audio: galleryAudio }, mediaSelection(initialTab, initialUrl));
+  const [preferredTab, setActiveTab] = useState(initialTab);
+  const activeTab = availableMediaTab(preferredTab, { images, videos, audio });
+  const [selectedUrl, setSelectedUrl] = useState(initialUrl);
+  const selectedImage = Math.max(0, images.indexOf(selectedUrl ?? ''));
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+    setSelectedUrl(initialUrl);
+  }, [initialTab, initialUrl]);
 
   useEffect(() => {
     if (initialUrl) {
@@ -134,7 +138,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                   {images.map((image, index) => (
                     <button
                       key={index}
-                      onClick={() => setSelectedImage(index)}
+                      onClick={() => setSelectedUrl(image)}
                       className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
                         selectedImage === index ? 'border-primary-500 ring-2 ring-primary-200' : 'border-neutral-200 hover:border-neutral-300 hover:scale-105'
                       }`}
@@ -164,7 +168,7 @@ export const MediaViewerPage: React.FC<MediaViewerPageProps> = ({
                     className="w-full h-full"
                     preload="metadata"
                   >
-                    <source src={video.url} type="video/mp4" />
+                    <source src={video.url} />
                     {t('videoNotSupported')}
                   </video>
                 </div>

@@ -98,5 +98,6 @@
   "altText": "Tekst alternatywny",
   "name": "Nazwa",
   "logout": "Wyloguj",
+  "qrCameraUnavailable": "Nie można uruchomić lub zatrzymać kamery. Zamknij skaner i spróbuj ponownie.",
   "contentChangedReload": "Ta treść została zmieniona lub usunięta. Niezapisane zmiany pozostają tutaj. Wróć do przeglądu i otwórz element ponownie, aby wczytać najnowszą wersję."
 }
