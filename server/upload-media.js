@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
 import busboy from 'busboy';
 
 export const UPLOAD_LIMITS = { files: 4, fileBytes: 50 * 1024 * 1024 };
@@ -15,7 +16,8 @@ export class UploadError extends Error {
 }
 
 // Deliberately excludes active documents (including SVG and HTML). This checks
-// browser media type/extension agreement, not the safety of every media byte.
+// browser media type/extension agreement; signatures below also reject documents
+// disguised as media. This identifies containers, not full codec validity.
 const MEDIA_TYPES = {
   '.jpg': ['image/jpeg'], '.jpeg': ['image/jpeg'], '.png': ['image/png'],
   '.gif': ['image/gif'], '.webp': ['image/webp'], '.avif': ['image/avif'],
@@ -27,6 +29,51 @@ const MEDIA_TYPES = {
   '.webm': ['video/webm', 'audio/webm'], '.ogv': ['video/ogg'],
   '.mov': ['video/quicktime'],
 };
+
+function validateMediaHeader(extension) {
+  const starts = (bytes, signature, offset = 0) => bytes.subarray(offset, offset + signature.length).equals(Buffer.from(signature, 'latin1'));
+  const riff = (bytes, kind) => starts(bytes, 'RIFF') && starts(bytes, kind, 8);
+  const frame = bytes => bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+  const iso = bytes => starts(bytes, 'ftyp', 4);
+  const checks = {
+    '.jpg': bytes => starts(bytes, '\xff\xd8\xff'),
+    '.png': bytes => starts(bytes, '\x89PNG\r\n\x1a\n'),
+    '.gif': bytes => starts(bytes, 'GIF87a') || starts(bytes, 'GIF89a'),
+    '.webp': bytes => riff(bytes, 'WEBP'),
+    '.avif': bytes => iso(bytes) && /avif|avis/.test(bytes.subarray(8).toString('latin1')),
+    '.bmp': bytes => starts(bytes, 'BM'),
+    '.mp3': bytes => starts(bytes, 'ID3') || frame(bytes),
+    '.wav': bytes => riff(bytes, 'WAVE'),
+    '.ogg': bytes => starts(bytes, 'OggS'),
+    '.flac': bytes => starts(bytes, 'fLaC'),
+    '.aac': bytes => frame(bytes) || starts(bytes, 'ADIF'),
+    '.m4a': iso, '.mp4': iso,
+    '.webm': bytes => starts(bytes, '\x1a\x45\xdf\xa3'),
+    // Classic QuickTime predates ftyp and may begin with another top-level atom.
+    '.mov': bytes => ['ftyp', 'moov', 'mdat', 'wide', 'free', 'skip', 'pnot'].some(atom => starts(bytes, atom, 4)),
+  };
+  const canonical = { '.jpeg': '.jpg', '.oga': '.ogg', '.ogv': '.ogg', '.m4v': '.mp4' }[extension] ?? extension;
+  let header = Buffer.alloc(0);
+  let validated = false;
+  const validate = () => {
+    if (!checks[canonical]?.(header)) throw new UploadError('File contents do not match the media format', 415);
+    validated = true;
+  };
+  return new Transform({
+    transform(chunk, _encoding, callback) {
+      if (validated) return callback(null, chunk);
+      const needed = 64 - header.length;
+      header = Buffer.concat([header, chunk.subarray(0, needed)]);
+      if (header.length < 64) return callback();
+      try { validate(); this.push(header); callback(null, chunk.subarray(needed)); }
+      catch (error) { callback(error); }
+    },
+    flush(callback) {
+      try { if (!validated) { validate(); this.push(header); } callback(); }
+      catch (error) { callback(error); }
+    },
+  });
+}
 
 /** Write a bounded multipart request; failures roll back all its new files. */
 export async function uploadMedia(rootDir, headers, reqStream) {
@@ -105,7 +152,7 @@ export async function uploadMedia(rootDir, headers, reqStream) {
     // never remove a pre-existing asset.
     output.once('open', () => createdFiles.push(destination));
     file.once('limit', () => fail(new UploadError('Each file must be at most 50 MiB', 413)));
-    writes.push(pipeline(file, output, { signal: controller.signal }).catch(fail));
+    writes.push(pipeline(file, validateMediaHeader(extension), output, { signal: controller.signal }).catch(fail));
     assets.push({ id, name: filename, alt: filename, url: `/uploads/${id}${extension}`, type: mimeType.split('/')[0] });
   });
 
