@@ -20,8 +20,8 @@ vi.mock('../useContentTranslation', () => ({ useContentTranslation: () => ({ isT
 vi.mock('../useAssetValidation', () => ({ useAssetValidation: () => ({ isValidating: false, validationErrors: [], validateAssets: mocks.validateAssets, setValidationErrors: mocks.setValidationErrors }) }));
 beforeEach(() => vi.clearAllMocks());
 
-function setup(contentType: 'artifact' | 'exhibition', id: string) {
-  const entity: EntityRecord = { id: 'existing', translations: {
+function setup(contentType: 'artifact' | 'exhibition', id: string, source?: EntityRecord) {
+  const entity: EntityRecord = source || { id: 'existing', translations: {
     de: { title: 'Titel', description: '', subtitle: 'Old subtitle', period: '1900', artist: 'Artist', significance: 'Significant' },
     fr: { title: 'Titre', description: 'Texte' },
   }, detailedContent: { de: 'Old details' }, exhibition: 'parent', dimensions: '10 cm', provenance: 'Owner',
@@ -36,7 +36,7 @@ function setup(contentType: 'artifact' | 'exhibition', id: string) {
 }
 
 describe.each(['artifact', 'exhibition'] as const)('%s editor save payload', contentType => {
-  it('uses full-language replacement and explicit cleared strings without marking edits as creation', async () => {
+  it('removes deliberately cleared languages and saves explicit cleared strings without marking edits as creation', async () => {
     const { result } = setup(contentType, 'existing');
     await act(async () => result.current.setFormData(previous => ({ ...previous,
       dimensions: '', provenance: '', exhibition: '', dateRange: '', location: '', curator: '', organizer: '', sponsor: '',
@@ -47,7 +47,7 @@ describe.each(['artifact', 'exhibition'] as const)('%s editor save payload', con
     const write = contentType === 'artifact' ? mocks.saveArtifact : mocks.saveExhibition;
     expect(write).toHaveBeenCalledOnce();
     const payload = JSON.parse(JSON.stringify(write.mock.calls[0][0]));
-    expect(payload).toMatchObject({ slug: 'existing', createOnly: false, replaceTranslations: true });
+    expect(payload).toMatchObject({ slug: 'existing', createOnly: false, removeLanguages: ['fr'] });
     expect(payload.translations).toHaveLength(1);
     expect(payload.translations[0]).toMatchObject({ language: 'de', title: 'Titel', detailedContent: '' });
     if (contentType === 'artifact') {
@@ -65,6 +65,22 @@ describe.each(['artifact', 'exhibition'] as const)('%s editor save payload', con
       translations: { de: { title: 'Titel', description: '' } } })));
     await act(async () => result.current.handleSave());
     const write = contentType === 'artifact' ? mocks.saveArtifact : mocks.saveExhibition;
-    expect(write.mock.calls[0][0]).toMatchObject({ slug: 'new-item', createOnly: true, replaceTranslations: true });
+    expect(write.mock.calls[0][0]).toMatchObject({ slug: 'new-item', createOnly: true, removeLanguages: [] });
+  });
+
+  it('preserves optional translation values and unseen languages when loaded from partial data', async () => {
+    const { result } = setup(contentType, 'existing', {
+      id: 'existing', translations: { de: { title: 'Titel', description: 'Text' } },
+    });
+    await act(async () => result.current.handleSave());
+    const write = contentType === 'artifact' ? mocks.saveArtifact : mocks.saveExhibition;
+    const payload = JSON.parse(JSON.stringify(write.mock.calls[0][0]));
+    expect(payload.removeLanguages).toEqual([]);
+    expect(payload).not.toHaveProperty('replaceTranslations');
+    expect(payload.translations[0]).toEqual({ language: 'de', title: 'Titel', description: 'Text' });
+
+    await act(async () => result.current.handleDetailedContentChange('de', ''));
+    await act(async () => result.current.handleSave());
+    expect(write.mock.calls[1][0].translations[0].detailedContent).toBe('');
   });
 });

@@ -1,5 +1,5 @@
 import { useProtectedMutation } from './useProtectedMutation';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import { api } from '../../convex/_generated/api';
 import { Language, MediaItem, EntityRecord } from '../types';
@@ -65,6 +65,7 @@ export function useEditorForm(config: EditorConfig) {
   const removeArtifact = useProtectedMutation(api.artifacts.remove);
 
   const [activeLang, setActiveLang] = useState<Language>('de');
+  const loadedLanguages = useRef<string[]>([]);
 
   const initialTranslations = LANGUAGES.reduce((acc, lang) => ({
     ...acc,
@@ -157,9 +158,11 @@ export function useEditorForm(config: EditorConfig) {
 
   // Load existing entity
   useEffect(() => {
+    loadedLanguages.current = [];
     if (id !== 'new') {
       const entity = loadEntity(id);
       if (entity) {
+        loadedLanguages.current = Object.keys(entity.translations || {});
         const normalizedMedia = {
           images: entity.media?.images || [],
           videos: entity.media?.videos || [],
@@ -387,6 +390,7 @@ export function useEditorForm(config: EditorConfig) {
     try {
       const slug = (formData.id || '').toLowerCase();
       const LANGS: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
+      const removeLanguages = loadedLanguages.current.filter(lang => !formData.translations?.[lang]?.title);
 
       // Build media items array from formData.media
       const mediaItems: Array<{
@@ -428,15 +432,15 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              subtitle: t.subtitle || '',
+              subtitle: Object.prototype.hasOwnProperty.call(t, 'subtitle') ? t.subtitle || '' : undefined,
               description: t.description || '',
-              detailedContent: formData.detailedContent?.[lang] || '',
+              detailedContent: Object.prototype.hasOwnProperty.call(formData.detailedContent || {}, lang) ? formData.detailedContent?.[lang] || '' : undefined,
             };
           });
 
         await saveExhibition({
           createOnly: id === 'new',
-          replaceTranslations: true,
+          removeLanguages,
           slug,
           qrCode: (formData.qrCode as string) || slug,
           image: formData.image || '',
@@ -461,17 +465,17 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              period: t.period || '',
-              artist: t.artist || '',
+              period: Object.prototype.hasOwnProperty.call(t, 'period') ? t.period || '' : undefined,
+              artist: Object.prototype.hasOwnProperty.call(t, 'artist') ? t.artist || '' : undefined,
               description: t.description || '',
-              significance: t.significance || '',
-              detailedContent: formData.detailedContent?.[lang] || '',
+              significance: Object.prototype.hasOwnProperty.call(t, 'significance') ? t.significance || '' : undefined,
+              detailedContent: Object.prototype.hasOwnProperty.call(formData.detailedContent || {}, lang) ? formData.detailedContent?.[lang] || '' : undefined,
             };
           });
 
         await saveArtifact({
           createOnly: id === 'new',
-          replaceTranslations: true,
+          removeLanguages,
           slug,
           qrCode: (formData.qrCode as string) || slug,
           exhibitionSlug: (formData.exhibition as string) || '',
