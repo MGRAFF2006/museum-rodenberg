@@ -22,6 +22,7 @@ async function fixture(t) {
 test('production schema jobs serialize and only gated steps can deploy', () => {
   assert.equal(job.concurrency.group, 'convex-production-schema');
   assert.equal(job.concurrency['cancel-in-progress'], false);
+  assert.equal(job.concurrency.queue, 'max');
   assert.deepEqual(job.permissions, { contents: 'read' });
   assert.match(job.if, /github.event_name == 'push'/);
   assert.match(job.if, /refs\/heads\/main/);

@@ -59,6 +59,7 @@ jobs:
     concurrency:
       group: convex-production-schema
       cancel-in-progress: false
+      queue: max
     steps:
       - name: Check deployment credentials
         id: deployment
