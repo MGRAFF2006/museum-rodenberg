@@ -65,7 +65,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           {t('translate')}
         </button>
       )}
-      <button onClick={onSave} disabled={!isReady} className="btn btn-primary">
+      <button onClick={onSave} disabled={!isReady || isTranslating} className="btn btn-primary">
         <Save className="h-4 w-4 mr-2" />
         {t('save')}
       </button>
