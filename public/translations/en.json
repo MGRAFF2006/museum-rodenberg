@@ -129,5 +129,6 @@
   "selectAssetPlaceholder": "Select an asset...",
   "assetLabel": "Asset",
   "mediaLabel": "Media",
+  "qrCameraUnavailable": "The camera could not start or stop. Close the scanner and try again.",
   "contentChangedReload": "This content was changed or deleted. Your unsaved edits are kept here. Return to the overview and reopen the item to load its latest version."
 }

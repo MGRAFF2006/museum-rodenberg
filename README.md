@@ -20,7 +20,7 @@ The application is a React and TypeScript frontend backed by a self-hosted Conve
 
 ## Requirements
 
-- Node.js 18 or newer and npm 9 or newer
+- Node.js 22.13 or newer (use a supported LTS release) and npm 9 or newer
 - Docker with Docker Compose for the local Convex backend
 
 ## Local development
@@ -47,10 +47,15 @@ Never commit `.env` or `.env.local`, and replace the example admin password befo
 ```bash
 npx tsc --noEmit
 npm test -- --run
+npm run test:node
 npm run build
 ```
 
 The existing GitHub Actions workflow runs type checking, tests, and the production build. A push to `main` also publishes the Convex schema when the production secrets are configured.
+
+`npm test` runs the visitor/application Vitest suites. `npm run test:node` also
+runs native Node suites under `scripts/` and `server/`, including nested test
+directories; it skips empty trees and excludes nested `node_modules`.
 
 ## Project layout
 
@@ -65,7 +70,7 @@ src/hooks/       Content, language, search, and accessibility hooks
 
 ## License
 
-Licensed under the [MIT License](LICENSE).
+Licensed under the [GNU General Public License, version 2](LICENSE).
 
 ### Authenticated content writes
 
@@ -78,8 +83,9 @@ Before deploying this change, generate a strong random credential and set the sa
 environment. For local Vite development put it in ignored `.env` together with
 `ADMIN_PASSWORD` and `CONVEX_SELF_HOSTED_URL`; Vite uses the same authenticated API.
 Docker Compose passes `.env`'s credential to the museum service. Set the Convex
-**deployment** variable via `npx convex env set CONVEX_WRITE_SECRET` using its
-interactive prompt (select the target deployment using the existing CLI credentials).
+**deployment** variable in the target Convex Dashboard environment settings.
+The CLI also supports reading the value from stdin; do not put credentials in shell
+arguments or history.
 Setting an environment variable on the backend container alone does not configure
 Convex functions. For production use the target deployment's CLI environment or
 Dashboard environment settings, and the museum host's runtime environment settings.

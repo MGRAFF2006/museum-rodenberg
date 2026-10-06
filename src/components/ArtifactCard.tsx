@@ -13,9 +13,14 @@ interface ArtifactCardProps {
 export const ArtifactCard: React.FC<ArtifactCardProps> = ({ artifact, onClick, featured = false }) => {
   const { t } = useLanguage();
   return (
-    <div
-      onClick={() => onClick(artifact.id)}
-      className={`${featured ? 'card-featured' : 'card-interactive'} overflow-hidden group h-full flex flex-col`}
+    <a
+      href={`/artifact/${encodeURIComponent(artifact.id)}`}
+      onClick={event => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        onClick(artifact.id);
+      }}
+      className={`${featured ? 'card-featured' : 'card-interactive'} overflow-hidden group h-full flex flex-col text-left`}
     >
       {/* Image Container */}
       <div className="relative w-full h-44 md:h-52 overflow-hidden bg-neutral-100 flex items-center justify-center">
@@ -99,6 +104,6 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({ artifact, onClick, f
           </div>
         )}
       </div>
-    </div>
+    </a>
   );
 };
