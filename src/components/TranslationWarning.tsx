@@ -7,9 +7,8 @@ interface TranslationWarningProps {
 }
 
 export const TranslationWarning: React.FC<TranslationWarningProps> = ({ isMissing }) => {
-  if (!isMissing) return null;
-
   const { t } = useLanguage();
+  if (!isMissing) return null;
 
   return (
     <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
