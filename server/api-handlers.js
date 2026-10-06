@@ -15,7 +15,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import busboy from 'busboy';
 import { randomUUID } from 'node:crypto';
 
 function isWithinDirectory(directory, candidate) {
@@ -52,44 +51,7 @@ function resolveUploadPath(rootDir, uploadPath) {
  * Asset metadata is NOT written to any JSON file — the client saves
  * it to Convex after the upload completes.
  */
-export function uploadMedia(rootDir, headers, reqStream) {
-  return new Promise((resolve, reject) => {
-    const bb = busboy({ headers });
-    const urls = [];
-    const assets = [];
-    const uploadDir = path.resolve(rootDir, 'public/uploads');
-
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    bb.on('file', (_name, file, info) => {
-      const { filename, mimeType } = info;
-      const safeFilename = filename.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
-      const id = safeFilename.replace(/\.[^/.]+$/, '');
-      const saveTo = path.join(uploadDir, safeFilename);
-      const url = `/uploads/${safeFilename}`;
-
-      file.pipe(fs.createWriteStream(saveTo));
-      urls.push(url);
-
-      let type = 'other';
-      if (mimeType.startsWith('image/')) type = 'image';
-      else if (mimeType.startsWith('audio/')) type = 'audio';
-      else if (mimeType.startsWith('video/')) type = 'video';
-
-      assets.push({ id, name: filename, alt: filename, url, type });
-    });
-
-    bb.on('finish', () => {
-      resolve({ urls, url: urls[0], assets });
-    });
-
-    bb.on('error', reject);
-
-    reqStream.pipe(bb);
-  });
-}
+export { uploadMedia } from './upload-media.js';
 
 // ── Translation proxy ───────────────────────────────────────────
 
@@ -97,6 +59,11 @@ export async function translate(body, apiUrl, apiKey) {
   const { text, target } = body || {};
   if (typeof text !== 'string' || !text.trim() || typeof target !== 'string' || !['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'].includes(target)) {
     return { status: 400, body: { error: 'Text and target language are required' } };
+  }
+  try {
+    if (!['http:', 'https:'].includes(new URL(apiUrl).protocol)) throw new Error('Invalid protocol');
+  } catch {
+    return { status: 503, body: { error: 'Translation service is not configured', retryable: false } };
   }
 
   // Protect Markdown URLs and images
@@ -107,7 +74,9 @@ export async function translate(body, apiUrl, apiKey) {
     return `${bracketed}(__${tokenNamespace}_${placeholders.length - 1}__)`;
   });
 
-  const response = await fetch(apiUrl, {
+  const deadline = AbortSignal.timeout(30_000);
+  let response;
+  try { response = await fetch(apiUrl, {
     method: 'POST',
     body: JSON.stringify({
       q: protectedText,
@@ -117,17 +86,28 @@ export async function translate(body, apiUrl, apiKey) {
       api_key: apiKey,
     }),
     headers: { 'Content-Type': 'application/json' },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(`LibreTranslate Error: ${response.status} ${JSON.stringify(errorData)}`);
+    signal: deadline,
+  }); } catch {
+    return { status: deadline.aborted ? 504 : 502, body: { error: 'Translation service is unavailable', retryable: true } };
   }
 
-  const data = await response.json();
-  let translatedText = data.translatedText;
+  if (!response.ok) {
+    const retryable = [408, 429].includes(response.status) || response.status >= 500;
+    await response.body?.cancel().catch(() => console.warn('Could not close rejected translation response'));
+    // Provider authentication failures must not look like an expired editor login.
+    return { status: response.status === 429 ? 429 : 502, body: { error: 'Translation service rejected the request', retryable } };
+  }
 
-  if (typeof translatedText !== 'string') throw new Error('Invalid translation response');
+  let data;
+  try { data = await response.json(); }
+  catch (error) {
+    return { status: deadline.aborted ? 504 : 502, body: { error: 'Invalid translation response', retryable: deadline.aborted || !(error instanceof SyntaxError) } };
+  }
+  let translatedText = data?.translatedText;
+
+  if (typeof translatedText !== 'string' || !translatedText.trim()) {
+    return { status: 502, body: { error: 'Invalid translation response', retryable: false } };
+  }
 
   // A request-specific namespace keeps literal ASSETURL/URL prose untouched.
   // Restore in one callback to preserve literal '$' characters and multi-digit indices.
@@ -153,7 +133,12 @@ export function validateAssets(rootDir, body) {
     if (!p || typeof p !== 'string') return false;
     if (!p.startsWith('/uploads/')) return false;
     const fullPath = resolveUploadPath(rootDir, p);
-    return !fullPath || !fs.existsSync(fullPath);
+    if (!fullPath) return true;
+    try { return !fs.statSync(fullPath).isFile(); }
+    catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return true;
+      throw error;
+    }
   });
 
   return { status: 200, body: { invalid } };
@@ -186,10 +171,14 @@ export function deleteImage(rootDir, imagePath) {
     return { status: 400, body: { error: 'Invalid path' } };
   }
 
-  if (!fs.existsSync(fullPath)) {
-    return { status: 404, body: { error: 'File not found' } };
+  try {
+    if (!fs.statSync(fullPath).isFile()) {
+      return { status: 400, body: { error: 'Path must identify a media file' } };
+    }
+    fs.unlinkSync(fullPath);
+  } catch (error) {
+    // Retrying after a file-first deletion must still allow metadata cleanup.
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
   }
-
-  fs.unlinkSync(fullPath);
   return { status: 200, body: { success: true } };
 }
