@@ -5,17 +5,18 @@ import { DetailedContentModal } from './DetailedContentModal';
 import { TextToSpeechButton } from './TextToSpeechButton';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useLanguage } from '../hooks/useLanguage';
-import { Artifact, MediaItem, RequiredMedia } from '../types';
+import { Artifact } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { TranslationWarning } from './TranslationWarning';
 import { stripMarkdown } from '../utils/markdownUtils';
+import { getMediaGallery } from '../utils/mediaGallery';
 
 interface ArtifactDetailProps {
   artifact: Artifact;
   onBack: () => void;
   exhibitionTitle?: string;
   onDetailedContentClick?: (type: 'artifact' | 'exhibition', id: string) => void;
-  onMediaViewerClick?: (images: string[], videos: MediaItem[], audio: MediaItem[]) => void;
+  onMediaViewerClick?: (type?: 'image' | 'video' | 'audio', url?: string) => void;
 }
 
 export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
@@ -36,21 +37,19 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
     return artifact.enabledAttributes.includes(attr);
   };
 
-  const hasMedia = isEnabled('media') && artifact.media && (
-    (artifact.media.images && artifact.media.images.length > 0) ||
-    (artifact.media.videos && artifact.media.videos.length > 0) ||
-    (artifact.media.audio && artifact.media.audio.length > 0)
+  const gallery = getMediaGallery(
+    isEnabled('media') ? artifact.media : undefined,
+    isEnabled('description') ? artifact.description : undefined,
+    isEnabled('significance') ? artifact.significance : undefined,
+    isEnabled('detailedContent') ? artifact.detailedContent?.[currentLanguage] || artifact.detailedContent?.de : undefined
   );
+  const hasMedia = isEnabled('media') && (gallery.images.length > 0 || gallery.videos.length > 0 || gallery.audio.length > 0);
 
   const hasDetailedContent = isEnabled('detailedContent') && artifact.detailedContent && artifact.detailedContent[currentLanguage];
 
   const handleMediaClick = (type: 'image' | 'video' | 'audio', url: string) => {
     if (isMobile && onMediaViewerClick) {
-      onMediaViewerClick(
-        artifact.media?.images || [],
-        artifact.media?.videos || [],
-        artifact.media?.audio || []
-      );
+      onMediaViewerClick(type, url);
     } else {
       setMediaViewerInitialItem({ type, url });
       setIsMediaViewerOpen(true);
@@ -187,11 +186,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                   <button
                     onClick={() => {
                       if (isMobile && onMediaViewerClick) {
-                        onMediaViewerClick(
-                          artifact.media!.images || [],
-                          artifact.media!.videos || [],
-                          artifact.media!.audio || []
-                        );
+                        onMediaViewerClick();
                       } else {
                         setIsMediaViewerOpen(true);
                       }
@@ -204,7 +199,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {/* Images */}
-                  {artifact.media!.images && artifact.media!.images.slice(0, 8).map((image, index) => (
+                  {gallery.images && gallery.images.slice(0, 8).map((image, index) => (
                     <div
                       key={`img-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-neutral-100 group cursor-pointer border border-neutral-200"
@@ -220,7 +215,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                   ))}
                   
                   {/* Videos Preview */}
-                  {artifact.media!.videos && artifact.media!.videos.slice(0, 4).map((video, index) => (
+                  {gallery.videos && gallery.videos.slice(0, 4).map((video, index) => (
                     <div
                       key={`vid-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-neutral-900 group cursor-pointer flex flex-col items-center justify-center relative border border-neutral-200"
@@ -237,7 +232,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                   ))}
 
                   {/* Audio Preview */}
-                  {artifact.media!.audio && artifact.media!.audio.slice(0, 4).map((audio, index) => (
+                  {gallery.audio && gallery.audio.slice(0, 4).map((audio, index) => (
                     <div
                       key={`aud-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-primary-50 group cursor-pointer flex flex-col items-center justify-center border border-primary-100"
@@ -354,11 +349,11 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
         </div>
       </div>
       
-      {hasMedia && !isMobile && (
+      {!isMobile && (
         <MediaViewer
-          images={artifact.media!.images || []}
-          videos={artifact.media!.videos || []}
-          audio={artifact.media!.audio || []}
+          images={gallery.images}
+          videos={gallery.videos}
+          audio={gallery.audio}
           isOpen={isMediaViewerOpen}
           onClose={() => {
             setIsMediaViewerOpen(false);
@@ -374,7 +369,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
           onClose={() => setIsDetailedContentOpen(false)}
           title={artifact.title}
           content={artifact.detailedContent![currentLanguage] || ''}
-          media={artifact.media as RequiredMedia}
+          media={gallery}
         />
       )}
     </div>

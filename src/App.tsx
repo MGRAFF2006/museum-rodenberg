@@ -3,6 +3,11 @@ import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunctio
 import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
 import { MobileMenu } from './components/MobileMenu';
+import { useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
+import { convexArtifactToRaw, convexExhibitionToRaw } from './utils/convexConverters';
+import { getTranslatedContent } from './utils/translationUtils';
+import { getMediaGallery } from './utils/mediaGallery';
 
 // Lazy-loaded detail pages (pulls in markdown-vendor chunk only when needed)
 const ExhibitionDetail = lazy(() => import('./components/ExhibitionDetail').then(m => ({ default: m.ExhibitionDetail })));
@@ -25,6 +30,15 @@ const LazyFallback = () => (
     <div className="inline-block h-8 w-8 border-4 border-primary-200 border-t-primary-700 rounded-full animate-spin" />
   </div>
 );
+
+const mediaTabs = { image: 'images', video: 'videos', audio: 'audio' } as const;
+
+function mediaViewerUrl(type: 'exhibition' | 'artifact', id: string, mediaType?: keyof typeof mediaTabs, url?: string) {
+  const params = new URLSearchParams();
+  if (mediaType) params.set('tab', mediaTabs[mediaType]);
+  if (url) params.set('url', url);
+  return `/${type}/${id}/media${params.size ? `?${params}` : ''}`;
+}
 
 function App() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -181,7 +195,6 @@ function App() {
           element={
             <MediaViewerRoute
               type="exhibition"
-              getExhibitionById={getExhibitionById}
               navigate={navigate}
             />
           }
@@ -192,7 +205,6 @@ function App() {
           element={
             <MediaViewerRoute
               type="artifact"
-              getArtifactById={getArtifactById}
               navigate={navigate}
             />
           }
@@ -251,7 +263,7 @@ function ExhibitionRoute({ getExhibitionById, getArtifactsByExhibition, navigate
       onBack={() => navigate('/')}
       onArtifactClick={(artId) => navigate(`/artifact/${artId}`)}
       onDetailedContentClick={() => navigate(`/exhibition/${id}/details`)}
-      onMediaViewerClick={() => navigate(`/exhibition/${id}/media`)}
+      onMediaViewerClick={(mediaType, url) => navigate(mediaViewerUrl('exhibition', id, mediaType, url))}
     />
   );
 }
@@ -277,7 +289,7 @@ function ArtifactRoute({ getArtifactById, getExhibitionById, navigate }: Artifac
       onBack={() => artifact.exhibition ? navigate(`/exhibition/${artifact.exhibition}`) : navigate('/')}
       exhibitionTitle={exhibition?.title}
       onDetailedContentClick={() => navigate(`/artifact/${id}/details`)}
-      onMediaViewerClick={() => navigate(`/artifact/${id}/media`)}
+      onMediaViewerClick={(mediaType, url) => navigate(mediaViewerUrl('artifact', id, mediaType, url))}
     />
   );
 }
@@ -306,8 +318,7 @@ function DetailedContentRoute({ type, getExhibitionById, getArtifactById, naviga
       content={item.detailedContent[currentLanguage] || item.detailedContent['de'] || ''}
       onBack={() => navigate(`/${type}/${id}`)}
       onMediaClick={(mediaType, url) => {
-        const tabMap = { 'image': 'images', 'video': 'videos', 'audio': 'audio' };
-        navigate(`/${type}/${id}/media?tab=${tabMap[mediaType]}&url=${encodeURIComponent(url)}`);
+        navigate(mediaViewerUrl(type, id, mediaType, url));
       }}
     />
   );
@@ -315,30 +326,42 @@ function DetailedContentRoute({ type, getExhibitionById, getArtifactById, naviga
 
 interface MediaViewerRouteProps {
   type: 'exhibition' | 'artifact';
-  getExhibitionById?: (id: string) => Exhibition | undefined;
-  getArtifactById?: (id: string) => Artifact | undefined;
   navigate: NavigateFunction;
 }
 
-function MediaViewerRoute({ type, getExhibitionById, getArtifactById, navigate }: MediaViewerRouteProps) {
+function MediaViewerRoute({ type, navigate }: MediaViewerRouteProps) {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') as 'images' | 'videos' | 'audio' | undefined;
+  const requestedTab = searchParams.get('tab');
+  const initialTab = requestedTab === 'images' || requestedTab === 'videos' || requestedTab === 'audio'
+    ? requestedTab : undefined;
   const initialUrl = searchParams.get('url');
+  const { currentLanguage } = useLanguage();
+  const { resolveAsset } = useContentData();
+  // Full content is needed to include media embedded only in detailed Markdown.
+  const exhibition = useQuery(api.exhibitions.getBySlug, type === 'exhibition' && id ? { slug: id } : 'skip');
+  const artifact = useQuery(api.artifacts.getBySlug, type === 'artifact' && id ? { slug: id } : 'skip');
+  const raw = type === 'exhibition'
+    ? exhibition && convexExhibitionToRaw(exhibition)
+    : artifact && convexArtifactToRaw(artifact);
+  const item = raw ? getTranslatedContent(raw, currentLanguage, 'de', resolveAsset) as Exhibition | Artifact : raw;
   
   if (!id) return <div>Media not found</div>;
-  
-  const item = type === 'exhibition' 
-    ? getExhibitionById?.(id)
-    : getArtifactById?.(id);
-    
-  if (!item || !item.media) return <div>Media not found</div>;
+  if (item === undefined) return <LazyFallback />;
+  if (!item) return <div>Media not found</div>;
+  const isEnabled = (attribute: string) => !item.enabledAttributes || item.enabledAttributes.includes(attribute);
+  const gallery = getMediaGallery(
+    isEnabled('media') ? item.media : undefined,
+    isEnabled('description') ? item.description : undefined,
+    isEnabled('significance') ? item.significance as string | undefined : undefined,
+    isEnabled('detailedContent') ? item.detailedContent?.[currentLanguage] || item.detailedContent?.de : undefined
+  );
   
   return (
     <MediaViewerPage
-      images={item.media.images || []}
-      videos={item.media.videos || []}
-      audio={item.media.audio || []}
+      images={gallery.images}
+      videos={gallery.videos}
+      audio={gallery.audio}
       onBack={() => navigate(`/${type}/${id}`)}
       initialTab={initialTab}
       initialUrl={initialUrl}

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X, Image as ImageIcon, Video, Music } from 'lucide-react';
 import { useLanguage } from '../hooks/useLanguage';
 import { AudioPlayer } from './AudioPlayer';
+import { useMediaSelection } from '../hooks/useMediaSelection';
 
 interface MediaItem {
   url: string;
@@ -27,23 +28,17 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
   initialItem
 }) => {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'images' | 'videos' | 'audio'>('images');
-  const [selectedImage, setSelectedImage] = useState(0);
+  const tabMap = { image: 'images', video: 'videos', audio: 'audio' } as const;
+  const { activeTab, setActiveTab, selectedImage, selectImage } = useMediaSelection(
+    { images, videos, audio },
+    initialItem ? tabMap[initialItem.type] : undefined,
+    initialItem?.url
+  );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
     if (isOpen && initialItem) {
-      if (initialItem.type === 'image') {
-        setActiveTab('images');
-        const index = images.indexOf(initialItem.url);
-        if (index !== -1) setSelectedImage(index);
-      } else if (initialItem.type === 'video') {
-        setActiveTab('videos');
-      } else if (initialItem.type === 'audio') {
-        setActiveTab('audio');
-      }
-
       // Small delay to allow tab switching and rendering before scrolling
       setTimeout(() => {
         const ref = itemRefs.current.get(initialItem.url);
@@ -142,7 +137,7 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
                     {images.map((image, index) => (
                       <button
                         key={index}
-                        onClick={() => setSelectedImage(index)}
+                        onClick={() => selectImage(index)}
                         className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
                           selectedImage === index ? 'border-primary-500 ring-2 ring-primary-200' : 'border-neutral-200 hover:border-neutral-300 hover:scale-105'
                         }`}
