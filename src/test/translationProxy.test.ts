@@ -21,8 +21,13 @@ it('preserves paragraph and prose separators around links and images', async () 
   expect((await translate({ text, target: 'en' }, 'http://translator.test', undefined)).body).toEqual({ translatedText: text });
 });
 it('recovers spaced, case-modified placeholder text without disturbing destinations', async () => {
-  translator(text => text.replace('ASSETURL0', 'asset URL 0'));
+  translator(text => text.replace(/__([a-f0-9]+)_0__/g, (_match, namespace) => `__ ${namespace.toUpperCase()} _ 0 __`));
   expect((await translate({ text: '[link](audio:bell)', target: 'en' }, 'http://translator.test', undefined)).body).toEqual({ translatedText: '[link](audio:bell)' });
+});
+it('preserves literal placeholder-like prose while translating links', async () => {
+  translator();
+  const text = 'ASSETURL0 and URL 0 describe labels. __URL_0__ is quoted. [link](https://example.org/original)';
+  expect((await translate({ text, target: 'en' }, 'http://translator.test', undefined)).body).toEqual({ translatedText: text });
 });
 it('rejects invalid types and languages before a translator request', async () => {
   const fetcher = translator();
