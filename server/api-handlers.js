@@ -59,6 +59,11 @@ export async function translate(body, apiUrl, apiKey) {
   if (typeof text !== 'string' || !text.trim() || typeof target !== 'string' || !['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'].includes(target)) {
     return { status: 400, body: { error: 'Text and target language are required' } };
   }
+  try {
+    if (!['http:', 'https:'].includes(new URL(apiUrl).protocol)) throw new Error('Invalid protocol');
+  } catch {
+    return { status: 503, body: { error: 'Translation service is not configured', retryable: false } };
+  }
 
   // Protect Markdown URLs and images
   const placeholders = [];
@@ -67,7 +72,9 @@ export async function translate(body, apiUrl, apiKey) {
     return `${bracketed}(ASSETURL${placeholders.length - 1})`;
   });
 
-  const response = await fetch(apiUrl, {
+  const deadline = AbortSignal.timeout(30_000);
+  let response;
+  try { response = await fetch(apiUrl, {
     method: 'POST',
     body: JSON.stringify({
       q: protectedText,
@@ -77,18 +84,28 @@ export async function translate(body, apiUrl, apiKey) {
       api_key: apiKey,
     }),
     headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(`LibreTranslate Error: ${response.status} ${JSON.stringify(errorData)}`);
+    signal: deadline,
+  }); } catch {
+    return { status: deadline.aborted ? 504 : 502, body: { error: 'Translation service is unavailable', retryable: true } };
   }
 
-  const data = await response.json();
-  let translatedText = data.translatedText;
+  if (!response.ok) {
+    const retryable = [408, 429].includes(response.status) || response.status >= 500;
+    await response.body?.cancel().catch(() => console.warn('Could not close rejected translation response'));
+    // Provider authentication failures must not look like an expired editor login.
+    return { status: response.status === 429 ? 429 : 502, body: { error: 'Translation service rejected the request', retryable } };
+  }
 
-  if (typeof translatedText !== 'string') throw new Error('Invalid translation response');
+  let data;
+  try { data = await response.json(); }
+  catch (error) {
+    return { status: deadline.aborted ? 504 : 502, body: { error: 'Invalid translation response', retryable: deadline.aborted || !(error instanceof SyntaxError) } };
+  }
+  let translatedText = data?.translatedText;
+
+  if (typeof translatedText !== 'string' || !translatedText.trim()) {
+    return { status: 502, body: { error: 'Invalid translation response', retryable: false } };
+  }
 
   // One indexed callback avoids prefix collisions (1 versus 10) and replacement
   // string interpretation of literal '$' characters in protected destinations.
