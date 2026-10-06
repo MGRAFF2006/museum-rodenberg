@@ -72,7 +72,6 @@ if (CONVEX_BACKEND_URL) {
 }
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
 
 app.use('/api', createAdminApi(ROOT_DIR, { ...process.env, CONVEX_BACKEND_URL }));
 
