@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunction } from 'react-router-dom';
+import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunction, useLocation } from 'react-router-dom';
 import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
 import { MobileMenu } from './components/MobileMenu';
@@ -33,6 +33,7 @@ function App() {
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const {
     exhibitions,
@@ -62,7 +63,11 @@ function App() {
   };
 
   const handleSearchChange = (query: string) => {
-    navigate(query.trim() ? `/search?${new URLSearchParams({ q: query })}` : '/', { replace: true });
+    if (query.trim()) {
+      navigate(`/search?${new URLSearchParams({ q: query })}`, { replace: location.pathname === '/search' });
+    } else if (location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
   };
 
   return (
