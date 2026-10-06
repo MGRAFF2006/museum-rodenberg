@@ -172,11 +172,13 @@ async function syncExhibitionMembership(
       if (!listed) {
         await ctx.db.patch(exhibition._id, {
           artifactSlugs: [...exhibition.artifactSlugs, slug],
+          revision: (exhibition.revision ?? 0) + 1,
         });
       }
     } else if (listed) {
       await ctx.db.patch(exhibition._id, {
         artifactSlugs: exhibition.artifactSlugs.filter((s) => s !== slug),
+        revision: (exhibition.revision ?? 0) + 1,
       });
     }
   }

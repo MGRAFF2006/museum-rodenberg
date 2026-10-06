@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as artifacts from '../../convex/artifacts';
+import * as exhibitionOperations from '../../convex/exhibitions';
+import { handler as actualHandler } from './helpers/convexMemory';
 
 const credential = 'fixture-content-secret';
 const handler = (mutation: typeof artifacts.save | typeof artifacts.remove) =>
@@ -52,7 +54,7 @@ function fixture() {
   return { ctx: { db }, rows, exhibitions };
 }
 
-const saveArgs = { serverSecret: credential, slug: 'item', image: '', qrCode: 'ITEM',
+const saveArgs = { serverSecret: credential, slug: 'item', image: '', qrCode: 'ITEM', expectedRevision: 0, expectedDocumentId: 'art-item',
   translations: [{ language: 'de', title: 'Objekt', description: '' }], mediaItems: [] };
 beforeEach(() => vi.stubEnv('CONVEX_WRITE_SECRET', credential));
 afterEach(() => vi.unstubAllEnvs());
@@ -61,7 +63,7 @@ describe('artifact exhibition membership', () => {
   it('moves an artifact, removes every stale listing and appends once to its new parent', async () => {
     const { ctx, rows, exhibitions } = fixture();
     await handler(artifacts.save)(ctx, { ...saveArgs, exhibitionSlug: 'b' });
-    await handler(artifacts.save)(ctx, { ...saveArgs, exhibitionSlug: 'b' });
+    await handler(artifacts.save)(ctx, { ...saveArgs, expectedRevision: 1, exhibitionSlug: 'b' });
     expect(rows.artifacts[0].exhibitionSlug).toBe('b');
     expect(exhibitions.map(ex => ex.artifactSlugs)).toEqual([['before', 'after'], ['other', 'item'], []]);
     const visitorMembers = exhibitions.map(ex => rows.artifacts.filter(art =>
@@ -79,7 +81,7 @@ describe('artifact exhibition membership', () => {
 
   it('adds a newly created artifact to its parent without disturbing other entries', async () => {
     const { ctx, rows, exhibitions } = fixture();
-    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'created', exhibitionSlug: 'b' });
+    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'created', expectedRevision: undefined, expectedDocumentId: undefined, exhibitionSlug: 'b' });
     expect(rows.artifacts.some(art => art.slug === 'created' && art.exhibitionSlug === 'b')).toBe(true);
     expect(exhibitions[1].artifactSlugs).toEqual(['other', 'created']);
   });
@@ -113,7 +115,7 @@ describe('artifact exhibition membership', () => {
 
   it('still permits migration-style creation before the target exhibition exists', async () => {
     const { ctx, rows } = fixture();
-    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'future-child', exhibitionSlug: 'future-exhibition' });
+    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'future-child', expectedRevision: undefined, expectedDocumentId: undefined, exhibitionSlug: 'future-exhibition' });
     expect(rows.artifacts.some(art => art.slug === 'future-child' && art.exhibitionSlug === 'future-exhibition')).toBe(true);
   });
 
@@ -125,4 +127,27 @@ describe('artifact exhibition membership', () => {
     expect(JSON.stringify(rows)).toBe(before);
     expect(exhibitions[0].artifactSlugs).toContain('item');
   });
+
+  it('invalidates old exhibition drafts after membership changes but avoids bumps for repeated moves', async () => {
+    const { ctx, rows, exhibitions } = fixture();
+    const oldDraft = { serverSecret: credential, slug: 'a', qrCode: 'A', image: '', isFeatured: false,
+      artifactSlugs: [...exhibitions[0].artifactSlugs], expectedRevision: 0, expectedDocumentId: 'ex-a',
+      translations: [{ language: 'de', title: 'Ausstellung', description: '' }], mediaItems: [] };
+    await handler(artifacts.save)(ctx, { ...saveArgs, exhibitionSlug: 'b' });
+    expect(exhibitions.map(ex => (ex as Record<string, unknown>).revision)).toEqual([1, 1, 1]);
+    const before = JSON.stringify(rows);
+    await expect(actualHandler(exhibitionOperations.save)(ctx, oldDraft)).rejects.toMatchObject({ data: { code: 'STALE_CONTENT' } });
+    expect(JSON.stringify(rows)).toBe(before);
+    await handler(artifacts.save)(ctx, { ...saveArgs, expectedRevision: 1, exhibitionSlug: 'b' });
+    expect(exhibitions.map(ex => (ex as Record<string, unknown>).revision)).toEqual([1, 1, 1]);
+  });
+
+  it('bumps only changed memberships on deletion and leaves untouched lists unversioned', async () => {
+    const { ctx, exhibitions } = fixture();
+    await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item' });
+    expect(exhibitions.map(ex => (ex as Record<string, unknown>).revision)).toEqual([1, undefined, 1]);
+    await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item' });
+    expect(exhibitions.map(ex => (ex as Record<string, unknown>).revision)).toEqual([1, undefined, 1]);
+  });
+
 });
