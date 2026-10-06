@@ -216,6 +216,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           await saveExhibition({
             slug: item.id,
+            expectedRevision: original.revision ?? 0,
+            expectedDocumentId: original.documentId,
             qrCode: (original.qrCode as string) || item.id,
             image: (original.image as string) || '',
             dateRange: (original.dateRange as string) || undefined,
@@ -265,6 +267,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           await saveArtifact({
             slug: item.id,
+            expectedRevision: original.revision ?? 0,
+            expectedDocumentId: original.documentId,
             qrCode: (original.qrCode as string) || item.id,
             exhibitionSlug: (original.exhibition as string) || undefined,
             image: (original.image as string) || '',

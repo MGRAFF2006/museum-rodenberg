@@ -5,6 +5,7 @@ export default defineSchema({
   // ── Exhibitions ─────────────────────────────────────────────────
   exhibitions: defineTable({
     slug: v.string(), // URL-friendly ID (was the JSON object key)
+    revision: v.optional(v.number()),
     qrCode: v.string(),
     image: v.string(), // asset ID reference
     dateRange: v.optional(v.string()),
@@ -36,6 +37,7 @@ export default defineSchema({
   // ── Artifacts ───────────────────────────────────────────────────
   artifacts: defineTable({
     slug: v.string(), // URL-friendly ID (was the JSON object key)
+    revision: v.optional(v.number()),
     qrCode: v.string(),
     exhibitionSlug: v.optional(v.string()), // link to exhibition by slug
     image: v.string(), // asset ID reference
