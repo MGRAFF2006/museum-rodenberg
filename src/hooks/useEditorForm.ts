@@ -406,9 +406,11 @@ export function useEditorForm(config: EditorConfig) {
       }> = [];
       let sortIdx = 0;
       for (const img of formData.media?.images || []) {
+        if (!img.trim()) continue;
         mediaItems.push({ mediaType: 'image', url: img, sortOrder: sortIdx++ });
       }
       for (const vid of formData.media?.videos || []) {
+        if (!vid.url.trim()) continue;
         mediaItems.push({
           mediaType: 'video',
           url: vid.url,
@@ -418,6 +420,7 @@ export function useEditorForm(config: EditorConfig) {
         });
       }
       for (const aud of formData.media?.audio || []) {
+        if (!aud.url.trim()) continue;
         mediaItems.push({
           mediaType: 'audio',
           url: aud.url,
