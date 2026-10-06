@@ -92,6 +92,13 @@ describe('artifact exhibition membership', () => {
     expect(exhibitions.map(ex => ex.artifactSlugs)).toEqual(before);
   });
 
+  it('clears every old listing when an explicit empty parent detaches the artifact', async () => {
+    const { ctx, exhibitions } = fixture();
+    const serialized = JSON.parse(JSON.stringify({ ...saveArgs, exhibitionSlug: '' }));
+    await handler(artifacts.save)(ctx, serialized);
+    expect(exhibitions.map(ex => ex.artifactSlugs)).toEqual([['before', 'after'], ['other'], []]);
+  });
+
   it('deletes translations, media and all memberships, including after an already missing artifact', async () => {
     const { ctx, rows, exhibitions } = fixture();
     await handler(artifacts.remove)(ctx, { serverSecret: credential, slug: 'item' });

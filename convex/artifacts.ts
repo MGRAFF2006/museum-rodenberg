@@ -232,7 +232,7 @@ export const save = mutation({
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
 
-    const exhibitionChanged = args.exhibitionSlug &&
+    const exhibitionChanged = args.exhibitionSlug !== undefined &&
       args.exhibitionSlug !== existing?.exhibitionSlug;
     let artifactId;
     if (existing) {
@@ -243,7 +243,7 @@ export const save = mutation({
     }
 
     if (exhibitionChanged) {
-      await syncExhibitionMembership(ctx, args.slug, args.exhibitionSlug);
+      await syncExhibitionMembership(ctx, args.slug, args.exhibitionSlug || undefined);
     }
 
     // Upsert translations
