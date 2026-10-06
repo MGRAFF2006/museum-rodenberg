@@ -367,6 +367,9 @@ its normal merge. Stacked PRs still need target-eligible CI and integration chec
   production login and translation handlers. Four native suites pass 47 tests:
   `node --test scripts/__tests__/{compose-isolation,production-runtime,push-convex,backup-convex}.test.mjs`.
   These are selected regressions, not a complete device or production validation.
+- The combined production Vite/PWA build passed with a synthetic loopback
+  Convex URL (`museum-feedback-build` finished with exit 0). No server credential
+  or production backend was used; generated build files remain ignored.
 - Assembly conflict resolutions preserve all QR/audio/materials translation keys,
   explicit empty-string metadata clearing with normalized arrays, both language
   snapshot and QR error imports, and the actionable seeding error with no unused
