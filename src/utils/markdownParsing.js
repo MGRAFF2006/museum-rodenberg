@@ -75,7 +75,8 @@ export function resolveMarkdownAssetReferences(content, resolveAsset) {
       patches.push({ ...node.data.destination, replacement: resolved });
     }
     if ((node.type === 'image' || node.type === 'imageReference') && !node.alt && content.slice(node.position.start.offset, node.position.start.offset + 3) === '![]') {
-      patches.push({ start: node.position.start.offset + 2, end: node.position.start.offset + 2, replacement: asset.alt.replace(/[\\\[\]]/g, '\\$&') });
+      const alt = asset.alt.replace(/[\\\[\]]/g, '\\$&').replace(/&/g, '&amp;').replace(/\r/g, '&#13;').replace(/\n/g, '&#10;');
+      patches.push({ start: node.position.start.offset + 2, end: node.position.start.offset + 2, replacement: alt });
     }
   }
   return patchSource(content, patches);

@@ -73,3 +73,10 @@ it('resolves description and detailed content through the application converter'
 it('does not leave parenthetical URL fragments in narrated plain text', () => {
   expect(stripMarkdown('See ![Photo](/a(1).jpg) and [caption](https://example.com/page(1)).')).toBe('See Photo and caption.');
 });
+
+it.each(['a &copy; b', 'a\n\nb', 'a\r\nb'])('preserves literal metadata caption %j in an image node', (alt) => {
+  const resolved = resolveMarkdownAssetReferences('![](asset)', id => id === 'asset' ? { url: '/photo.png', alt } : undefined);
+  render(<ReactMarkdown>{resolved}</ReactMarkdown>);
+  expect(screen.getByRole('img')).toHaveAttribute('src', '/photo.png');
+  expect(screen.getByRole('img')).toHaveAttribute('alt', alt);
+});
