@@ -200,7 +200,7 @@ const MAX_RETRIES = 5;
 const RETRY_BASE_DELAY_MS = 1000;
 
 class TranslationHttpError extends Error {
-  constructor(readonly status: number, statusText: string) {
+  constructor(readonly status: number, statusText: string, readonly retryable = [408, 429].includes(status) || status >= 500) {
     super(`Translation failed: ${status} ${statusText}`);
   }
 }
@@ -254,16 +254,24 @@ export async function translateText(text: string, targetLang: string, attempt = 
     });
 
     if (!response.ok) {
-      throw new TranslationHttpError(response.status, response.statusText);
+      const data = await response.json().catch(() => ({}));
+      const retryable = data?.retryable !== false && ([408, 429].includes(response.status) || response.status >= 500);
+      throw new TranslationHttpError(response.status, response.statusText, retryable);
     }
 
-    const data = await response.json();
-    const result = data.translatedText;
+    let data;
+    try { data = await response.json(); }
+    catch (error) {
+      if (error instanceof SyntaxError) throw new TranslationHttpError(502, 'Invalid translation response', false);
+      throw error;
+    }
+    const result = data?.translatedText;
+    if (typeof result !== 'string' || !result.trim()) throw new TranslationHttpError(502, 'Invalid translation response', false);
     
     sessionCache.set(cacheKey, result);
     return result;
   } catch (error) {
-    if (error instanceof TranslationHttpError && error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) throw error;
+    if (error instanceof TranslationHttpError && !error.retryable) throw error;
     if (attempt >= MAX_RETRIES) {
       console.error(`Translation failed after ${MAX_RETRIES} retries:`, error);
       throw error;

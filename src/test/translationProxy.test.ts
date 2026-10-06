@@ -35,5 +35,5 @@ it('rejects invalid translator output', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => {
     return new Response(JSON.stringify({ translatedText: null }));
   }));
-  await expect(translate({ text: 'hi', target: 'en' }, 'http://translator.test', undefined)).rejects.toThrow('Invalid translation response');
+  expect(await translate({ text: 'hi', target: 'en' }, 'http://translator.test', undefined)).toEqual({ status: 502, body: { error: 'Invalid translation response', retryable: false } });
 });
