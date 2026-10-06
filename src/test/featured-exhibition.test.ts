@@ -57,7 +57,8 @@ function fixture() {
   return { ctx: { db }, rows, featured, flagged };
 }
 
-const saveArgs = { serverSecret: credential, slug: 'b', image: '', qrCode: 'B', artifactSlugs: [], translations: [], mediaItems: [] };
+const saveArgs = { serverSecret: credential, slug: 'b', image: '', qrCode: 'B', artifactSlugs: [],
+  translations: [{ language: 'de', title: 'Ausstellung', description: '' }], mediaItems: [] };
 beforeEach(() => vi.stubEnv('CONVEX_WRITE_SECRET', credential));
 afterEach(() => vi.unstubAllEnvs());
 
