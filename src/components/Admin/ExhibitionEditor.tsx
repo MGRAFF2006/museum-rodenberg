@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useContentData } from '../../hooks/useContentData';
 import { useLanguage } from '../../hooks/useLanguage';
+import { EntityRecord } from '../../types';
 import { useEditorForm, TranslatableField } from '../../hooks/useEditorForm';
 import { convexExhibitionToRaw, type ConvexExhibition } from '../../utils/convexConverters';
 import { AssetSelector } from './AssetSelector';
@@ -23,13 +23,12 @@ interface ExhibitionEditorProps {
 }
 
 const INITIAL_TRANSLATION_FIELDS = {
-  title: '', subtitle: '', description: '', location: '', curator: '', organizer: '', sponsor: '', dateRange: '',
+  title: '', subtitle: '', description: '',
 };
 
 const DEFAULT_ENABLED = ['title', 'description', 'subtitle', 'dateRange', 'location', 'curator', 'organizer', 'sponsor', 'tags', 'media', 'detailedContent'];
 
 export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }) => {
-  const { exhibitions } = useContentData();
   const { t } = useLanguage();
 
   // Fetch full exhibition data (all languages) directly via getBySlug.
@@ -41,28 +40,16 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
 
   // Convert to legacy raw shape with all translations for the editor form
   const rawExhibition = useMemo(() => {
-    if (!fullExhibition) return undefined;
-    return convexExhibitionToRaw(fullExhibition) as Record<string, unknown>;
+    if (!fullExhibition) return fullExhibition;
+    return convexExhibitionToRaw(fullExhibition) as EntityRecord;
   }, [fullExhibition]);
 
-  const loadEntity = useCallback((entityId: string) => {
-    if (rawExhibition && rawExhibition.id === entityId) return rawExhibition;
-    // Fallback to context data (only has current language, but works for display)
-    const ex = exhibitions.find(e => e.id === entityId);
-    return ex as Record<string, unknown> | undefined;
-  }, [rawExhibition, exhibitions]);
-
-  const getFieldsToTranslate = useCallback((formData: Record<string, any>): TranslatableField[] => {
+  const getFieldsToTranslate = useCallback((formData: EntityRecord): TranslatableField[] => {
     const de = formData.translations?.de || {};
     return [
       { key: 'title', text: de.title || '', type: 'translation', isMarkdown: false },
       { key: 'subtitle', text: de.subtitle || '', type: 'translation', isMarkdown: false },
       { key: 'description', text: de.description || '', type: 'translation', isMarkdown: true },
-      { key: 'location', text: de.location || '', type: 'translation', isMarkdown: false },
-      { key: 'curator', text: de.curator || '', type: 'translation', isMarkdown: false },
-      { key: 'organizer', text: de.organizer || '', type: 'translation', isMarkdown: false },
-      { key: 'sponsor', text: de.sponsor || '', type: 'translation', isMarkdown: false },
-      { key: 'dateRange', text: de.dateRange || '', type: 'translation', isMarkdown: false },
       { key: 'detailed', text: formData.detailedContent?.de || '', type: 'detailed', isMarkdown: true },
     ].filter(f => f.text) as TranslatableField[];
   }, []);
@@ -75,12 +62,12 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
     defaultEnabledAttributes: DEFAULT_ENABLED,
     contentMediaFields: ['description'],
     getFieldsToTranslate,
-    loadEntity: loadEntity,
+    entity: rawExhibition,
     deleteConfirmKey: 'deleteExhibitionConfirm',
   });
 
   const {
-    formData, activeLang, setActiveLang, contentMedia,
+    formData, isReady, isNotFound, activeLang, setActiveLang, contentMedia,
     isTranslating, translationProgress,
     isValidating, validationErrors, setValidationErrors,
     handleChange, handleMediaChange, addMediaItem, removeMediaItem,
@@ -106,9 +93,12 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
         id={id} activeLang={activeLang} isTranslating={isTranslating}
         onBack={() => onBack()} onDelete={handleDelete}
         onTranslate={handleTranslate} onTranslateAll={handleTranslateAll}
-        onSave={handleSave} t={t}
+        onSave={handleSave} isReady={isReady} t={t}
       />
 
+      {!isReady ? (
+        <p role="status" aria-busy={!isNotFound}>{isNotFound ? t('exhibitionNotFound') : t('edit') + '…'}</p>
+      ) : (<>
       <TranslationProgress isTranslating={isTranslating} progress={translationProgress} t={t} />
       <ValidationBanners isValidating={isValidating} validationErrors={validationErrors} setValidationErrors={setValidationErrors} t={t} />
 
@@ -144,6 +134,12 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
               <input type="text" className="input w-full px-3 py-2 border rounded-md" value={formData.location || ''} onChange={(e) => handleChange('location', e.target.value)} />
             </div>
           )}
+          {formData.enabledAttributes?.includes('curator') && (
+            <div>
+              <label htmlFor="exhibition-curator" className="block text-sm font-medium text-neutral-700 mb-1">{t('curator')}</label>
+              <input id="exhibition-curator" type="text" className="input w-full px-3 py-2 border rounded-md" value={formData.curator || ''} onChange={(e) => handleChange('curator', e.target.value)} />
+            </div>
+          )}
           {formData.enabledAttributes?.includes('organizer') && (
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1">{t('organizer')}</label>
@@ -171,21 +167,6 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
             {formData.enabledAttributes?.includes('subtitle') && (
               <TranslatableTextField label={t('museumHeaderSubtitle')} lang={activeLang} value={formData.translations?.[activeLang]?.subtitle || ''} onChange={(v) => handleTranslationChange(activeLang, 'subtitle', v)} />
             )}
-            {formData.enabledAttributes?.includes('dateRange') && (
-              <TranslatableTextField label={t('period')} lang={activeLang} value={formData.translations?.[activeLang]?.dateRange || ''} onChange={(v) => handleTranslationChange(activeLang, 'dateRange', v)} />
-            )}
-            {formData.enabledAttributes?.includes('location') && (
-              <TranslatableTextField label={t('location')} lang={activeLang} value={formData.translations?.[activeLang]?.location || ''} onChange={(v) => handleTranslationChange(activeLang, 'location', v)} />
-            )}
-            {formData.enabledAttributes?.includes('curator') && (
-              <TranslatableTextField label={t('curator')} lang={activeLang} value={formData.translations?.[activeLang]?.curator || ''} onChange={(v) => handleTranslationChange(activeLang, 'curator', v)} />
-            )}
-            {formData.enabledAttributes?.includes('organizer') && (
-              <TranslatableTextField label={t('organizer')} lang={activeLang} value={formData.translations?.[activeLang]?.organizer || ''} onChange={(v) => handleTranslationChange(activeLang, 'organizer', v)} />
-            )}
-            {formData.enabledAttributes?.includes('sponsor') && (
-              <TranslatableTextField label={t('sponsor')} lang={activeLang} value={formData.translations?.[activeLang]?.sponsor || ''} onChange={(v) => handleTranslationChange(activeLang, 'sponsor', v)} />
-            )}
             <TranslatableMarkdownField id={id} label={t('description')} lang={activeLang} value={formData.translations?.[activeLang]?.description || ''} onChange={(v) => handleTranslationChange(activeLang, 'description', v)} editorKeySuffix="description" />
             {formData.enabledAttributes?.includes('detailedContent') && (
               <TranslatableMarkdownField id={id} label={t('details')} lang={activeLang} value={formData.detailedContent?.[activeLang] || ''} onChange={(v) => handleDetailedContentChange(activeLang, v)} editorKeySuffix="detailed" />
@@ -193,6 +174,7 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
           </div>
         </div>
       </div>
+      </>)}
     </div>
   );
 };

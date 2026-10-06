@@ -32,7 +32,8 @@ export default defineSchema({
     detailedContent: v.optional(v.string()), // markdown
   })
     .index("by_exhibition", ["exhibitionId"])
-    .index("by_exhibition_lang", ["exhibitionId", "language"]),
+    .index("by_exhibition_lang", ["exhibitionId", "language"])
+    .index("by_language", ["language"]),
 
   // ── Artifacts ───────────────────────────────────────────────────
   artifacts: defineTable({
@@ -63,7 +64,8 @@ export default defineSchema({
     detailedContent: v.optional(v.string()), // markdown
   })
     .index("by_artifact", ["artifactId"])
-    .index("by_artifact_lang", ["artifactId", "language"]),
+    .index("by_artifact_lang", ["artifactId", "language"])
+    .index("by_language", ["language"]),
 
   // ── Assets (registry for uploaded files; files stay on disk) ───
   assets: defineTable({
