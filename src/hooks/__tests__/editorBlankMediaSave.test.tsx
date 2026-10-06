@@ -3,13 +3,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useEditorForm, type EditorConfig } from '../useEditorForm';
 
 const save = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('convex/react', () => ({ useMutation: () => save }));
 vi.mock('../../utils/auth', () => ({ authFetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
   const request = JSON.parse(String(init?.body));
   expect(['artifacts:save', 'exhibitions:save']).toContain(request.operation);
   const result = await save(request.args);
   return new Response(JSON.stringify({ result }));
 } }));
+
 vi.mock('../useContentData', () => ({ useContentData: () => ({ refreshData: vi.fn() }) }));
 vi.mock('../useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
 vi.mock('../useContentTranslation', () => ({ useContentTranslation: () => ({ isTranslating: false, translationProgress: null, translateFields: vi.fn() }) }));
