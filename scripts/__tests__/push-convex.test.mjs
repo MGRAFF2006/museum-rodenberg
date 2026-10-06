@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { spawn } from 'node:child_process';
 import { pushConfig, pushSchema } from '../push-convex.mjs';
 
 async function fixture(t) {
@@ -72,13 +74,15 @@ for (const prod of [false, true]) for (const existing of [false, true]) for (con
       assert.equal(options.env.CONVEX_SELF_HOSTED_ADMIN_KEY, config.key);
       assert.equal(options.env.CONVEX_DEPLOY_KEY, '');
       assert.equal(options.env.CONVEX_DEPLOYMENT, '');
-      assert.equal(options.stdio, 'ignore');
+      assert.deepEqual(options.stdio, ['ignore', 'pipe', 'pipe']);
       assert.ok(!args.join(' ').includes(config.key));
       const child = new EventEmitter();
-      child.kill = (signal) => { killed = signal; setImmediate(() => child.emit('exit', null, signal)); };
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = (signal) => { killed = signal; setImmediate(() => child.emit('close', null, signal)); };
       setImmediate(() => {
         if (result.startsWith('SIG')) signals.emit(result);
-        else child.emit('exit', result === 'success' ? 0 : 7, null);
+        else child.emit('close', result === 'success' ? 0 : 7, null);
       });
       return child;
     };
@@ -98,3 +102,48 @@ for (const prod of [false, true]) for (const existing of [false, true]) for (con
     assert.equal(signals.listenerCount('SIGTERM'), 0);
   });
 }
+
+for (const [diagnostic, category] of [
+  ['convex/example.ts: error TS2322: secret value', 'backend typecheck failed'],
+  ['HTTP 401 InvalidAdminKey secret value', 'deployment authentication rejected'],
+  ['fetch failed: ECONNREFUSED secret value', 'deployment connection failed'],
+  ['SchemaValidationError secret value', 'deployment schema validation failed'],
+  ['error: unknown option --secret', 'Convex CLI arguments rejected'],
+  ['private backend contents', 'unclassified Convex CLI failure'],
+]) {
+  test(`failure reports ${category} without raw CLI values`, async (t) => {
+    const { root, env } = await fixture(t);
+    const config = await pushConfig([], root, env);
+    const messages = [];
+    await assert.rejects(pushSchema(config, {
+      log: (line) => messages.push(line),
+      spawnProcess: () => {
+        const child = new EventEmitter();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        setImmediate(() => {
+          child.stdout.write('x'.repeat(100000));
+          child.stderr.write(`\n${diagnostic} ${config.key} ${config.url}\n`);
+          child.emit('close', 1, null);
+        });
+        return child;
+      },
+    }), (error) => {
+      assert.ok(error.message.includes(category));
+      assert.ok(!error.message.includes(config.key));
+      assert.ok(!error.message.includes(config.url));
+      assert.ok(!error.message.includes('secret value'));
+      assert.ok(!error.message.includes('private backend contents'));
+      assert.ok(!messages.join('\n').includes(config.key));
+      return true;
+    });
+  });
+}
+
+test('native CLI option rejection is classified without contacting a deployment', async (t) => {
+  const { root, env } = await fixture(t);
+  await assert.rejects(pushSchema(await pushConfig([], root, env), {
+    log: () => {},
+    spawnProcess: (command, args, options) => spawn(command, [args[0], 'deploy', '--museum-invalid-test-option'], options),
+  }), /Convex CLI arguments rejected/);
+});
