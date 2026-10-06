@@ -12,11 +12,21 @@ let record: Artifact & Exhibition;
 vi.mock('../hooks/useLanguage', () => ({ useLanguage: () => ({ currentLanguage: 'de', t: (key: string) => key }) }));
 vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => mobile }));
 vi.mock('../hooks/useContentData', () => ({ useContentData: () => ({
-  exhibitions: [record], artifacts: [record], featuredExhibitionId: record.id,
+  exhibitions: [record], artifacts: [record], featuredExhibitionId: record.id, resolveAsset: () => undefined,
   getExhibitionById: (id: string) => id === record.id ? record : undefined,
   getArtifactById: (id: string) => id === record.id ? record : undefined,
   getArtifactsByExhibition: () => [], findByQRCode: () => ({ type: null, item: null }),
 }) }));
+vi.mock('convex/react', () => ({ useQuery: (_query: unknown, args: unknown) => args === 'skip' ? undefined : {
+  _id: 'record', slug: record.id, qrCode: record.qrCode, image: record.image,
+  translations: [{ language: 'de', title: record.title, description: record.description,
+    detailedContent: record.detailedContent?.de }],
+  media: [
+    ...(record.media?.images ?? []).map((url, sortOrder) => ({ mediaType: 'image', url, sortOrder })),
+    ...(record.media?.videos ?? []).map(item => ({ ...item, mediaType: 'video', sortOrder: 0 })),
+    ...(record.media?.audio ?? []).map(item => ({ ...item, mediaType: 'audio', sortOrder: 0 })),
+  ], enabledAttributes: record.enabledAttributes,
+} }));
 vi.mock('../components/Header', () => ({ Header: () => null }));
 vi.mock('../components/MobileMenu', () => ({ MobileMenu: () => null }));
 vi.mock('../components/AccessibilityPanel', () => ({ AccessibilityPanel: () => null }));
@@ -137,4 +147,27 @@ it('opens Markdown-only media inside desktop detailed content', () => {
   render(<DetailedContentModal isOpen onClose={() => {}} title="Details" content="![Detail image](/detail-only.jpg)" />);
   fireEvent.click(screen.getByAltText('Detail image'));
   expect(screen.getByAltText('images 1')).toHaveAttribute('src', '/detail-only.jpg');
+});
+
+it.each(['artifact', 'exhibition'] as const)('enumerates all article-only media on the %s route without a selection query', async type => {
+  delete record.media;
+  record.description = '![Description picture](/description.jpg)';
+  record.detailedContent = { de: '![Article picture](/article.jpg)' };
+  render(page(`/${type}/object/media`));
+  expect(await screen.findByAltText('image 1')).toHaveAttribute('src', '/description.jpg');
+  fireEvent.click(screen.getByAltText('Thumbnail 2'));
+  expect(screen.getByAltText('image 2')).toHaveAttribute('src', '/article.jpg');
+});
+it('excludes hidden attribute media from the route gallery', async () => {
+  record.enabledAttributes = ['title', 'media'];
+  record.description = '![Hidden picture](/hidden.jpg)';
+  record.detailedContent = { de: '![Hidden article](/hidden-article.jpg)' };
+  render(page('/artifact/object/media'));
+  await screen.findByAltText('image 1');
+  expect(screen.queryByAltText('Thumbnail 3')).not.toBeInTheDocument();
+});
+it('shows all article images in the desktop detailed gallery before selecting an individual embed', () => {
+  render(<DetailedContentModal isOpen onClose={() => {}} title="Details" content="![First](/first.jpg) ![Second](/second.jpg)" />);
+  fireEvent.click(screen.getAllByRole('button', { name: 'media' })[0]);
+  expect(screen.getByAltText('Thumbnail 2')).toHaveAttribute('src', '/second.jpg');
 });

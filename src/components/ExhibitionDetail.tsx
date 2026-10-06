@@ -11,7 +11,7 @@ import { Exhibition, Artifact, MediaItem, RequiredMedia } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { TranslationWarning } from './TranslationWarning';
 import { stripMarkdown } from '../utils/markdownUtils';
-import type { MediaSelection } from '../utils/mediaGallery';
+import { getMediaGallery, type MediaSelection } from '../utils/mediaGallery';
 
 interface ExhibitionDetailProps {
   exhibition: Exhibition;
@@ -44,9 +44,9 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
   const handleMediaClick = (type: 'image' | 'video' | 'audio', url: string) => {
     if (isMobile && onMediaViewerClick) {
       onMediaViewerClick(
-        exhibition.media?.images || [],
-        exhibition.media?.videos || [],
-        exhibition.media?.audio || [],
+        gallery.images || [],
+        gallery.videos || [],
+        gallery.audio || [],
         { type, url }
       );
     } else {
@@ -55,11 +55,12 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
     }
   };
 
-  const hasMedia = isEnabled('media') && exhibition.media && (
-    (exhibition.media.images && exhibition.media.images.length > 0) ||
-    (exhibition.media.videos && exhibition.media.videos.length > 0) ||
-    (exhibition.media.audio && exhibition.media.audio.length > 0)
+  const gallery = getMediaGallery(
+    isEnabled('media') ? exhibition.media : undefined,
+    isEnabled('description') ? exhibition.description : undefined,
+    isEnabled('detailedContent') ? exhibition.detailedContent?.[currentLanguage] || exhibition.detailedContent?.de : undefined
   );
+  const hasMedia = gallery.images.length > 0 || gallery.videos.length > 0 || gallery.audio.length > 0;
 
   const hasDetailedContent = isEnabled('detailedContent') && exhibition.detailedContent && exhibition.detailedContent[currentLanguage];
 
@@ -158,9 +159,9 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
                     onClick={() => {
                       if (isMobile && onMediaViewerClick) {
                         onMediaViewerClick(
-                          exhibition.media!.images || [],
-                          exhibition.media!.videos || [],
-                          exhibition.media!.audio || []
+                          gallery.images || [],
+                          gallery.videos || [],
+                          gallery.audio || []
                         );
                       } else {
                         setIsMediaViewerOpen(true);
@@ -174,7 +175,7 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {/* Images */}
-                  {exhibition.media!.images && exhibition.media!.images.slice(0, 8).map((image, index) => (
+                  {gallery.images && gallery.images.slice(0, 8).map((image, index) => (
                     <div
                       key={`img-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-neutral-100 group cursor-pointer border border-neutral-200"
@@ -190,7 +191,7 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
                   ))}
                   
                   {/* Videos Preview */}
-                  {exhibition.media!.videos && exhibition.media!.videos.slice(0, 4).map((video, index) => (
+                  {gallery.videos && gallery.videos.slice(0, 4).map((video, index) => (
                     <div
                       key={`vid-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-neutral-900 group cursor-pointer flex flex-col items-center justify-center relative border border-neutral-200"
@@ -207,7 +208,7 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
                   ))}
 
                   {/* Audio Preview */}
-                  {exhibition.media!.audio && exhibition.media!.audio.slice(0, 4).map((audio, index) => (
+                  {gallery.audio && gallery.audio.slice(0, 4).map((audio, index) => (
                     <div
                       key={`aud-${index}`}
                       className="aspect-square rounded-md overflow-hidden bg-primary-50 group cursor-pointer flex flex-col items-center justify-center border border-primary-100 relative"
@@ -346,9 +347,9 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
       
       {(hasMedia || mediaViewerInitialItem) && !isMobile && (
         <MediaViewer
-          images={exhibition.media?.images || []}
-          videos={exhibition.media?.videos || []}
-          audio={exhibition.media?.audio || []}
+          images={gallery.images || []}
+          videos={gallery.videos || []}
+          audio={gallery.audio || []}
           isOpen={isMediaViewerOpen}
           onClose={() => {
             setIsMediaViewerOpen(false);
