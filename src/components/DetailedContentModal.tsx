@@ -31,7 +31,7 @@ export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleMediaClick = (type: 'image' | 'video' | 'audio', url: string, title?: string) => {
+  const handleMediaClick = (type: 'image' | 'video' | 'audio', url: string) => {
     setMediaViewerInitialItem({ type, url });
     setIsMediaViewerOpen(true);
   };

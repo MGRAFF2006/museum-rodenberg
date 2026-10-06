@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
+import type { EntityRecord } from '../../types';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useContentData } from '../../hooks/useContentData';
@@ -52,7 +53,7 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
     return ex as Record<string, unknown> | undefined;
   }, [rawExhibition, exhibitions]);
 
-  const getFieldsToTranslate = useCallback((formData: Record<string, any>): TranslatableField[] => {
+  const getFieldsToTranslate = useCallback((formData: EntityRecord): TranslatableField[] => {
     const de = formData.translations?.de || {};
     return [
       { key: 'title', text: de.title || '', type: 'translation', isMarkdown: false },

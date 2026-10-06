@@ -42,7 +42,7 @@ const getSettingsFromLocalStorage = (): TTSSettings => {
   if (saved) {
     try {
       return JSON.parse(saved);
-    } catch (e) {}
+    } catch { return defaultTTSSettings; }
   }
   return defaultTTSSettings;
 };

@@ -83,7 +83,7 @@ export const useAssetValidation = () => {
         setIsValidating(false);
         return false;
       }
-    } catch (error) {
+    } catch {
       setValidationErrors(['Error during asset validation']);
       setIsValidating(false);
       return false;
