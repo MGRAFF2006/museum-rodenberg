@@ -152,5 +152,6 @@
   "heading2": "Überschrift 2",
   "selectAssetPlaceholder": "Medium auswählen...",
   "assetLabel": "Medium",
-  "mediaLabel": "Medien"
+  "mediaLabel": "Medien",
+  "qrCameraUnavailable": "Die Kamera konnte nicht gestartet oder beendet werden. Bitte schließen Sie den Scanner und versuchen Sie es erneut."
 }
