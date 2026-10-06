@@ -13,6 +13,13 @@ const mocks = vi.hoisted(() => ({
   onBack: vi.fn(),
 }));
 vi.mock('convex/react', () => ({ useQuery: mocks.query, useMutation: () => mocks.save }));
+vi.mock('../../utils/auth', () => ({ authFetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+  expect(input).toBe('/api/content-write');
+  const body = JSON.parse(String(init?.body));
+  expect(['artifacts:save', 'exhibitions:save']).toContain(body.operation);
+  const result = await mocks.save(body.args);
+  return new Response(JSON.stringify({ result }));
+} }));
 vi.mock('../useContentData', () => ({ useContentData: () => ({
   refreshData: () => {},
   exhibitions: [{ id: 'first', title: 'Partial visitor exhibition' }],
