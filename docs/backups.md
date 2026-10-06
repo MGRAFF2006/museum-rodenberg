@@ -84,3 +84,33 @@ Native mechanism references:
 [Convex backup/restore](https://docs.convex.dev/database/backup-restore),
 [export](https://docs.convex.dev/database/import-export/export), and
 [ZIP import](https://docs.convex.dev/database/import-export/import).
+
+## Verified isolated recovery drill
+
+On 2026-10-06, the native recovery path passed against two freshly created,
+loopback-only self-hosted backends using Convex CLI 1.32.0 and backend image
+`sha256:1cd901be5d7de21bdba700d69dc7e47e91e2e77d87e70356a16ea04fde22d6e8`.
+Both deployments used the museum schema/functions from main commit `c09904a`
+plus temporary fixture helpers. The source contained ten synthetic records across
+all seven museum tables: one exhibition, one artifact, two translations of each,
+one asset, one media row, and two settings rows. Relationships covered document
+IDs, exhibition/artifact slugs and featured selection. The helpers also uploaded
+one 41-byte native Convex storage file and created two filesystem uploads absent
+from git, including a filename containing spaces and a nested file.
+
+The drill ran the real `createBackup` implementation and its native
+`convex export --path … --include-file-storage` command, verified archive sizes and
+SHA-256 values against the manifest, then used the real default
+`convex import convex.zip` against the empty destination. A complete query of all
+seven restored tables exactly matched the source, including IDs, creation times,
+translations and relationships. The restored native storage file and both
+extracted filesystem uploads matched their original bytes. Source uploads
+remained intact. Both owned backend containers, their anonymous volumes and the
+temporary projects/archives were removed afterwards; existing museum containers,
+volumes, credentials and data were untouched.
+
+This verifies the native snapshot/import and filesystem archive mechanisms with
+synthetic data. It does not verify a production backup, application browsing after
+recovery, interrupted exports, large deployments or enforcement of the required
+cross-system write freeze. The fixture regressions cover reported subprocess
+failure, incomplete archive cleanup and unsafe inherited `TAR_OPTIONS` separately.
