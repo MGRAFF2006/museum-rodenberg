@@ -27,7 +27,7 @@ const LazyFallback = () => (
 );
 
 function App() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('q') || '';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
@@ -62,13 +62,7 @@ function App() {
   };
 
   const handleSearchChange = (query: string) => {
-    if (query.trim()) {
-      setSearchParams({ q: query });
-      navigate(`/search?q=${encodeURIComponent(query)}`);
-    } else {
-      setSearchParams({});
-      navigate('/');
-    }
+    navigate(query.trim() ? `/search?${new URLSearchParams({ q: query })}` : '/', { replace: true });
   };
 
   return (
