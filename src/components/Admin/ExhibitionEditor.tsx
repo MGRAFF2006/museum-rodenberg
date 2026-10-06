@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useContentData } from '../../hooks/useContentData';
 import { useLanguage } from '../../hooks/useLanguage';
+import { EntityRecord } from '../../types';
 import { useEditorForm, TranslatableField } from '../../hooks/useEditorForm';
 import { convexExhibitionToRaw, type ConvexExhibition } from '../../utils/convexConverters';
 import { AssetSelector } from './AssetSelector';
@@ -29,7 +29,6 @@ const INITIAL_TRANSLATION_FIELDS = {
 const DEFAULT_ENABLED = ['title', 'description', 'subtitle', 'dateRange', 'location', 'curator', 'organizer', 'sponsor', 'tags', 'media', 'detailedContent'];
 
 export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }) => {
-  const { exhibitions } = useContentData();
   const { t } = useLanguage();
 
   // Fetch full exhibition data (all languages) directly via getBySlug.
@@ -41,18 +40,11 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
 
   // Convert to legacy raw shape with all translations for the editor form
   const rawExhibition = useMemo(() => {
-    if (!fullExhibition) return undefined;
-    return convexExhibitionToRaw(fullExhibition) as Record<string, unknown>;
+    if (!fullExhibition) return fullExhibition;
+    return convexExhibitionToRaw(fullExhibition) as EntityRecord;
   }, [fullExhibition]);
 
-  const loadEntity = useCallback((entityId: string) => {
-    if (rawExhibition && rawExhibition.id === entityId) return rawExhibition;
-    // Fallback to context data (only has current language, but works for display)
-    const ex = exhibitions.find(e => e.id === entityId);
-    return ex as Record<string, unknown> | undefined;
-  }, [rawExhibition, exhibitions]);
-
-  const getFieldsToTranslate = useCallback((formData: Record<string, any>): TranslatableField[] => {
+  const getFieldsToTranslate = useCallback((formData: EntityRecord): TranslatableField[] => {
     const de = formData.translations?.de || {};
     return [
       { key: 'title', text: de.title || '', type: 'translation', isMarkdown: false },
@@ -75,12 +67,12 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
     defaultEnabledAttributes: DEFAULT_ENABLED,
     contentMediaFields: ['description'],
     getFieldsToTranslate,
-    loadEntity: loadEntity,
+    entity: rawExhibition,
     deleteConfirmKey: 'deleteExhibitionConfirm',
   });
 
   const {
-    formData, activeLang, setActiveLang, contentMedia,
+    formData, isReady, isNotFound, activeLang, setActiveLang, contentMedia,
     isTranslating, translationProgress,
     isValidating, validationErrors, setValidationErrors,
     handleChange, handleMediaChange, addMediaItem, removeMediaItem,
@@ -106,9 +98,12 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
         id={id} activeLang={activeLang} isTranslating={isTranslating}
         onBack={() => onBack()} onDelete={handleDelete}
         onTranslate={handleTranslate} onTranslateAll={handleTranslateAll}
-        onSave={handleSave} t={t}
+        onSave={handleSave} isReady={isReady} t={t}
       />
 
+      {!isReady ? (
+        <p role="status" aria-busy={!isNotFound}>{isNotFound ? t('exhibitionNotFound') : t('edit') + '…'}</p>
+      ) : (<>
       <TranslationProgress isTranslating={isTranslating} progress={translationProgress} t={t} />
       <ValidationBanners isValidating={isValidating} validationErrors={validationErrors} setValidationErrors={setValidationErrors} t={t} />
 
@@ -193,6 +188,7 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
           </div>
         </div>
       </div>
+      </>)}
     </div>
   );
 };
