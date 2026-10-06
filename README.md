@@ -20,7 +20,7 @@ The application is a React and TypeScript frontend backed by a self-hosted Conve
 
 ## Requirements
 
-- Node.js 18 or newer and npm 9 or newer
+- Node.js 22.13 or newer (use a supported LTS release) and npm 9 or newer
 - Docker with Docker Compose for the local Convex backend
 
 ## Local development

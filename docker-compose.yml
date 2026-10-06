@@ -48,7 +48,7 @@ services:
   # Automatically pushes the Convex schema after backend is healthy.
   # Reads credentials from .env.local on the host.
   convex-setup:
-    image: node:20-alpine
+    image: node:22-alpine
     container_name: museum-convex-setup
     working_dir: /app
     volumes:
