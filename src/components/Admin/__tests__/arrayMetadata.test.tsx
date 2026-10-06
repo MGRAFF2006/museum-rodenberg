@@ -5,6 +5,7 @@ import { ExhibitionEditor } from '../ExhibitionEditor';
 
 const mocks = vi.hoisted(() => ({ query: vi.fn(), save: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('convex/react', () => ({ useQuery: mocks.query, useMutation: () => mocks.save }));
+vi.mock('../../../hooks/useProtectedMutation', () => ({ useProtectedMutation: () => mocks.save }));
 vi.mock('../../../hooks/useContentData', () => ({ useContentData: () => ({ exhibitions: [], artifacts: [], refreshData: vi.fn() }) }));
 vi.mock('../../../hooks/useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
 vi.mock('../../../hooks/useContentTranslation', () => ({ useContentTranslation: () => ({
