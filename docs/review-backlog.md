@@ -357,9 +357,21 @@ its normal merge. Stacked PRs still need target-eligible CI and integration chec
 
 ### Current focused integration evidence
 
-- Standalone #34 lint verification passed with zero errors and seven existing
-  warnings. The full feedback-source assembly typecheck remains pending fixture
-  typing fixes exposed by #14; no combined typecheck success is claimed here.
+- The unpublished `verify/full-feedback-20261006` assembly combines all 26 ready
+  implementation branches on current main. `npm run typecheck` passes all three
+  projects; normal `npm run lint` passes with zero errors and seven existing
+  warnings. Integration exposed and corrected test-fixture listener typing in
+  #9/#21 and narrow selection-switch props in #58 without weakening assertions.
+- In that assembly, 22 focused Vitest files pass all 189 tests across editor saves,
+  membership/deletion/revisions/QR identity, metadata, audio/search/Markdown,
+  production login and translation handlers. Four native suites pass 47 tests:
+  `node --test scripts/__tests__/{compose-isolation,production-runtime,push-convex,backup-convex}.test.mjs`.
+  These are selected regressions, not a complete device or production validation.
+- Assembly conflict resolutions preserve all QR/audio/materials translation keys,
+  explicit empty-string metadata clearing with normalized arrays, both language
+  snapshot and QR error imports, and the actionable seeding error with no unused
+  context argument. The local verification branch is not published or merged;
+  later independent PR merges may require these same combinations.
 - The assembled backend feedback graph passed 165 Vitest cases and 19 native
   Node cases. The deliberate-translation-removal race was also independently
   checked against #42: 20 save/removal cases passed, including the two original
@@ -446,7 +458,7 @@ No duplicate PR is opened for these branches. Keep local work recoverable; do no
 - Related-record version increments receive independent review and regression tests; versioned deletion is covered by #62. An isolated #4/#8/#12/#42/#60/#62 integration passed 136 focused tests; this is not a complete combined-project claim. These checks do not prove all PRs together are conflict-free.
 - Every PR created or worked on is registered with T3; final thread inventory is checked before handoff. #63 hosted Test/Build/current Type Check passes. Other updated branches can retain hosted failures from the current-main Compose fixture until #63 lands. Stacked child branches without check rollups rely on documented local checks until their target is eligible; successful historical runs do not certify every current head.
 - The agent performed no production writes, production seed/schema/deployment command, real translator call, PR merge or shared-history rewrite. The user merged 36 campaign PRs; their main-branch workflow attempted deployment separately. Native recovery validation used only temporary synthetic local backends, source deployment and seed helpers, then removed its owned resources.
-- Native browser preview automation was unavailable; real camera, codecs, speech engine, assistive technology and curator UX checks remain. No screenshots or device validation are claimed.
+- Earlier native browser attempts were unavailable; this feedback batch used rendered DOM regressions and local HTTP checks. Real camera, codecs, speech engine, assistive technology and curator UX checks remain. No screenshots or device validation are claimed.
 - Native backup export/import and startup of two isolated Convex Docker backends were performed successfully for #11. The full Compose application stack, production recovery and an agent-triggered GitHub Actions schema dispatch were not performed. Other fixtures are not operational round-trip evidence.
 - Standalone branches often retain pre-existing app type/lint diagnostics fixed by separate #14/#26/#34. Check the combined result after integrating their dependencies; no rules/assertions were weakened.
 
