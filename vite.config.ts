@@ -44,19 +44,21 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
+        globIgnores: ['**/uploads/**'],
+        navigateFallbackDenylist: [/^\/(?:api|convex|uploads)(?:\/|$)/],
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/uploads\/.*/i,
             handler: 'CacheFirst',
             options: {
-              // Bumped to v2 to purge stale 404s cached by the v1 SW
-              cacheName: 'museum-uploads-v2',
+              // New cache drops previously cached SPA responses for missing uploads
+              cacheName: 'museum-uploads-v3',
               expiration: {
                 maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
               cacheableResponse: {
-                statuses: [0, 200],
+                statuses: [200],
               },
             },
           },
