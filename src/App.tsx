@@ -70,7 +70,7 @@ function App() {
   const handleSearchChange = (query: string) => {
     if (query.trim()) {
       navigate(`/search?${new URLSearchParams({ q: query })}`, { replace: location.pathname === '/search' });
-    } else if (location.pathname !== '/') {
+    } else if (location.pathname !== '/' || location.search) {
       navigate('/', { replace: true });
     }
   };

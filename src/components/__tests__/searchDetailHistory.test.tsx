@@ -3,6 +3,8 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import App from '../../App';
 
+vi.mock('convex/react', () => ({ useQuery: () => null }));
+
 vi.mock('../../hooks/useLanguage', () => ({ useLanguage: () => ({ currentLanguage: 'de', t: (key: string) => key }) }));
 vi.mock('../TextToSpeechButton', () => ({ TextToSpeechButton: () => null }));
 vi.mock('../AccessibilityPanel', () => ({ AccessibilityPanel: () => null }));
