@@ -22,6 +22,7 @@ describe.each(['artifact', 'exhibition'] as const)('%s intentional translation r
     });
     const save = (changes: Record<string, Value | undefined>) => handler(kind === 'artifact' ? artifacts.save : exhibitions.save)({ db: memory.db }, wireArgs({
       serverSecret: 'fixture-content-secret', slug: 'item', image: '', qrCode: 'ITEM',
+      expectedDocumentId: 'item', expectedRevision: 0,
       ...(kind === 'exhibition' ? { isFeatured: false, artifactSlugs: [] } : {}),
       translations: [{ language: 'de', title: 'Titel', description: 'Updated' }], ...changes,
     }));
