@@ -15,7 +15,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import busboy from 'busboy';
 
 function isWithinDirectory(directory, candidate) {
   const relative = path.relative(directory, candidate);
@@ -51,44 +50,7 @@ function resolveUploadPath(rootDir, uploadPath) {
  * Asset metadata is NOT written to any JSON file — the client saves
  * it to Convex after the upload completes.
  */
-export function uploadMedia(rootDir, headers, reqStream) {
-  return new Promise((resolve, reject) => {
-    const bb = busboy({ headers });
-    const urls = [];
-    const assets = [];
-    const uploadDir = path.resolve(rootDir, 'public/uploads');
-
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    bb.on('file', (_name, file, info) => {
-      const { filename, mimeType } = info;
-      const safeFilename = filename.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
-      const id = safeFilename.replace(/\.[^/.]+$/, '');
-      const saveTo = path.join(uploadDir, safeFilename);
-      const url = `/uploads/${safeFilename}`;
-
-      file.pipe(fs.createWriteStream(saveTo));
-      urls.push(url);
-
-      let type = 'other';
-      if (mimeType.startsWith('image/')) type = 'image';
-      else if (mimeType.startsWith('audio/')) type = 'audio';
-      else if (mimeType.startsWith('video/')) type = 'video';
-
-      assets.push({ id, name: filename, alt: filename, url, type });
-    });
-
-    bb.on('finish', () => {
-      resolve({ urls, url: urls[0], assets });
-    });
-
-    bb.on('error', reject);
-
-    reqStream.pipe(bb);
-  });
-}
+export { uploadMedia } from './upload-media.js';
 
 // ── Translation proxy ───────────────────────────────────────────
 
