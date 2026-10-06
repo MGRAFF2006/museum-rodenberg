@@ -119,6 +119,12 @@ describe('useSearch', () => {
     expect(result.current.artifacts).toHaveLength(1);
   });
 
+  it('matches queries with leading and trailing whitespace', () => {
+    const { result } = renderHook(() => useSearch('  RODENBERG \n', mockExhibitions, mockArtifacts));
+    expect(result.current.exhibitions.map(item => item.id)).toEqual(['ex1']);
+    expect(result.current.artifacts.map(item => item.id)).toEqual(['art1']);
+  });
+
   it('can match across both exhibitions and artifacts', () => {
     const { result } = renderHook(() => useSearch('farming', mockExhibitions, mockArtifacts));
     expect(result.current.exhibitions).toHaveLength(1);
