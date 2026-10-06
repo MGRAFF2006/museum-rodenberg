@@ -1,6 +1,6 @@
-/**
- * Shared regexes for markdown parsing
- */
+import { markdownMediaNodes, plainMarkdownText } from './markdownParsing.js';
+
+/** Legacy exported patterns; live parsing uses the CommonMark syntax tree. */
 export const MARKDOWN_REGEX = {
   // Standard markdown images: ![alt](url)
   IMAGE: /!\[(.*?)\]\((.*?)\)/g,
@@ -29,39 +29,18 @@ export const extractMediaFromMarkdown = (markdown: string) => {
 
   if (!markdown) return result;
   
-  // Standard markdown images
-  let match;
-  const imageRegex = new RegExp(MARKDOWN_REGEX.IMAGE);
-  while ((match = imageRegex.exec(markdown)) !== null) {
-    const alt = match[1];
-    const url = match[2];
-    if (url) {
-      const ext = url.split('.').pop()?.toLowerCase();
-      const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
-      const audioExtensions = ['mp3', 'wav', 'aac', 'm4a', 'flac'];
-      
-      if (videoExtensions.includes(ext || '')) {
-        result.videos.push({ url, title: alt || url.split('/').pop() || 'Video' });
-      } else if (audioExtensions.includes(ext || '')) {
-        result.audio.push({ url, title: alt || url.split('/').pop() || 'Audio' });
-      } else {
-        result.images.push(url);
-      }
-    }
-  }
-  
-  // Custom media links
-  const customMediaRegex = new RegExp(MARKDOWN_REGEX.CUSTOM_MEDIA);
-  while ((match = customMediaRegex.exec(markdown)) !== null) {
-    const type = match[1].toLowerCase();
-    const alt = match[2];
-    const url = match[4];
-    
-    if (url) {
-      if (type === 'image') result.images.push(url);
-      if (type === 'audio') result.audio.push({ url, title: alt || url.split('/').pop() || 'Audio' });
-      if (type === 'video') result.videos.push({ url, title: alt || url.split('/').pop() || 'Video' });
-    }
+  for (const node of markdownMediaNodes(markdown)) {
+    const prefix = /^(image|audio|video):/i.exec(node.url);
+    if (node.type === 'link' && !prefix) continue;
+    const url = prefix ? node.url.slice(prefix[0].length) : node.url;
+    const extension = url.split(/[?#]/, 1)[0].split('.').pop()?.toLowerCase();
+    const type = prefix?.[1].toLowerCase() ??
+      (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(extension || '') ? 'video' :
+      ['mp3', 'wav', 'aac', 'm4a', 'flac'].includes(extension || '') ? 'audio' : 'image');
+    const title = node.type === 'link' ? node.title.replace(/^(Image|Audio|Video):\s*/i, '') : node.title;
+    if (type === 'image') result.images.push(url);
+    if (type === 'audio') result.audio.push({ url, title: title || url.split('/').pop() || 'Audio' });
+    if (type === 'video') result.videos.push({ url, title: title || url.split('/').pop() || 'Video' });
   }
   
   // Remove duplicates based on URL
@@ -90,28 +69,7 @@ export const extractMediaFromMarkdown = (markdown: string) => {
  * Strips markdown formatting for plain text use (e.g. TTS).
  */
 export const stripMarkdown = (markdown: string): string => {
-  if (!markdown) return '';
-  
-  return markdown
-    // Remove image tags but keep alt text
-    .replace(/!\[(.*?)\]\(.*?\)/g, '$1')
-    // Remove links but keep text
-    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-    // Remove bold/italic
-    .replace(/(\*\*|__)(.*?)\1/g, '$2')
-    .replace(/(\*|_)(.*?)\1/g, '$2')
-    // Remove headers
-    .replace(/^#+\s+/gm, '')
-    // Remove blockquotes
-    .replace(/^>\s+/gm, '')
-    // Remove code blocks
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/`(.+?)`/g, '$1')
-    // Remove horizontal rules
-    .replace(/^---$/gm, '')
-    // Normalize newlines
-    .replace(/\n{2,}/g, '\n\n')
-    .trim();
+  return markdown ? plainMarkdownText(markdown) : '';
 };
 
 /**
