@@ -79,9 +79,9 @@ describe('artifact exhibition membership', () => {
 
   it('adds a newly created artifact to its parent without disturbing other entries', async () => {
     const { ctx, rows, exhibitions } = fixture();
-    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'new', exhibitionSlug: 'b' });
-    expect(rows.artifacts.some(art => art.slug === 'new' && art.exhibitionSlug === 'b')).toBe(true);
-    expect(exhibitions[1].artifactSlugs).toEqual(['other', 'new']);
+    await handler(artifacts.save)(ctx, { ...saveArgs, slug: 'created', exhibitionSlug: 'b' });
+    expect(rows.artifacts.some(art => art.slug === 'created' && art.exhibitionSlug === 'b')).toBe(true);
+    expect(exhibitions[1].artifactSlugs).toEqual(['other', 'created']);
   });
 
   it('preserves explicit exhibition groupings when an unassigned artifact is saved', async () => {
