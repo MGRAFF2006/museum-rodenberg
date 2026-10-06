@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Language } from '../types';
+import { readPreference, writePreference } from '../utils/preferences';
 
 interface LanguageContextType {
   currentLanguage: Language;
@@ -21,7 +22,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [selectedLoading, setSelectedLoading] = useState(false);
 
   useEffect(() => {
-    const savedLanguage = localStorage.getItem('museum-language') as Language;
+    const savedLanguage = readPreference('museum-language') as Language;
     if (savedLanguage && ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'].includes(savedLanguage)) setCurrentLanguage(savedLanguage);
   }, []);
 
@@ -81,7 +82,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const changeLanguage = (language: Language) => {
     setCurrentLanguage(language);
-    localStorage.setItem('museum-language', language);
+    writePreference('museum-language', language);
   };
   const t = useCallback((key: string): string => {
     return (dictionary.language === currentLanguage ? dictionary.values[key] : undefined) || fallbackTranslations[key] || key;

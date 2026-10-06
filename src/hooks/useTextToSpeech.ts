@@ -1,3 +1,4 @@
+import { readJSONPreference, writePreference } from '../utils/preferences';
 import React, { useState, useCallback, useEffect, useRef, createContext, useContext, ReactNode } from 'react';
 
 export interface TTSVoice {
@@ -38,13 +39,17 @@ const defaultTTSSettings: TTSSettings = {
 };
 
 const getSettingsFromLocalStorage = (): TTSSettings => {
-  const saved = localStorage.getItem('tts-settings');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {}
-  }
-  return defaultTTSSettings;
+  const saved = readJSONPreference('tts-settings');
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaultTTSSettings;
+  const values = saved as Partial<TTSSettings>;
+  const numberInRange = (value: unknown, min: number, max: number, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : fallback;
+  return {
+    rate: numberInRange(values.rate, 0.1, 10, defaultTTSSettings.rate),
+    pitch: numberInRange(values.pitch, 0, 2, defaultTTSSettings.pitch),
+    volume: numberInRange(values.volume, 0, 1, defaultTTSSettings.volume),
+    selectedVoiceIndex: typeof values.selectedVoiceIndex === 'number' && Number.isInteger(values.selectedVoiceIndex) && values.selectedVoiceIndex >= 0 ? values.selectedVoiceIndex : 0,
+  };
 };
 
 /** Detect Gecko/Firefox-based browsers (includes Zen, Librewolf, etc.) */
@@ -70,7 +75,7 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<TTSVoice[]>([]);
-  const [settings, setSettings] = useState<TTSSettings>(getSettingsFromLocalStorage());
+  const [settings, setSettings] = useState<TTSSettings>(getSettingsFromLocalStorage);
   const [error, setError] = useState<TTSError>(null);
 
   // Keep a ref to the native SpeechSynthesisVoice objects so we never
@@ -81,7 +86,7 @@ export const TextToSpeechProvider: React.FC<{ children: ReactNode }> = ({ childr
   const voicesLoadedRef = useRef(false);
 
   useEffect(() => {
-    localStorage.setItem('tts-settings', JSON.stringify(settings));
+    writePreference('tts-settings', JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
