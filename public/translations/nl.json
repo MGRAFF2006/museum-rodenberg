@@ -97,5 +97,6 @@
   "deleteFileConfirm": "Weet je zeker dat je dit bestand wilt verwijderen?",
   "altText": "Alt-tekst",
   "name": "Naam",
-  "logout": "Uitloggen"
+  "logout": "Uitloggen",
+  "contentChangedReload": "Deze inhoud is gewijzigd of verwijderd. Uw niet-opgeslagen wijzigingen blijven hier bewaard. Ga terug naar het overzicht en open het item opnieuw om de nieuwste versie te laden."
 }

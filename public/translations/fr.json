@@ -97,5 +97,6 @@
   "deleteFileConfirm": "Êtes-vous sûr de vouloir supprimer ce fichier ?",
   "altText": "Texte alternatif",
   "name": "Nom",
-  "logout": "Déconnexion"
+  "logout": "Déconnexion",
+  "contentChangedReload": "Ce contenu a été modifié ou supprimé. Vos modifications non enregistrées sont conservées ici. Revenez à la vue d’ensemble et rouvrez l’élément pour charger sa dernière version."
 }

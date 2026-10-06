@@ -58,7 +58,10 @@ export function createAdminApi(rootDir, env) {
         ...args, serverSecret: env.CONVEX_WRITE_SECRET,
       });
       res.json({ result: result ?? null });
-    } catch {
+    } catch (error) {
+      if (error?.data?.code === 'STALE_CONTENT') {
+        return res.status(409).json({ error: 'Content changed. Reopen it before saving.', code: 'STALE_CONTENT' });
+      }
       // Convex errors can include function arguments. Never echo or log credentials.
       res.status(502).json({ error: 'Failed to write content' });
     }

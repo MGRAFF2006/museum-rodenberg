@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { api } from '../../../convex/_generated/api';
-import { useProtectedMutation } from '../useProtectedMutation';
+import { ContentConflictError, useProtectedMutation } from '../useProtectedMutation';
 import { getToken, setToken } from '../../utils/auth';
 
 afterEach(() => { sessionStorage.clear(); vi.unstubAllGlobals(); });
@@ -19,4 +19,12 @@ it('sends only the browser session to Express and clears rejected sessions', asy
   fetch.mockResolvedValueOnce(new Response('{}', { status: 401 }));
   await expect(result.current({ assetId: 'fixture' })).rejects.toThrow('log in again');
   expect(getToken()).toBeNull();
+});
+
+it('identifies stale writes without treating them as expired sessions', async () => {
+  setToken('browser-session');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 409 })));
+  const { result } = renderHook(() => useProtectedMutation(api.artifacts.save));
+  await expect(result.current({ slug: 'fixture', qrCode: '', image: '', translations: [] })).rejects.toBeInstanceOf(ContentConflictError);
+  expect(getToken()).toBe('browser-session');
 });

@@ -152,5 +152,6 @@
   "heading2": "Überschrift 2",
   "selectAssetPlaceholder": "Medium auswählen...",
   "assetLabel": "Medium",
-  "mediaLabel": "Medien"
+  "mediaLabel": "Medien",
+  "contentChangedReload": "Dieser Inhalt wurde geändert oder gelöscht. Ihre ungespeicherten Änderungen bleiben hier erhalten. Gehen Sie zurück zur Übersicht und öffnen Sie den Eintrag erneut, um die aktuelle Version zu laden."
 }
