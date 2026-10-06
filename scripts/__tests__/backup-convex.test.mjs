@@ -139,3 +139,24 @@ test('child failure is nonzero and stderr containing a credential is not forward
     return true;
   });
 });
+
+for (const inheritedOptions of ['--exclude=*', '--remove-files']) {
+  test(`upload archive ignores inherited TAR_OPTIONS=${inheritedOptions}`, async (t) => {
+    const { root, uploads, config } = await fixture(t);
+    const previous = process.env.TAR_OPTIONS;
+    t.after(() => {
+      if (previous === undefined) delete process.env.TAR_OPTIONS;
+      else process.env.TAR_OPTIONS = previous;
+    });
+    process.env.TAR_OPTIONS = inheritedOptions;
+    const backupDir = await createBackup(config, fakeExport, () => {});
+    assert.equal(process.env.TAR_OPTIONS, inheritedOptions);
+    assert.equal(await fs.readFile(path.join(uploads, 'photo with spaces.txt'), 'utf8'), 'curator upload');
+    const restored = path.join(root, 'isolated-restored-uploads');
+    await fs.mkdir(restored);
+    await runCommand('tar', ['-xzf', path.join(backupDir, 'uploads.tar.gz'), '-C', restored], {
+      env: { ...process.env, TAR_OPTIONS: '' },
+    }, 'Fixture extraction');
+    assert.equal(await fs.readFile(path.join(restored, 'photo with spaces.txt'), 'utf8'), 'curator upload');
+  });
+}

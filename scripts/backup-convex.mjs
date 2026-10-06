@@ -97,7 +97,9 @@ export async function createBackup(config, run = runCommand, log = console.log) 
     const databaseDigest = await digest(database);
     log('Archiving uploads (filesystem archive; freeze writes for consistency)...');
     const media = path.join(staging, 'uploads.tar.gz');
-    await run('tar', ['-czf', media, '-C', uploads, '.'], { cwd: root }, 'Upload archive');
+    await run('tar', ['-czf', media, '-C', uploads, '.'], {
+      cwd: root, env: { ...process.env, TAR_OPTIONS: '' },
+    }, 'Upload archive');
     const mediaDigest = await digest(media);
     const manifest = {
       formatVersion: 1, source: prod ? 'production' : 'local', deploymentUrl: url,

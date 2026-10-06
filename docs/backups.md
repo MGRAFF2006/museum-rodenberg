@@ -3,7 +3,9 @@
 `npm run backup` uses the installed Convex CLI to create an authenticated native
 snapshot of **all tables**, with Convex file storage included. It also archives
 `public/uploads`, the separate filesystem used by the museum upload API. Install
-project dependencies and have `tar` available before running it.
+project dependencies and have `tar` available before running it. The archive
+command ignores inherited `TAR_OPTIONS` so host settings cannot exclude uploads
+or remove source files.
 
 The command reads credentials with precedence: process environment, `.env.local`,
 then `.env`. Local backups require `CONVEX_SELF_HOSTED_URL` and
