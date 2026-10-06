@@ -124,10 +124,11 @@ describe.each(['artifact', 'exhibition'] as const)('%s asynchronous save ownersh
       contentType, onBack: vi.fn(), initialTranslationFields: { title: '', description: '' },
       defaultEnabledAttributes: [], contentMediaFields: ['description'], getFieldsToTranslate: () => [], deleteConfirmKey: 'delete',
     };
-    const { result, rerender } = renderHook(({ id, entity }: { id: string; entity: EntityRecord }) => useEditorForm({ ...config, id, entity }), {
-      initialProps: { id: 'original', entity: { id: 'original', documentId: 'old-id', revision: 3,
-        translations: { de: { title: 'Deutsch', description: '' }, fr: { title: 'French', description: '' } } } },
-    });
+    const initialProps: { id: string; entity: EntityRecord } = {
+      id: 'original', entity: { id: 'original', documentId: 'old-id', revision: 3,
+        translations: { de: { title: 'Deutsch', description: '' }, fr: { title: 'French', description: '' } } },
+    };
+    const { result, rerender } = renderHook(({ id, entity }: { id: string; entity: EntityRecord }) => useEditorForm({ ...config, id, entity }), { initialProps });
     act(() => result.current.handleTranslationChange('fr', 'title', ''));
     let pending!: Promise<void>;
     act(() => { pending = result.current.handleSave(); });
