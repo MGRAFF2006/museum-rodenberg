@@ -96,5 +96,8 @@
   "deleteFileConfirm": "¿Estás seguro de que deseas eliminar este archivo?",
   "altText": "Texto alternativo",
   "name": "Nombre",
-  "logout": "Cerrar sesión"
+  "logout": "Cerrar sesión",
+  "audioPlaybackError": "No se pudo reproducir el audio. Inténtelo de nuevo.",
+  "playAudio": "Reproducir audio",
+  "pauseAudio": "Pausar audio"
 }

@@ -128,5 +128,8 @@
   "heading2": "Heading 2",
   "selectAssetPlaceholder": "Select an asset...",
   "assetLabel": "Asset",
-  "mediaLabel": "Media"
+  "mediaLabel": "Media",
+  "audioPlaybackError": "Audio could not be played. Please try again.",
+  "playAudio": "Play audio",
+  "pauseAudio": "Pause audio"
 }

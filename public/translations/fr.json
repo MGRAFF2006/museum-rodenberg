@@ -97,5 +97,8 @@
   "deleteFileConfirm": "Êtes-vous sûr de vouloir supprimer ce fichier ?",
   "altText": "Texte alternatif",
   "name": "Nom",
-  "logout": "Déconnexion"
+  "logout": "Déconnexion",
+  "audioPlaybackError": "Impossible de lire cet audio. Veuillez réessayer.",
+  "playAudio": "Lire l’audio",
+  "pauseAudio": "Mettre l’audio en pause"
 }

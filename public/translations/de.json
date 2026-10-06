@@ -152,5 +152,8 @@
   "heading2": "Überschrift 2",
   "selectAssetPlaceholder": "Medium auswählen...",
   "assetLabel": "Medium",
-  "mediaLabel": "Medien"
+  "mediaLabel": "Medien",
+  "audioPlaybackError": "Audio konnte nicht abgespielt werden. Bitte versuchen Sie es erneut.",
+  "playAudio": "Audio abspielen",
+  "pauseAudio": "Audio pausieren"
 }

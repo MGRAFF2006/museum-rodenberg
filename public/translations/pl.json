@@ -97,5 +97,8 @@
   "deleteFileConfirm": "Czy na pewno chcesz usunąć ten plik?",
   "altText": "Tekst alternatywny",
   "name": "Nazwa",
-  "logout": "Wyloguj"
+  "logout": "Wyloguj",
+  "audioPlaybackError": "Nie udało się odtworzyć dźwięku. Spróbuj ponownie.",
+  "playAudio": "Odtwórz dźwięk",
+  "pauseAudio": "Wstrzymaj dźwięk"
 }
