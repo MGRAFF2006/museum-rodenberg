@@ -199,6 +199,12 @@ const sessionCache = new Map<string, string>();
 const MAX_RETRIES = 5;
 const RETRY_BASE_DELAY_MS = 1000;
 
+class TranslationHttpError extends Error {
+  constructor(readonly status: number, statusText: string) {
+    super(`Translation failed: ${status} ${statusText}`);
+  }
+}
+
 /**
  * Translates a single field, handling markdown splitting if necessary.
  */
@@ -243,11 +249,12 @@ export async function translateText(text: string, targetLang: string, attempt = 
     const response = await authFetch('/api/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, target: targetLang })
+      body: JSON.stringify({ text, target: targetLang }),
+      signal: AbortSignal.timeout(35_000),
     });
 
     if (!response.ok) {
-      throw new Error(`Translation failed: ${response.status} ${response.statusText}`);
+      throw new TranslationHttpError(response.status, response.statusText);
     }
 
     const data = await response.json();
@@ -256,6 +263,7 @@ export async function translateText(text: string, targetLang: string, attempt = 
     sessionCache.set(cacheKey, result);
     return result;
   } catch (error) {
+    if (error instanceof TranslationHttpError && error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status)) throw error;
     if (attempt >= MAX_RETRIES) {
       console.error(`Translation failed after ${MAX_RETRIES} retries:`, error);
       throw error;

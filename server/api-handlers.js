@@ -77,6 +77,7 @@ export async function translate(body, apiUrl, apiKey) {
       api_key: apiKey,
     }),
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
