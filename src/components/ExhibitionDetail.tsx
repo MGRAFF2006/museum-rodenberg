@@ -59,7 +59,9 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
     (exhibition.media.audio && exhibition.media.audio.length > 0)
   );
 
-  const hasDetailedContent = isEnabled('detailedContent') && exhibition.detailedContent && exhibition.detailedContent[currentLanguage];
+  const hasDescription = isEnabled('description') && exhibition.description;
+  const detailedContent = exhibition.detailedContent?.[currentLanguage] || exhibition.detailedContent?.de;
+  const hasDetailedContent = isEnabled('detailedContent') && detailedContent;
 
 
   return (
@@ -112,21 +114,25 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
           <div className="lg:col-span-2 space-y-6">
 
             {/* About Exhibition */}
-            {isEnabled('description') && exhibition.description && (
+            {(hasDescription || hasDetailedContent) && (
               <section className="card-lg p-5 md:p-6">
-                <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-neutral-200">
-                  <h2 className="text-heading-lg font-serif font-bold text-neutral-900">
-                    {t('aboutExhibition')}
-                  </h2>
-                  <TextToSpeechButton
-                    text={stripMarkdown(exhibition.description)}
-                    language={currentLanguage}
-                    size="md"
-                  />
-                </div>
-                <div className="mb-4">
-                  <MarkdownRenderer content={exhibition.description} onMediaClick={handleMediaClick} />
-                </div>
+                {hasDescription && (
+                  <>
+                    <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-neutral-200">
+                      <h2 className="text-heading-lg font-serif font-bold text-neutral-900">
+                        {t('aboutExhibition')}
+                      </h2>
+                      <TextToSpeechButton
+                        text={stripMarkdown(exhibition.description)}
+                        language={currentLanguage}
+                        size="md"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <MarkdownRenderer content={exhibition.description} onMediaClick={handleMediaClick} />
+                    </div>
+                  </>
+                )}
                 {hasDetailedContent && (
                   <button
                     onClick={() => {
@@ -361,7 +367,7 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
           isOpen={isDetailedContentOpen}
           onClose={() => setIsDetailedContentOpen(false)}
           title={exhibition.title}
-          content={exhibition.detailedContent![currentLanguage] || ''}
+          content={detailedContent || ''}
           media={exhibition.media as RequiredMedia}
         />
       )}

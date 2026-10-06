@@ -3,6 +3,10 @@ import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunctio
 import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
 import { MobileMenu } from './components/MobileMenu';
+import { useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
+import { convexArtifactToRaw, convexExhibitionToRaw } from './utils/convexConverters';
+import { getTranslatedContent } from './utils/translationUtils';
 
 // Lazy-loaded detail pages (pulls in markdown-vendor chunk only when needed)
 const ExhibitionDetail = lazy(() => import('./components/ExhibitionDetail').then(m => ({ default: m.ExhibitionDetail })));
@@ -21,7 +25,7 @@ const AccessibilityPanel = lazy(() => import('./components/AccessibilityPanel').
 const Admin = lazy(() => import('./components/Admin/Admin').then(m => ({ default: m.Admin })));
 
 const LazyFallback = () => (
-  <div className="min-h-[50vh] flex items-center justify-center">
+  <div role="status" aria-label="Loading content" className="min-h-[50vh] flex items-center justify-center">
     <div className="inline-block h-8 w-8 border-4 border-primary-200 border-t-primary-700 rounded-full animate-spin" />
   </div>
 );
@@ -122,7 +126,6 @@ function App() {
           path="/exhibition/:id"
           element={
             <ExhibitionRoute
-              getExhibitionById={getExhibitionById}
               getArtifactsByExhibition={getArtifactsByExhibition}
               navigate={navigate}
             />
@@ -133,7 +136,6 @@ function App() {
           path="/artifact/:id"
           element={
             <ArtifactRoute
-              getArtifactById={getArtifactById}
               getExhibitionById={getExhibitionById}
               navigate={navigate}
             />
@@ -159,7 +161,6 @@ function App() {
           element={
             <DetailedContentRoute
               type="exhibition"
-              getExhibitionById={getExhibitionById}
               navigate={navigate}
             />
           }
@@ -170,7 +171,6 @@ function App() {
           element={
             <DetailedContentRoute
               type="artifact"
-              getArtifactById={getArtifactById}
               navigate={navigate}
             />
           }
@@ -229,17 +229,31 @@ function App() {
 }
 
 // Route components
+function usePublicItem(type: 'exhibition', id: string | undefined): Exhibition | null | undefined;
+function usePublicItem(type: 'artifact', id: string | undefined): Artifact | null | undefined;
+function usePublicItem(type: 'exhibition' | 'artifact', id: string | undefined): Exhibition | Artifact | null | undefined;
+function usePublicItem(type: 'exhibition' | 'artifact', id: string | undefined) {
+  const { currentLanguage } = useLanguage();
+  const { resolveAsset } = useContentData();
+  const exhibition = useQuery(api.exhibitions.getBySlug, type === 'exhibition' && id ? { slug: id } : 'skip');
+  const artifact = useQuery(api.artifacts.getBySlug, type === 'artifact' && id ? { slug: id } : 'skip');
+  const raw = type === 'exhibition'
+    ? exhibition && convexExhibitionToRaw(exhibition)
+    : artifact && convexArtifactToRaw(artifact);
+
+  return raw ? getTranslatedContent(raw, currentLanguage, 'de', resolveAsset) as Exhibition | Artifact : raw;
+}
+
 interface ExhibitionRouteProps {
-  getExhibitionById: (id: string) => Exhibition | undefined;
   getArtifactsByExhibition: (id: string) => Artifact[];
   navigate: NavigateFunction;
 }
 
-function ExhibitionRoute({ getExhibitionById, getArtifactsByExhibition, navigate }: ExhibitionRouteProps) {
+function ExhibitionRoute({ getArtifactsByExhibition, navigate }: ExhibitionRouteProps) {
   const { id } = useParams();
+  const exhibition = usePublicItem('exhibition', id);
   if (!id) return <div>Exhibition not found</div>;
-  
-  const exhibition = getExhibitionById(id);
+  if (exhibition === undefined) return <LazyFallback />;
   if (!exhibition) return <div>Exhibition not found</div>;
   
   const exhibitionArtifacts = getArtifactsByExhibition(id);
@@ -257,16 +271,15 @@ function ExhibitionRoute({ getExhibitionById, getArtifactsByExhibition, navigate
 }
 
 interface ArtifactRouteProps {
-  getArtifactById: (id: string) => Artifact | undefined;
   getExhibitionById: (id: string) => Exhibition | undefined;
   navigate: NavigateFunction;
 }
 
-function ArtifactRoute({ getArtifactById, getExhibitionById, navigate }: ArtifactRouteProps) {
+function ArtifactRoute({ getExhibitionById, navigate }: ArtifactRouteProps) {
   const { id } = useParams();
+  const artifact = usePublicItem('artifact', id);
   if (!id) return <div>Artifact not found</div>;
-  
-  const artifact = getArtifactById(id);
+  if (artifact === undefined) return <LazyFallback />;
   if (!artifact) return <div>Artifact not found</div>;
   
   const exhibition = artifact.exhibition ? getExhibitionById(artifact.exhibition) : null;
@@ -284,26 +297,24 @@ function ArtifactRoute({ getArtifactById, getExhibitionById, navigate }: Artifac
 
 interface DetailedContentRouteProps {
   type: 'exhibition' | 'artifact';
-  getExhibitionById?: (id: string) => Exhibition | undefined;
-  getArtifactById?: (id: string) => Artifact | undefined;
   navigate: NavigateFunction;
 }
 
-function DetailedContentRoute({ type, getExhibitionById, getArtifactById, navigate }: DetailedContentRouteProps) {
+function DetailedContentRoute({ type, navigate }: DetailedContentRouteProps) {
   const { id } = useParams();
   const { currentLanguage } = useLanguage();
+  const item = usePublicItem(type, id);
   if (!id) return <div>Content not found</div>;
-  
-  const item = type === 'exhibition' 
-    ? getExhibitionById?.(id)
-    : getArtifactById?.(id);
-    
-  if (!item || !item.detailedContent) return <div>Content not found</div>;
+  if (item === undefined) return <LazyFallback />;
+  const content = item?.detailedContent?.[currentLanguage] || item?.detailedContent?.de;
+  if (!item || !content || (item.enabledAttributes && !item.enabledAttributes.includes('detailedContent'))) {
+    return <div>Content not found</div>;
+  }
   
   return (
     <DetailedContentPage
       title={item.title}
-      content={item.detailedContent[currentLanguage] || item.detailedContent['de'] || ''}
+      content={content}
       onBack={() => navigate(`/${type}/${id}`)}
       onMediaClick={(mediaType, url) => {
         const tabMap = { 'image': 'images', 'video': 'videos', 'audio': 'audio' };
