@@ -242,7 +242,7 @@ export const save = mutation({
       .first();
 
     const exhibitionChanged = args.exhibitionSlug !== undefined &&
-      args.exhibitionSlug !== existing?.exhibitionSlug;
+      artifactData.exhibitionSlug !== (existing?.exhibitionSlug || undefined);
     if (createOnly && existing) throw new Error("An artifact with this ID already exists");
     if (existing
       ? expectedRevision !== (existing.revision ?? 0) || expectedDocumentId !== existing._id

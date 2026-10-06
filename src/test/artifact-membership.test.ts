@@ -94,6 +94,20 @@ describe('artifact exhibition membership', () => {
     expect(exhibitions.map(ex => ex.artifactSlugs)).toEqual(before);
   });
 
+  it('preserves grouped unassigned artifacts when the editor submits an empty parent', async () => {
+    const { ctx, rows, exhibitions } = fixture();
+    delete rows.artifacts[0].exhibitionSlug;
+    const before = structuredClone(exhibitions);
+    const patch = vi.spyOn(ctx.db, 'patch');
+    await handler(artifacts.save)(ctx, JSON.parse(JSON.stringify({
+      ...saveArgs, exhibitionSlug: '',
+      translations: [{ language: 'de', title: 'Updated title', description: '' }],
+    })));
+    expect(rows.artifacts[0].exhibitionSlug).toBeUndefined();
+    expect(exhibitions).toEqual(before);
+    expect(patch.mock.calls.map(([id]) => id)).toEqual(['art-item']);
+  });
+
   it('clears every old listing when an explicit empty parent detaches the artifact', async () => {
     const { ctx, exhibitions } = fixture();
     const serialized = JSON.parse(JSON.stringify({ ...saveArgs, exhibitionSlug: '' }));
