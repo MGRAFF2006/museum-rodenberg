@@ -211,7 +211,7 @@ export function useEditorForm(config: EditorConfig) {
 
   const handleMediaChange = useCallback((type: 'images' | 'videos' | 'audio', index: number, field: string, value: string) => {
     const currentMediaArray = formData.media?.[type];
-    if (!currentMediaArray || !currentMediaArray[index]) return;
+    if (!currentMediaArray || currentMediaArray[index] === undefined) return;
 
     const item = currentMediaArray[index];
     const url = type === 'images' ? (item as string) : (item as MediaItem).url;
@@ -264,7 +264,7 @@ export function useEditorForm(config: EditorConfig) {
 
   const removeMediaItem = useCallback((type: 'images' | 'videos' | 'audio', index: number) => {
     const currentMediaArray = formData.media?.[type];
-    if (!currentMediaArray || !currentMediaArray[index]) return;
+    if (!currentMediaArray || currentMediaArray[index] === undefined) return;
 
     const item = currentMediaArray[index];
     const urlToRemove = type === 'images' ? (item as string) : (item as MediaItem).url;
@@ -406,9 +406,11 @@ export function useEditorForm(config: EditorConfig) {
       }> = [];
       let sortIdx = 0;
       for (const img of formData.media?.images || []) {
+        if (!img.trim()) continue;
         mediaItems.push({ mediaType: 'image', url: img, sortOrder: sortIdx++ });
       }
       for (const vid of formData.media?.videos || []) {
+        if (!vid.url.trim()) continue;
         mediaItems.push({
           mediaType: 'video',
           url: vid.url,
@@ -418,6 +420,7 @@ export function useEditorForm(config: EditorConfig) {
         });
       }
       for (const aud of formData.media?.audio || []) {
+        if (!aud.url.trim()) continue;
         mediaItems.push({
           mediaType: 'audio',
           url: aud.url,

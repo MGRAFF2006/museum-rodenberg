@@ -162,3 +162,33 @@ for (const [name, Editor] of [['artifact', ArtifactEditor], ['exhibition', Exhib
 it.each([true, false])('preserves exhibition isFeatured=%s in raw editor data', isFeatured => {
   expect(convexExhibitionToRaw({ ...fixture('first'), isFeatured }).isFeatured).toBe(isFeatured);
 });
+
+describe('manual gallery media', () => {
+  it('allows selecting and removing a newly added blank image', () => {
+    const { result } = renderHook(() => useEditorForm({ ...baseConfig, id: 'new' }));
+    act(() => result.current.addMediaItem('images'));
+    expect(result.current.formData.media?.images).toEqual(['']);
+    act(() => result.current.handleMediaChange('images', 0, '', 'photo'));
+    expect(result.current.formData.media?.images).toEqual(['photo']);
+    act(() => result.current.removeMediaItem('images', 0));
+    expect(result.current.formData.media?.images).toEqual([]);
+    act(() => result.current.addMediaItem('images'));
+    act(() => result.current.removeMediaItem('images', 0));
+    expect(result.current.formData.media?.images).toEqual([]);
+  });
+
+  it.each(['artifact', 'exhibition'] as const)('omits unfinished media rows when saving an %s', async contentType => {
+    const { result } = renderHook(() => useEditorForm({ ...baseConfig, id: 'new', contentType }));
+    act(() => {
+      result.current.handleChange('id', 'created');
+      result.current.addMediaItem('images');
+      result.current.addMediaItem('videos');
+      result.current.addMediaItem('audio');
+    });
+    act(() => result.current.handleMediaChange('videos', 0, 'url', 'film'));
+    await act(() => result.current.handleSave());
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
+      mediaItems: [{ mediaType: 'video', url: 'film', sortOrder: 0 }],
+    }));
+  });
+});
