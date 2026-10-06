@@ -84,3 +84,50 @@ describe.each(['artifact', 'exhibition'] as const)('%s editor save payload', con
     expect(write.mock.calls[1][0].translations[0].detailedContent).toBe('');
   });
 });
+
+
+describe.each(['artifact', 'exhibition'] as const)('%s asynchronous save ownership', contentType => {
+  function mount() {
+    const config: EditorConfig = {
+      contentType, id: 'existing', entity: undefined, onBack: vi.fn(),
+      initialTranslationFields: { title: '', description: '' }, defaultEnabledAttributes: [],
+      contentMediaFields: ['description'], getFieldsToTranslate: () => [], deleteConfirmKey: 'delete',
+    };
+    return renderHook((entity: EntityRecord | undefined) => useEditorForm({ ...config, entity }), {
+      initialProps: undefined as EntityRecord | undefined,
+    });
+  }
+
+  it('captures loaded languages and version when the full record arrives, then preserves draft ownership', async () => {
+    const { result, rerender } = mount();
+    expect(result.current.isReady).toBe(false);
+    rerender({ id: 'existing', documentId: 'original-id', revision: 3,
+      translations: { de: { title: 'Titel', description: 'Text' }, fr: { title: 'Titre', description: 'Texte' } },
+      detailedContent: { de: 'German details', fr: 'French details' },
+    });
+    act(() => result.current.handleTranslationChange('fr', 'title', ''));
+    rerender({ id: 'existing', documentId: 'replacement-id', revision: 9,
+      translations: { de: { title: 'Remote title', description: 'Remote text' }, it: { title: 'Titolo', description: '' } },
+    });
+    await act(async () => result.current.handleSave());
+    const write = contentType === 'artifact' ? mocks.saveArtifact : mocks.saveExhibition;
+    const payload = JSON.parse(JSON.stringify(write.mock.calls[0][0]));
+    expect(payload).toMatchObject({ expectedDocumentId: 'original-id', expectedRevision: 3, removeLanguages: ['fr'] });
+    expect(payload.translations).toEqual([expect.objectContaining({ language: 'de', title: 'Titel', detailedContent: 'German details' })]);
+    expect(payload).not.toHaveProperty('replaceTranslations');
+  });
+
+  it('keeps unseen languages and details outside a partial accepted record out of the clearing payload', async () => {
+    const { result, rerender } = mount();
+    rerender({ id: 'existing', documentId: 'original-id', revision: 3,
+      translations: { de: { title: 'Titel', description: 'Text' } },
+    });
+    act(() => result.current.handleTranslationChange('de', 'title', 'Edited title'));
+    await act(async () => result.current.handleSave());
+    const write = contentType === 'artifact' ? mocks.saveArtifact : mocks.saveExhibition;
+    const payload = JSON.parse(JSON.stringify(write.mock.calls[0][0]));
+    expect(payload).toMatchObject({ expectedDocumentId: 'original-id', expectedRevision: 3, removeLanguages: [] });
+    expect(payload.translations).toEqual([{ language: 'de', title: 'Edited title', description: 'Text' }]);
+    expect(payload).not.toHaveProperty('replaceTranslations');
+  });
+});
