@@ -12,10 +12,15 @@ export const MediaLibrary: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Asset>>({});
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(text);
-    setTimeout(() => setCopied(null), 2000);
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(text);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      setCopied(null);
+      window.prompt(t('copyId'), text);
+    }
   };
 
   const startEditing = (asset: Asset) => {
