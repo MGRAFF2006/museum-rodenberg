@@ -20,8 +20,9 @@ test('former server migration rejects with the existing seed command instead of 
   await assert.rejects(exports.run(), /node scripts\/migrate-to-convex\.mjs; see docs\/content-seeding\.md/);
 });
 
-async function seed({ secret = 'fixture-write-token', failAt = -1 } = {}) {
+async function seed({ secret = 'fixture-write-token', failAt = -1, existing = false, failQuery = false } = {}) {
   const writes = [];
+  const queries = [];
   const logs = [];
   const env = {
     '.env.local': 'CONVEX_SELF_HOSTED_URL=http://fixture.invalid:3210\nCONVEX_SELF_HOSTED_ADMIN_KEY=fixture-admin-token',
@@ -31,12 +32,19 @@ async function seed({ secret = 'fixture-write-token', failAt = -1 } = {}) {
   class Client {
     constructor(url) { assert.equal(url, 'http://fixture.invalid:3210'); }
     setAdminAuth(key) { assert.equal(key, 'fixture-admin-token'); }
+    async query(operation, args) {
+      assert.ok(['exhibitions.getBySlug', 'artifacts.getBySlug'].includes(operation));
+      assert.deepEqual(Object.keys(args), ['slug']);
+      queries.push({ operation, args });
+      if (failQuery) throw new Error('Fixture query failed');
+      return existing ? { _id: `${operation}:${args.slug}`, revision: operation === 'exhibitions.getBySlug' ? 7 : undefined } : null;
+    }
     async mutation(operation, args) {
       if (writes.length === failAt) throw new Error(`Simulated remote error with ${args.serverSecret}`);
       writes.push({ operation, args });
     }
   }
-  const api = { assets: { save: 'assets.save' }, exhibitions: { save: 'exhibitions.save', setFeatured: 'exhibitions.setFeatured' }, artifacts: { save: 'artifacts.save' } };
+  const api = { assets: { save: 'assets.save' }, exhibitions: { save: 'exhibitions.save', setFeatured: 'exhibitions.setFeatured', getBySlug: 'exhibitions.getBySlug' }, artifacts: { save: 'artifacts.save', getBySlug: 'artifacts.getBySlug' } };
   const fs = {
     existsSync: (file) => file.replace('/fixture/', '') in env,
     readFileSync: (file) => {
@@ -59,7 +67,7 @@ async function seed({ secret = 'fixture-write-token', failAt = -1 } = {}) {
       error: (...values) => logs.push(values.join(' ')),
     });
   } catch (caught) { error = caught; }
-  return { writes, logs, error };
+  return { writes, queries, logs, error };
 }
 
 test('working CLI seeds the shipped JSON through authenticated writes before reporting completion', async () => {
@@ -70,6 +78,11 @@ test('working CLI seeds the shipped JSON through authenticated writes before rep
   const artifacts = JSON.parse(sourceData['src/content/artifacts.json']).artifacts;
   assert.equal(result.writes.length, Object.keys(assets).length + Object.keys(exhibitions.exhibitions).length + Object.keys(artifacts).length + 1);
   assert.ok(result.writes.every((write) => write.args.serverSecret === 'fixture-write-token'));
+  assert.equal(result.queries.length, Object.keys(exhibitions.exhibitions).length + Object.keys(artifacts).length);
+  for (const write of result.writes.filter(write => ['exhibitions.save', 'artifacts.save'].includes(write.operation))) {
+    assert.equal(write.args.expectedRevision, undefined);
+    assert.equal(write.args.expectedDocumentId, undefined);
+  }
   assert.deepEqual(result.writes.at(-1), { operation: 'exhibitions.setFeatured', args: {
     slug: exhibitions.featured, serverSecret: 'fixture-write-token',
   } });
@@ -91,4 +104,24 @@ test('a failed seed write stops the import, hides credential-bearing errors, and
   assert.match(result.error.message, /Migration content write failed/);
   assert.ok(!result.error.message.includes('fixture-write-token'));
   assert.ok(result.logs.every((line) => !line.includes('Migration complete') && !line.includes('fixture-write-token')));
+});
+
+
+test('existing seed targets carry queried document identity and revision, including legacy revision zero', async () => {
+  const result = await seed({ existing: true });
+  assert.equal(result.error, undefined);
+  for (const write of result.writes.filter(write => ['exhibitions.save', 'artifacts.save'].includes(write.operation))) {
+    const queryOperation = write.operation.replace('.save', '.getBySlug');
+    assert.ok(result.queries.some(query => query.operation === queryOperation && query.args.slug === write.args.slug));
+    assert.equal(write.args.expectedDocumentId, `${queryOperation}:${write.args.slug}`);
+    assert.equal(write.args.expectedRevision, write.operation === 'exhibitions.save' ? 7 : 0);
+  }
+});
+
+test('failed target reads stop before any versioned content write or completion claim', async () => {
+  const result = await seed({ failQuery: true });
+  assert.match(result.error.message, /Fixture query failed/);
+  assert.equal(result.queries.length, 1);
+  assert.ok(result.writes.every(write => write.operation === 'assets.save'));
+  assert.ok(result.logs.every(line => !line.includes('Migration complete')));
 });
