@@ -59,7 +59,8 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
     (exhibition.media.audio && exhibition.media.audio.length > 0)
   );
 
-  const hasDetailedContent = isEnabled('detailedContent') && exhibition.detailedContent && exhibition.detailedContent[currentLanguage];
+  const detailedContent = exhibition.detailedContent?.[currentLanguage] || exhibition.detailedContent?.de;
+  const hasDetailedContent = isEnabled('detailedContent') && detailedContent;
 
 
   return (
@@ -361,7 +362,7 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
           isOpen={isDetailedContentOpen}
           onClose={() => setIsDetailedContentOpen(false)}
           title={exhibition.title}
-          content={exhibition.detailedContent![currentLanguage] || ''}
+          content={detailedContent || ''}
           media={exhibition.media as RequiredMedia}
         />
       )}

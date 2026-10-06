@@ -42,7 +42,8 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
     (artifact.media.audio && artifact.media.audio.length > 0)
   );
 
-  const hasDetailedContent = isEnabled('detailedContent') && artifact.detailedContent && artifact.detailedContent[currentLanguage];
+  const detailedContent = artifact.detailedContent?.[currentLanguage] || artifact.detailedContent?.de;
+  const hasDetailedContent = isEnabled('detailedContent') && detailedContent;
 
   const handleMediaClick = (type: 'image' | 'video' | 'audio', url: string) => {
     if (isMobile && onMediaViewerClick) {
@@ -373,7 +374,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
           isOpen={isDetailedContentOpen}
           onClose={() => setIsDetailedContentOpen(false)}
           title={artifact.title}
-          content={artifact.detailedContent![currentLanguage] || ''}
+          content={detailedContent || ''}
           media={artifact.media as RequiredMedia}
         />
       )}
