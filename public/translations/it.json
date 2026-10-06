@@ -98,5 +98,6 @@
   "altText": "Testo alternativo",
   "name": "Nome",
   "logout": "Esci",
-  "contentChangedReload": "Questo contenuto è stato modificato o eliminato. Le modifiche non salvate restano qui. Torna alla panoramica e riapri l’elemento per caricare la versione più recente."
+  "contentChangedReload": "Questo contenuto è stato modificato o eliminato. Le modifiche non salvate restano qui. Torna alla panoramica e riapri l’elemento per caricare la versione più recente.",
+  "qrCodeAlreadyAssigned": "Questo codice QR è già assegnato a un altro oggetto o a un’altra mostra. Scegli un altro codice QR."
 }

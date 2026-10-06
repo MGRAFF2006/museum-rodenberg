@@ -98,5 +98,6 @@
   "altText": "Tekst alternatywny",
   "name": "Nazwa",
   "logout": "Wyloguj",
-  "contentChangedReload": "Ta treść została zmieniona lub usunięta. Niezapisane zmiany pozostają tutaj. Wróć do przeglądu i otwórz element ponownie, aby wczytać najnowszą wersję."
+  "contentChangedReload": "Ta treść została zmieniona lub usunięta. Niezapisane zmiany pozostają tutaj. Wróć do przeglądu i otwórz element ponownie, aby wczytać najnowszą wersję.",
+  "qrCodeAlreadyAssigned": "Ten kod QR jest już przypisany do innego obiektu lub wystawy. Wybierz inny kod QR."
 }

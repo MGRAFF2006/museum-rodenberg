@@ -1,4 +1,4 @@
-import { ContentConflictError, useProtectedMutation } from './useProtectedMutation';
+import { ContentConflictError, ContentQRCodeError, useProtectedMutation } from './useProtectedMutation';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
 import { api } from '../../convex/_generated/api';
@@ -490,6 +490,11 @@ export function useEditorForm(config: EditorConfig) {
       refreshData();
       onBack(true);
     } catch (error) {
+      if (error instanceof ContentQRCodeError) {
+        setValidationErrors([t('qrCodeAlreadyAssigned')]);
+        alert(t('qrCodeAlreadyAssigned'));
+        return;
+      }
       if (error instanceof ContentConflictError) {
         setValidationErrors([t('contentChangedReload')]);
         alert(t('contentChangedReload'));

@@ -139,6 +139,7 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [exhibitions, artifacts]);
 
   const findByQRCode = useCallback((qrCode: string) => {
+    if (!qrCode.trim()) return { type: null, item: null };
     const artifact = artifacts.find(a => a.qrCode === qrCode);
     const exhibition = exhibitions.find(e => e.qrCode === qrCode);
 

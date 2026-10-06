@@ -98,5 +98,6 @@
   "altText": "Texte alternatif",
   "name": "Nom",
   "logout": "Déconnexion",
-  "contentChangedReload": "Ce contenu a été modifié ou supprimé. Vos modifications non enregistrées sont conservées ici. Revenez à la vue d’ensemble et rouvrez l’élément pour charger sa dernière version."
+  "contentChangedReload": "Ce contenu a été modifié ou supprimé. Vos modifications non enregistrées sont conservées ici. Revenez à la vue d’ensemble et rouvrez l’élément pour charger sa dernière version.",
+  "qrCodeAlreadyAssigned": "Ce code QR est déjà attribué à un autre objet ou à une autre exposition. Choisissez un autre code QR."
 }

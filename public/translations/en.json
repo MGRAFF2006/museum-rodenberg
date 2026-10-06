@@ -129,5 +129,6 @@
   "selectAssetPlaceholder": "Select an asset...",
   "assetLabel": "Asset",
   "mediaLabel": "Media",
-  "contentChangedReload": "This content was changed or deleted. Your unsaved edits are kept here. Return to the overview and reopen the item to load its latest version."
+  "contentChangedReload": "This content was changed or deleted. Your unsaved edits are kept here. Return to the overview and reopen the item to load its latest version.",
+  "qrCodeAlreadyAssigned": "This QR code is already assigned to another artifact or exhibition. Choose another QR code."
 }

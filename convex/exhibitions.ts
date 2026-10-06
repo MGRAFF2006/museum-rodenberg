@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { requireServerSecret } from "./auth";
+import { requireUniqueQRCode } from "./qrCodeValidation";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -178,6 +179,7 @@ export const save = mutation({
       : expectedRevision !== undefined || expectedDocumentId !== undefined) {
       throw new ConvexError({ code: "STALE_CONTENT" });
     }
+    await requireUniqueQRCode(ctx, args.qrCode, existing?._id);
     const revision = existing ? (existing.revision ?? 0) + 1 : 0;
     let exhibitionId;
     if (existing) {
