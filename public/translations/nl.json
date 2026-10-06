@@ -97,5 +97,6 @@
   "deleteFileConfirm": "Weet je zeker dat je dit bestand wilt verwijderen?",
   "altText": "Alt-tekst",
   "name": "Naam",
-  "logout": "Uitloggen"
+  "logout": "Uitloggen",
+  "qrCameraUnavailable": "De camera kon niet starten of stoppen. Sluit de scanner en probeer opnieuw."
 }
