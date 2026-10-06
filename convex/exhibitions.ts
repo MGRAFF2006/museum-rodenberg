@@ -125,7 +125,7 @@ async function updateFeatured(ctx: MutationCtx, slug: string | null) {
   for (const exhibition of exhibitions) {
     const isFeatured = exhibition.slug === slug;
     if (exhibition.isFeatured !== isFeatured) {
-      await ctx.db.patch(exhibition._id, { isFeatured });
+      await ctx.db.patch(exhibition._id, { isFeatured, revision: (exhibition.revision ?? 0) + 1 });
     }
   }
 

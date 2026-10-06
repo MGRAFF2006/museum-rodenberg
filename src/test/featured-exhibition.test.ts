@@ -57,7 +57,7 @@ function fixture() {
   return { ctx: { db }, rows, featured, flagged };
 }
 
-const saveArgs = { serverSecret: credential, slug: 'b', image: '', qrCode: 'B', artifactSlugs: [],
+const saveArgs = { serverSecret: credential, slug: 'b', image: '', qrCode: 'B', artifactSlugs: [], expectedRevision: 0, expectedDocumentId: 'ex-b',
   translations: [{ language: 'de', title: 'Ausstellung', description: '' }], mediaItems: [] };
 beforeEach(() => vi.stubEnv('CONVEX_WRITE_SECRET', credential));
 afterEach(() => vi.unstubAllEnvs());
@@ -89,21 +89,21 @@ describe('featured exhibition consistency', () => {
     await handler(exhibitions.save)(ctx, { ...saveArgs, isFeatured: true });
     expect(featured()).toBe('b');
     expect(flagged()).toEqual(['b']);
-    await handler(exhibitions.save)(ctx, { ...saveArgs, isFeatured: true });
+    await handler(exhibitions.save)(ctx, { ...saveArgs, expectedRevision: 1, isFeatured: true });
     expect(rows.settings.filter(row => row.key === 'featured_exhibition')).toHaveLength(1);
   });
 
   it('creates a featured exhibition and its setting when neither exists', async () => {
     const { ctx, rows, featured, flagged } = fixture();
     rows.settings = rows.settings.filter(row => row.key !== 'featured_exhibition');
-    await handler(exhibitions.save)(ctx, { ...saveArgs, slug: 'created', isFeatured: true });
+    await handler(exhibitions.save)(ctx, { ...saveArgs, slug: 'created', expectedRevision: undefined, expectedDocumentId: undefined, isFeatured: true });
     expect(featured()).toBe('created');
     expect(flagged()).toEqual(['created']);
   });
 
   it('explicitly unfeaturing the current exhibition clears the singleton and stale flags', async () => {
     const { ctx, featured, flagged } = fixture();
-    await handler(exhibitions.save)(ctx, { ...saveArgs, slug: 'a', isFeatured: false });
+    await handler(exhibitions.save)(ctx, { ...saveArgs, slug: 'a', expectedDocumentId: 'ex-a', isFeatured: false });
     expect(featured()).toBeUndefined();
     expect(flagged()).toEqual([]);
   });
@@ -134,4 +134,25 @@ describe('featured exhibition consistency', () => {
     }
     expect(JSON.stringify(rows)).toBe(before);
   });
+
+  it('invalidates old drafts when feature flags change and does not bump repeated selections', async () => {
+    const { ctx, rows } = fixture();
+    const oldDraft = { ...saveArgs, slug: 'a', expectedDocumentId: 'ex-a', isFeatured: true };
+    await handler(exhibitions.setFeatured)(ctx, { serverSecret: credential, slug: 'c' });
+    expect(rows.exhibitions.map(row => row.revision)).toEqual([1, undefined, 1]);
+    const before = JSON.stringify(rows);
+    await expect(handler(exhibitions.save)(ctx, oldDraft)).rejects.toMatchObject({ data: { code: 'STALE_CONTENT' } });
+    expect(JSON.stringify(rows)).toBe(before);
+    await handler(exhibitions.setFeatured)(ctx, { serverSecret: credential, slug: 'c' });
+    expect(rows.exhibitions.map(row => row.revision)).toEqual([1, undefined, 1]);
+  });
+
+  it('bumps replacement feature and detached child snapshots when deleting the selected exhibition', async () => {
+    const { ctx, rows } = fixture();
+    await handler(exhibitions.remove)(ctx, { serverSecret: credential, slug: 'a' });
+    expect(rows.exhibitions.map(row => row.revision)).toEqual([1, undefined]);
+    expect(rows.artifacts[0]).toMatchObject({ revision: 1 });
+    expect(rows.artifacts[0]).not.toHaveProperty('exhibitionSlug');
+  });
+
 });
