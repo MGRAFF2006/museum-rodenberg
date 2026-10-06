@@ -16,6 +16,15 @@ export const MARKDOWN_REGEX = {
   EMBEDDING: /(!\[.*?\]\(.*?\)|\[(?:Image|Audio|Video):\s*.*?\]\((?:image|audio|video):.*?\))/gi
 };
 
+/** Classify the resource pathname; query strings and fragments are not extensions. */
+export function getMediaType(url: string): 'image' | 'video' | 'audio' {
+  const filename = url.split(/[?#]/, 1)[0].split('/').pop() || '';
+  const extension = filename.split('.').pop()?.toLowerCase();
+  if (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(extension || '')) return 'video';
+  if (['mp3', 'wav', 'aac', 'm4a', 'flac'].includes(extension || '')) return 'audio';
+  return 'image';
+}
+
 /**
  * Extracts all media URLs from a markdown string.
  * Returns an object with arrays for each media type.
@@ -33,10 +42,7 @@ export const extractMediaFromMarkdown = (markdown: string) => {
     const prefix = /^(image|audio|video):/i.exec(node.url);
     if (node.type === 'link' && !prefix) continue;
     const url = prefix ? node.url.slice(prefix[0].length) : node.url;
-    const extension = url.split(/[?#]/, 1)[0].split('.').pop()?.toLowerCase();
-    const type = prefix?.[1].toLowerCase() ??
-      (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(extension || '') ? 'video' :
-      ['mp3', 'wav', 'aac', 'm4a', 'flac'].includes(extension || '') ? 'audio' : 'image');
+    const type = prefix?.[1].toLowerCase() ?? getMediaType(url);
     const title = node.type === 'link' ? node.title.replace(/^(Image|Audio|Video):\s*/i, '') : node.title;
     if (type === 'image') result.images.push(url);
     if (type === 'audio') result.audio.push({ url, title: title || url.split('/').pop() || 'Audio' });
