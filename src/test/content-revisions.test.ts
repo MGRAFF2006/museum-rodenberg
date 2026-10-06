@@ -25,7 +25,8 @@ for (const [type, operations] of [['artifact', artifacts], ['exhibition', exhibi
       expect(initial.revision).toBe(0);
       const first = { ...draft(), expectedRevision: initial.revision, expectedDocumentId: initial._id, image: 'first-photo',
         translations: [{ language: 'de', title: 'First curator', description: 'First story' }], mediaItems: [] };
-      const second = { ...draft(), expectedRevision: initial.revision, expectedDocumentId: initial._id, image: 'second-photo' };
+      const second = { ...draft(), expectedRevision: initial.revision, expectedDocumentId: initial._id, image: 'second-photo',
+        replaceTranslations: true, translations: [{ language: 'de', title: 'Stale replacement', description: '' }], mediaItems: [] };
       await handler(operations.save)({ db: memory.db }, wireArgs(first));
       const before = structuredClone(memory.tables);
       memory.writes.length = 0;

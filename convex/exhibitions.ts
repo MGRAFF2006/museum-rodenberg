@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { requireServerSecret } from "./auth";
 import { requireUniqueQRCode } from "./qrCodeValidation";
+import { validateContentInput } from "./contentValidation";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -135,6 +136,8 @@ export const save = mutation({
     sponsor: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     enabledAttributes: v.optional(v.array(v.string())),
+    createOnly: v.optional(v.boolean()),
+    replaceTranslations: v.optional(v.boolean()),
     isFeatured: v.boolean(),
     artifactSlugs: v.array(v.string()),
     // Translations as an array of objects
@@ -164,8 +167,9 @@ export const save = mutation({
       )
     ),
   },
-  handler: async (ctx, { serverSecret, ...args }) => {
+  handler: async (ctx, { serverSecret, createOnly, replaceTranslations, ...args }) => {
     requireServerSecret(serverSecret);
+    validateContentInput(args.slug, args.translations);
     const { translations, mediaItems, expectedRevision, expectedDocumentId, ...exhibitionData } = args;
 
     // Check if exhibition already exists
@@ -174,6 +178,7 @@ export const save = mutation({
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
 
+    if (createOnly && existing) throw new Error("An exhibition with this ID already exists");
     if (existing
       ? expectedRevision !== (existing.revision ?? 0) || expectedDocumentId !== existing._id
       : expectedRevision !== undefined || expectedDocumentId !== undefined) {
@@ -220,6 +225,17 @@ export const save = mutation({
           ...t,
           exhibitionId,
         });
+      }
+    }
+
+    if (replaceTranslations) {
+      const languages = new Set(translations.map((t) => t.language));
+      const stored = await ctx.db
+        .query("exhibition_translations")
+        .withIndex("by_exhibition", (q) => q.eq("exhibitionId", exhibitionId))
+        .collect();
+      for (const translation of stored) {
+        if (!languages.has(translation.language)) await ctx.db.delete(translation._id);
       }
     }
 
