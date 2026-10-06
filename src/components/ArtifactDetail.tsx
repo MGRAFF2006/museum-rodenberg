@@ -9,13 +9,14 @@ import { Artifact, MediaItem, RequiredMedia } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { TranslationWarning } from './TranslationWarning';
 import { stripMarkdown } from '../utils/markdownUtils';
+import type { MediaSelection } from '../utils/mediaGallery';
 
 interface ArtifactDetailProps {
   artifact: Artifact;
   onBack: () => void;
   exhibitionTitle?: string;
   onDetailedContentClick?: (type: 'artifact' | 'exhibition', id: string) => void;
-  onMediaViewerClick?: (images: string[], videos: MediaItem[], audio: MediaItem[]) => void;
+  onMediaViewerClick?: (images: string[], videos: MediaItem[], audio: MediaItem[], selection?: MediaSelection) => void;
 }
 
 export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
@@ -51,7 +52,8 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
       onMediaViewerClick(
         artifact.media?.images || [],
         artifact.media?.videos || [],
-        artifact.media?.audio || []
+        artifact.media?.audio || [],
+        { type, url }
       );
     } else {
       setMediaViewerInitialItem({ type, url });
@@ -360,11 +362,11 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
         </div>
       </div>
       
-      {hasMedia && !isMobile && (
+      {(hasMedia || mediaViewerInitialItem) && !isMobile && (
         <MediaViewer
-          images={artifact.media!.images || []}
-          videos={artifact.media!.videos || []}
-          audio={artifact.media!.audio || []}
+          images={artifact.media?.images || []}
+          videos={artifact.media?.videos || []}
+          audio={artifact.media?.audio || []}
           isOpen={isMediaViewerOpen}
           onClose={() => {
             setIsMediaViewerOpen(false);
