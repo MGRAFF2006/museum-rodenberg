@@ -9,92 +9,100 @@ interface LanguageContextType {
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
-
 const isDev = import.meta.env.DEV;
+const languages = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
 
-/** In dev mode, bust cache to pick up file changes. In production, let the browser cache. */
-function translationUrl(lang: string): string {
-  const base = `/translations/${lang}.json`;
-  return isDev ? base + '?v=' + Date.now() : base;
+function savedLanguage(): Language {
+  try {
+    const saved = localStorage.getItem('museum-language');
+    if (saved && languages.includes(saved)) return saved as Language;
+  } catch {
+    // Preferences are optional when the browser denies storage.
+  }
+  return 'de';
+}
+
+/** In dev mode, bust cache to pick up file changes. */
+async function loadMessages(language: Language, signal: AbortSignal): Promise<Record<string, string>> {
+  const url = `/translations/${language}.json${isDev ? '?v=' + Date.now() : ''}`;
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`Translation request failed: ${response.status}`);
+  return response.json();
 }
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentLanguage, setCurrentLanguage] = useState<Language>('de');
-  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [currentLanguage, setCurrentLanguage] = useState<Language>(savedLanguage);
+  const [translations, setTranslations] = useState<{ language: Language; messages: Record<string, string> }>();
   const [fallbackTranslations, setFallbackTranslations] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [fallbackLoading, setFallbackLoading] = useState(true);
+  const [translationLoading, setTranslationLoading] = useState(true);
 
-  const loadFallback = useCallback(async () => {
-    try {
-      const response = await fetch(translationUrl('de'));
-      if (response.ok) {
-        const data = await response.json();
-        setFallbackTranslations(prev => JSON.stringify(prev) !== JSON.stringify(data) ? data : prev);
+  useEffect(() => {
+    const controller = new AbortController();
+    let request = 0;
+    const load = async () => {
+      const currentRequest = ++request;
+      try {
+        const messages = await loadMessages('de', controller.signal);
+        if (!controller.signal.aborted && currentRequest === request) setFallbackTranslations(messages);
+      } catch (error) {
+        if (!controller.signal.aborted) console.error('Failed to load fallback translations:', error);
+      } finally {
+        if (!controller.signal.aborted && currentRequest === request) setFallbackLoading(false);
       }
-    } catch (error) {
-      console.error('Failed to load fallback translations:', error);
-    }
+    };
+    void load();
+    const interval = isDev ? setInterval(() => void load(), 5000) : undefined;
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, []);
 
-  const loadTranslations = useCallback(async (isSilent = false) => {
-    if (currentLanguage === 'de') {
-      setTranslations(fallbackTranslations);
-      setLoading(false);
-      return;
-    }
-
-    if (!isSilent) setLoading(true);
-    try {
-      const response = await fetch(translationUrl(currentLanguage));
-      if (response.ok) {
-        const data = await response.json();
-        setTranslations(prev => JSON.stringify(prev) !== JSON.stringify(data) ? data : prev);
-      }
-    } catch (error) {
-      console.error('Failed to load translations:', error);
-    } finally {
-      if (!isSilent) setLoading(false);
-    }
-  }, [currentLanguage, fallbackTranslations]);
-
-  // Load German as fallback immediately
   useEffect(() => {
-    loadFallback();
-
-    const savedLanguage = localStorage.getItem('museum-language') as Language;
-    if (savedLanguage && ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'].includes(savedLanguage)) {
-      setCurrentLanguage(savedLanguage);
-    }
-  }, [loadFallback]);
-
-  useEffect(() => {
-    if (Object.keys(fallbackTranslations).length > 0 || currentLanguage !== 'de') {
-      loadTranslations();
-    }
-  }, [loadTranslations, fallbackTranslations]);
-
-  // Polling mechanism for translations in development
-  useEffect(() => {
-    const isDev = import.meta.env.DEV;
-    if (isDev) {
-      const interval = setInterval(() => {
-        loadFallback();
-        if (currentLanguage !== 'de') {
-          loadTranslations(true); // Pass true for silent loading
+    if (currentLanguage === 'de') return;
+    const controller = new AbortController();
+    let request = 0;
+    const load = async (silent = false) => {
+      const currentRequest = ++request;
+      if (!silent) setTranslationLoading(true);
+      try {
+        const messages = await loadMessages(currentLanguage, controller.signal);
+        if (!controller.signal.aborted && currentRequest === request) {
+          setTranslations({ language: currentLanguage, messages });
         }
-      }, 5000); // Poll every 5 seconds
-      return () => clearInterval(interval);
+      } catch (error) {
+        if (!controller.signal.aborted && currentRequest === request) {
+          setTranslations({ language: currentLanguage, messages: {} });
+          console.error('Failed to load translations:', error);
+        }
+      } finally {
+        if (!controller.signal.aborted && currentRequest === request) setTranslationLoading(false);
+      }
+    };
+    void load();
+    const interval = isDev ? setInterval(() => void load(true), 5000) : undefined;
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [currentLanguage]);
+
+  useEffect(() => {
+    document.documentElement.lang = currentLanguage;
+    try {
+      localStorage.setItem('museum-language', currentLanguage);
+    } catch {
+      // Keep language switching available without persistent storage.
     }
-  }, [currentLanguage, loadFallback, loadTranslations]);
+  }, [currentLanguage]);
 
-  const changeLanguage = (language: Language) => {
-    setCurrentLanguage(language);
-    localStorage.setItem('museum-language', language);
-  };
-
+  const changeLanguage = (language: Language) => setCurrentLanguage(language);
   const t = useCallback((key: string): string => {
-    return translations[key] || fallbackTranslations[key] || key;
-  }, [translations, fallbackTranslations]);
+    const messages = translations?.language === currentLanguage ? translations.messages : undefined;
+    return messages?.[key] || fallbackTranslations[key] || key;
+  }, [translations, currentLanguage, fallbackTranslations]);
+  const loading = currentLanguage === 'de' ? fallbackLoading : translationLoading;
 
   return (
     <LanguageContext.Provider value={{ currentLanguage, changeLanguage, t, loading }}>
@@ -105,8 +113,6 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
 export const useLanguage = () => {
   const context = useContext(LanguageContext);
-  if (context === undefined) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
-  }
+  if (context === undefined) throw new Error('useLanguage must be used within a LanguageProvider');
   return context;
 };
