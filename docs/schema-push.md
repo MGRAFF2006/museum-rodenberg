@@ -22,8 +22,9 @@ and be visible in the wrapper's process arguments. Keys are not forwarded to the
 Convex subprocess as arguments, printed or saved to a temporary credential file.
 
 The wrapper invokes the installed `convex deploy` command with explicit
-self-hosted URL/key environment variables, clearing unrelated cloud deployment
-selectors. Unlike `convex dev --once`, `deploy` does not reconfigure the frontend
+self-hosted URL/key environment variables and required backend typechecking,
+clearing unrelated cloud deployment selectors. A type error must stop publishing.
+Unlike `convex dev --once`, `deploy` does not reconfigure the frontend
 or write `.env.local`, so existing local URLs, formatting and file absence are
 preserved on success, failure or interruption. CLI output is suppressed because
 diagnostics can contain credentials; wrapper errors identify exit status/signal.

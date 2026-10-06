@@ -56,7 +56,7 @@ export async function pushSchema(config, { spawnProcess = spawn, signals = proce
   await new Promise((resolve, reject) => {
     // deploy accepts explicit self-hosted credentials without dev's env-file writes.
     // Suppress CLI output, which may contain credentials in diagnostics.
-    const child = spawnProcess(process.execPath, [cli, 'deploy', '--typecheck=disable'], {
+    const child = spawnProcess(process.execPath, [cli, 'deploy', '--typecheck=enable'], {
       cwd: config.root, stdio: 'ignore',
       env: { ...config.env, CONVEX_SELF_HOSTED_URL: config.url, CONVEX_SELF_HOSTED_ADMIN_KEY: config.key,
         CONVEX_DEPLOY_KEY: '', CONVEX_DEPLOYMENT: '', CONVEX_VERBOSE: '', CI: '1' },

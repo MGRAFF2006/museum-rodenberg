@@ -67,7 +67,7 @@ for (const prod of [false, true]) for (const existing of [false, true]) for (con
     let killed;
     const spawnProcess = (command, args, options) => {
       assert.equal(command, process.execPath);
-      assert.deepEqual(args.slice(1), ['deploy', '--typecheck=disable']);
+      assert.deepEqual(args.slice(1), ['deploy', '--typecheck=enable']);
       assert.equal(options.env.CONVEX_SELF_HOSTED_URL, config.url);
       assert.equal(options.env.CONVEX_SELF_HOSTED_ADMIN_KEY, config.key);
       assert.equal(options.env.CONVEX_DEPLOY_KEY, '');
