@@ -110,6 +110,17 @@ describe.each(['artifact', 'exhibition'] as const)('%s public detailed content',
     expect(await screen.findByText('English details')).toBeVisible();
   });
 
+  it.each(['disabled', 'empty'])('opens details without exposing an %s description', async (condition) => {
+    if (condition === 'disabled') record.enabledAttributes = ['detailedContent'];
+    else record.translations[1].description = '';
+    render(publicPage(`/${type}/${record.slug}`));
+    const action = await screen.findByRole('button', { name: 'readMore' });
+    expect(screen.queryByText('Description')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: type === 'artifact' ? 'description' : 'aboutExhibition' })).not.toBeInTheDocument();
+    fireEvent.click(action);
+    expect(await screen.findByText('English details')).toBeVisible();
+  });
+
   it('updates details when the selected language changes', async () => {
     record.translations.push({ language: 'fr', title: 'Titre français', description: 'Description', detailedContent: 'Détails français' });
     const view = render(publicPage(`/${type}/${record.slug}/details`));
