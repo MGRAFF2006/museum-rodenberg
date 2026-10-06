@@ -20,7 +20,7 @@ The application is a React and TypeScript frontend backed by a self-hosted Conve
 
 ## Requirements
 
-- Node.js 18 or newer and npm 9 or newer
+- Node.js 22.13 or newer (use a supported LTS release) and npm 9 or newer
 - Docker with Docker Compose for the local Convex backend
 
 ## Local development
@@ -47,10 +47,15 @@ Never commit `.env` or `.env.local`, and replace the example admin password befo
 ```bash
 npm run typecheck
 npm test -- --run
+npm run test:node
 npm run build
 ```
 
 The existing GitHub Actions workflow runs type checking, tests, and the production build. A push to `main` also publishes the Convex schema when the production secrets are configured.
+
+`npm test` runs the visitor/application Vitest suites. `npm run test:node` also
+runs native Node suites under `scripts/` and `server/`, including nested test
+directories; it skips empty trees and excludes nested `node_modules`.
 
 ## Project layout
 
@@ -65,4 +70,4 @@ src/hooks/       Content, language, search, and accessibility hooks
 
 ## License
 
-Licensed under the [MIT License](LICENSE).
+Licensed under the [GNU General Public License, version 2](LICENSE).

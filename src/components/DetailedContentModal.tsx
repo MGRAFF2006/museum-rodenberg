@@ -5,6 +5,7 @@ import { MediaViewer } from './MediaViewer';
 import { TextToSpeechButton } from './TextToSpeechButton';
 import { useLanguage } from '../hooks/useLanguage';
 import { stripMarkdown } from '../utils/markdownUtils';
+import { getMediaGallery } from '../utils/mediaGallery';
 
 interface DetailedContentModalProps {
   isOpen: boolean;
@@ -36,11 +37,8 @@ export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
     setIsMediaViewerOpen(true);
   };
 
-  const hasMedia = media && (
-    media.images.length > 0 ||
-    media.videos.length > 0 ||
-    media.audio.length > 0
-  );
+  const gallery = getMediaGallery(media, content);
+  const hasMedia = gallery.images.length > 0 || gallery.videos.length > 0 || gallery.audio.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center p-0 md:p-4">
@@ -97,11 +95,11 @@ export const DetailedContentModal: React.FC<DetailedContentModalProps> = ({
       </div>
 
       {/* Media Viewer */}
-      {hasMedia && (
+      {(hasMedia || mediaViewerInitialItem) && (
         <MediaViewer
-          images={media!.images}
-          videos={media!.videos}
-          audio={media!.audio}
+          images={gallery.images}
+          videos={gallery.videos}
+          audio={gallery.audio}
           isOpen={isMediaViewerOpen}
           onClose={() => {
             setIsMediaViewerOpen(false);

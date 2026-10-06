@@ -2,8 +2,10 @@ import { useState, useCallback } from 'react';
 import { EntityRecord, MediaItem } from '../types';
 import { extractMediaFromMarkdown } from '../utils/markdownUtils';
 import { authFetch } from '../utils/auth';
+import { useAssets } from './useAssets';
 
 export const useAssetValidation = () => {
+  const { resolveAsset, isLoading } = useAssets();
   const [isValidating, setIsValidating] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
@@ -31,7 +33,7 @@ export const useAssetValidation = () => {
     
     // Add from translations
     if (data.translations) {
-      Object.values(data.translations).forEach((trans: Record<string, string | undefined>) => {
+      Object.values(data.translations).forEach((trans) => {
         // Collect all fields that might contain markdown or URLs
         const fieldsToExtract = ['description', 'significance'];
         fieldsToExtract.forEach(field => {
@@ -57,7 +59,26 @@ export const useAssetValidation = () => {
       });
     }
 
-    const pathsToValidate = Array.from(paths).filter(p => p.startsWith('/uploads/'));
+    const resolvedPaths = new Set<string>();
+    const missing: string[] = [];
+    for (const reference of paths) {
+      const asset = resolveAsset(reference);
+      if (asset) {
+        resolvedPaths.add(asset.url);
+      } else if (/^(?:[a-z][a-z\d+.-]*:|\/)/i.test(reference)) {
+        resolvedPaths.add(reference);
+      } else {
+        missing.push(reference);
+      }
+    }
+    if (missing.length > 0) {
+      setValidationErrors(isLoading
+        ? ['Asset library is still loading. Please try again.']
+        : missing.map(reference => `Unknown asset: ${reference}`));
+      setIsValidating(false);
+      return false;
+    }
+    const pathsToValidate = Array.from(resolvedPaths).filter(p => p.startsWith('/uploads/'));
     
     if (pathsToValidate.length === 0) {
       setIsValidating(false);
@@ -83,7 +104,7 @@ export const useAssetValidation = () => {
         setIsValidating(false);
         return false;
       }
-    } catch (error) {
+    } catch {
       setValidationErrors(['Error during asset validation']);
       setIsValidating(false);
       return false;
@@ -91,7 +112,7 @@ export const useAssetValidation = () => {
 
     setIsValidating(false);
     return true;
-  }, []);
+  }, [resolveAsset, isLoading]);
 
   return {
     isValidating,
