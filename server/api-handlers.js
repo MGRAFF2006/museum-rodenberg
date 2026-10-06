@@ -55,8 +55,8 @@ export { uploadMedia } from './upload-media.js';
 // ── Translation proxy ───────────────────────────────────────────
 
 export async function translate(body, apiUrl, apiKey) {
-  const { text, target } = body;
-  if (!text || !target) {
+  const { text, target } = body || {};
+  if (typeof text !== 'string' || !text.trim() || typeof target !== 'string' || !['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'].includes(target)) {
     return { status: 400, body: { error: 'Text and target language are required' } };
   }
 
@@ -87,14 +87,16 @@ export async function translate(body, apiUrl, apiKey) {
   const data = await response.json();
   let translatedText = data.translatedText;
 
-  // Restore URLs
-  placeholders.forEach((url, i) => {
-    const regex = new RegExp(`(ASSET\\s*URL\\s*${i})|(_*\\s*URL\\s*_*\\s*${i}\\s*_*)|(URL\\s*${i})`, 'gi');
-    translatedText = translatedText.replace(regex, url);
-  });
+  if (typeof translatedText !== 'string') throw new Error('Invalid translation response');
 
-  // Fix potential broken Markdown syntax
-  translatedText = translatedText.replace(/(!?)\s*\[\s*(.*?)\s*\]\s*\(\s*(.*?)\s*\)/g, '$1[$2]($3)');
+  // One indexed callback avoids prefix collisions (1 versus 10) and replacement
+  // string interpretation of literal '$' characters in protected destinations.
+  translatedText = translatedText.replace(
+    /\bASSET\s*URL\s*(\d+)\b|_+\s*URL\s*_+\s*(\d+)\s*_+|\bURL\s*(\d+)\b/gi,
+    (match, first, second, third) => placeholders[Number(first ?? second ?? third)] ?? match,
+  );
+  // Preserve all surrounding Markdown whitespace; translator output may already
+  // be valid and normalizing optional image prefixes consumed prose separators.
 
   return { status: 200, body: { translatedText } };
 }
