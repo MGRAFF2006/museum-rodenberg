@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireServerSecret } from "./auth";
+import { validateContentInput } from "./contentValidation";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ export const save = mutation({
   },
   handler: async (ctx, { serverSecret, ...args }) => {
     requireServerSecret(serverSecret);
+    validateContentInput(args.slug, args.translations);
     const { translations, mediaItems, ...exhibitionData } = args;
 
     // Check if exhibition already exists
