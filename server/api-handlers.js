@@ -149,7 +149,12 @@ export function validateAssets(rootDir, body) {
     if (!p || typeof p !== 'string') return false;
     if (!p.startsWith('/uploads/')) return false;
     const fullPath = resolveUploadPath(rootDir, p);
-    return !fullPath || !fs.existsSync(fullPath);
+    if (!fullPath) return true;
+    try { return !fs.statSync(fullPath).isFile(); }
+    catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return true;
+      throw error;
+    }
   });
 
   return { status: 200, body: { invalid } };
@@ -182,10 +187,14 @@ export function deleteImage(rootDir, imagePath) {
     return { status: 400, body: { error: 'Invalid path' } };
   }
 
-  if (!fs.existsSync(fullPath)) {
-    return { status: 404, body: { error: 'File not found' } };
+  try {
+    if (!fs.statSync(fullPath).isFile()) {
+      return { status: 400, body: { error: 'Path must identify a media file' } };
+    }
+    fs.unlinkSync(fullPath);
+  } catch (error) {
+    // Retrying after a file-first deletion must still allow metadata cleanup.
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
   }
-
-  fs.unlinkSync(fullPath);
   return { status: 200, body: { success: true } };
 }
