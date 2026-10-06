@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable, PassThrough, Writable } from 'node:stream';
+import { spawnSync } from 'node:child_process';
 import { uploadMedia } from './api-handlers.js';
 import { UPLOAD_LIMITS } from './upload-media.js';
 
@@ -56,6 +57,23 @@ test('nameless octet-stream file, invalid multipart and empty uploads return val
   await assert.rejects(uploadMedia(root, {}, Readable.from([])), rejectedWith(400));
   await assert.rejects(upload(''), rejectedWith(400));
   assert.deepEqual(await files(), []);
+});
+
+test('rejecting a still-open multipart file does not crash the process', () => {
+  for (const [filename, mime, status] of [['page.html', 'text/html', 415], [null, 'application/octet-stream', 400]]) {
+    const script = `
+      import assert from 'node:assert/strict';
+      import { PassThrough } from 'node:stream';
+      import { uploadMedia } from ${JSON.stringify(new URL('./api-handlers.js', import.meta.url).href)};
+      const stream = new PassThrough();
+      const uploading = uploadMedia(${JSON.stringify(root)}, ${JSON.stringify(headers)}, stream);
+      stream.write(${JSON.stringify(part(filename, mime).slice(0, -2))});
+      await assert.rejects(uploading, error => error.status === ${status});
+      stream.end();
+    `;
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8' });
+    assert.equal(child.status, 0, child.stderr);
+  }
 });
 
 test('limits file counts and rolls back earlier files when a later part is rejected', async () => {

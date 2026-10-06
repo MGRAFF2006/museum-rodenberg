@@ -85,6 +85,9 @@ export async function uploadMedia(rootDir, headers, reqStream) {
   parser.on('partsLimit', () => fail(new UploadError('Too many multipart parts', 413)));
   parser.on('fieldsLimit', () => fail(new UploadError('Form fields are not supported', 413)));
   parser.on('file', (_name, file, { filename, mimeType }) => {
+    // Rejected parts may still be open when Busboy destroys them with an error.
+    // They need a listener even when no output pipeline will be created.
+    file.once('error', fail);
     if (failure) return file.resume();
     if (typeof filename !== 'string' || !filename.trim()) {
       file.resume();
