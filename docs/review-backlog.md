@@ -357,6 +357,9 @@ its normal merge. Stacked PRs still need target-eligible CI and integration chec
 
 ### Current focused integration evidence
 
+- Standalone #34 lint verification passed with zero errors and seven existing
+  warnings. The full feedback-source assembly typecheck remains pending fixture
+  typing fixes exposed by #14; no combined typecheck success is claimed here.
 - The assembled backend feedback graph passed 165 Vitest cases and 19 native
   Node cases. The deliberate-translation-removal race was also independently
   checked against #42: 20 save/removal cases passed, including the two original
