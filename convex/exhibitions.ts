@@ -263,14 +263,22 @@ export const save = mutation({
 
 /** Delete an exhibition and its translations/media. */
 export const remove = mutation({
-  args: { serverSecret: v.optional(v.string()), slug: v.string() },
+  args: {
+    serverSecret: v.optional(v.string()),
+    slug: v.string(),
+    expectedRevision: v.optional(v.number()),
+    expectedDocumentId: v.optional(v.string()),
+  },
   handler: async (ctx, { serverSecret, ...args }) => {
     requireServerSecret(serverSecret);
     const exhibition = await ctx.db
       .query("exhibitions")
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
-    if (!exhibition) return;
+    if (!exhibition || args.expectedRevision !== (exhibition.revision ?? 0) ||
+      args.expectedDocumentId !== exhibition._id) {
+      throw new ConvexError({ code: "STALE_CONTENT" });
+    }
 
     // Delete translations
     const translations = await ctx.db
