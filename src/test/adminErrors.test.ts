@@ -11,7 +11,9 @@ let token: string;
 beforeEach(async () => {
   const app = express();
   app.use('/api', createAdminApi(process.cwd(), { ADMIN_PASSWORD: 'fixture-password' }));
-  await new Promise<void>(resolve => { server = app.listen(0, '127.0.0.1', resolve); });
+  await new Promise<void>((resolve, reject) => {
+    server = app.listen(0, '127.0.0.1', error => error ? reject(error) : resolve());
+  });
   const addr = server.address();
   if (!addr || typeof addr === 'string') throw new Error('Missing test port');
   origin = `http://127.0.0.1:${addr.port}/api`;
