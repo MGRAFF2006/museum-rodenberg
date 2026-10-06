@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
@@ -8,7 +8,6 @@ import { Markdown } from 'tiptap-markdown';
 import { 
   Bold, 
   Italic, 
-  Underline as UnderlineIcon, 
   List, 
   ListOrdered, 
   Image as ImageIcon, 
@@ -21,6 +20,21 @@ import {
 import { AssetPicker } from './AssetSelector';
 import { useAssets } from '../../hooks/useAssets';
 import { useLanguage } from '../../hooks/useLanguage';
+import { useContentData } from '../../hooks/useContentData';
+
+function AssetImage({ node }: NodeViewProps) {
+  const { resolveAsset } = useContentData();
+  const asset = resolveAsset(node.attrs.src);
+  return <NodeViewWrapper as="span"><img src={asset?.url ?? node.attrs.src} alt={node.attrs.alt || asset?.alt || ''} title={node.attrs.title || undefined} /></NodeViewWrapper>;
+}
+
+const EditorImage = Image.extend({
+  addNodeView() { return ReactNodeViewRenderer(AssetImage); },
+});
+
+const LegacyUnderline = Underline.extend({
+  addStorage() { return { markdown: { serialize: { open: '', close: '' }, parse: {} } }; },
+});
 
 /** Tiptap storage shape for the markdown extension */
 interface MarkdownStorage {
@@ -41,13 +55,15 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({ content, onChange })
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      Underline,
+      StarterKit.configure({ link: false, underline: false }),
+      // Retain legacy underline marks when loading existing documents; the
+      // toolbar does not create formatting unsupported by the visitor renderer.
+      LegacyUnderline,
       Link.configure({
         openOnClick: false,
-        validate: (url) => /^https?:\/\//.test(url) || url.startsWith('audio:') || url.startsWith('video:'),
+        protocols: ['audio', 'video', 'image'],
       }),
-      Image.configure({
+      EditorImage.configure({
         inline: true,
         allowBase64: true,
       }),
@@ -66,13 +82,13 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({ content, onChange })
     const filename = asset.name || t('mediaLabel');
     
     if (asset.type === 'image') {
-      editor?.chain().focus().setImage({ src: id }).run();
-    } else if (asset.type === 'audio') {
-      // Use the custom markdown syntax for audio
-      editor?.chain().focus().insertContent(`[Audio: ${filename}](audio:${id})`).run();
-    } else if (asset.type === 'video') {
-      // Use the custom markdown syntax for video
-      editor?.chain().focus().insertContent(`[Video: ${filename}](video:${id})`).run();
+      editor?.chain().focus().setImage({ src: id, alt: asset.alt }).run();
+    } else if (asset.type === 'audio' || asset.type === 'video') {
+      const label = asset.type === 'audio' ? 'Audio' : 'Video';
+      editor?.chain().focus().insertContent({
+        type: 'text', text: `${label}: ${filename}`,
+        marks: [{ type: 'link', attrs: { href: `${asset.type}:${id}` } }],
+      }).run();
     } else {
       editor?.chain().focus().setLink({ href: id }).insertContent(filename).run();
     }
@@ -139,13 +155,6 @@ export const VisualEditor: React.FC<VisualEditorProps> = ({ content, onChange })
           title={t('italic')}
         >
           <Italic className="h-4 w-4" />
-        </MenuButton>
-        <MenuButton
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          isActive={editor.isActive('underline')}
-          title={t('underline')}
-        >
-          <UnderlineIcon className="h-4 w-4" />
         </MenuButton>
         <div className="w-px h-6 bg-neutral-300 mx-1" />
         <MenuButton

@@ -40,7 +40,7 @@ export const list = query({
 });
 
 /** List exhibitions with only the requested language (+ de fallback).
- *  Returns ~1/7th the translation data compared to the full list query.
+ *  Reads only those languages through the translation language index.
  *  Omits detailedContent from translations (only needed on detail pages). */
 export const listForLanguage = query({
   args: { language: v.string() },
@@ -49,17 +49,26 @@ export const listForLanguage = query({
 
     const [exhibitions, allTranslations, allMedia] = await Promise.all([
       ctx.db.query("exhibitions").collect(),
-      ctx.db.query("exhibition_translations").collect(),
+      Promise.all(
+        [...langs].map((language) =>
+          ctx.db
+            .query("exhibition_translations")
+            .withIndex("by_language", (q) => q.eq("language", language))
+            .collect()
+        )
+      ).then((rows) => rows.flat().sort((a, b) =>
+        // Match the original full-table creation order when merging language ranges.
+        a._creationTime - b._creationTime || (a._id < b._id ? -1 : a._id > b._id ? 1 : 0)
+      )),
       ctx.db
         .query("media")
         .withIndex("by_parent", (q) => q.eq("parentType", "exhibition"))
         .collect(),
     ]);
 
-    // Build lookup maps — filter to requested languages only
+    // Build lookup maps for the requested language and German fallback
     const translationsByExId = new Map<string, typeof allTranslations>();
     for (const t of allTranslations) {
-      if (!langs.has(t.language)) continue;
       const key = t.exhibitionId;
       const arr = translationsByExId.get(key) ?? [];
       // Strip detailedContent to reduce payload (only needed on detail pages)

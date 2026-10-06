@@ -97,5 +97,6 @@
   "deleteFileConfirm": "Sei sicuro di voler eliminare questo file?",
   "altText": "Testo alternativo",
   "name": "Nome",
-  "logout": "Esci"
+  "logout": "Esci",
+  "qrCameraUnavailable": "Impossibile avviare o arrestare la fotocamera. Chiudi lo scanner e riprova."
 }

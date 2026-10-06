@@ -1,7 +1,16 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AudioPlayer } from './AudioPlayer';
+import { getMediaType } from '../utils/markdownUtils';
+
+function mediaUrlTransform(url: string, key: string): string {
+  const media = /^(audio|video|image):(.+)$/i.exec(url);
+  if (!media || key !== 'href') return defaultUrlTransform(url);
+  // Custom wrappers do not bypass react-markdown's safety check for their
+  // underlying URL (including nested javascript:, data: and custom schemes).
+  return defaultUrlTransform(media[2]) ? url : '';
+}
 
 interface MarkdownRendererProps {
   content: string;
@@ -16,12 +25,13 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     <div className="prose prose-lg max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={mediaUrlTransform}
         components={{
           a: ({ href, children }) => {
-            const isMedia = href?.startsWith('audio:') || href?.startsWith('video:') || href?.startsWith('image:');
+            const isMedia = href && /^(audio|video|image):/i.test(href);
             
             if (isMedia) {
-              const type = href?.split(':')[0] as 'image' | 'video' | 'audio';
+              const type = href.split(':')[0].toLowerCase() as 'image' | 'video' | 'audio';
               const url = href?.split(':').slice(1).join(':');
               const title = children?.toString() || '';
               
@@ -32,13 +42,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               };
 
               return (
-                <span 
+                <button
+                  type="button"
                   onClick={() => onMediaClick?.(type, url || '', title)}
-                  className="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm font-medium cursor-pointer hover:bg-blue-200 transition-colors my-2"
+                  className="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm font-medium cursor-pointer hover:bg-blue-200 transition-colors my-2 focus-ring-sm"
                 >
-                  <span className="mr-2">{icons[type]}</span>
+                  <span aria-hidden="true" className="mr-2">{icons[type]}</span>
                   {title}
-                </span>
+                </button>
               );
             }
             
@@ -90,11 +101,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           ),
           img: ({ src, alt }) => {
             const url = src || '';
-            const ext = url.split('.').pop()?.toLowerCase();
-            const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
-            const audioExtensions = ['mp3', 'wav', 'aac', 'm4a', 'flac'];
-            
-            if (videoExtensions.includes(ext || '')) {
+            const type = getMediaType(url);
+            if (type === 'video') {
               return (
                 <div className="my-6">
                   <video 
@@ -111,7 +119,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               );
             }
 
-            if (audioExtensions.includes(ext || '')) {
+            if (type === 'audio') {
               return (
                 <div className="my-6">
                   <AudioPlayer url={url} title={alt || undefined} />
