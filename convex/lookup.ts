@@ -37,11 +37,12 @@ export const search = query({
   handler: async (ctx, args) => {
     if (!args.query.trim()) return { exhibitions: [], artifacts: [] };
 
-    const q = args.query.toLowerCase();
+    const q = args.query.trim().toLowerCase();
 
     // Search exhibition translations
     const allExTranslations = await ctx.db
       .query("exhibition_translations")
+      .withIndex("by_language", (q) => q.eq("language", args.language))
       .collect();
     const matchingExIds = new Set<Id<"exhibitions">>();
     for (const t of allExTranslations) {
@@ -64,6 +65,7 @@ export const search = query({
     // Search artifact translations
     const allArtTranslations = await ctx.db
       .query("artifact_translations")
+      .withIndex("by_language", (q) => q.eq("language", args.language))
       .collect();
     const matchingArtIds = new Set<Id<"artifacts">>();
     for (const t of allArtTranslations) {

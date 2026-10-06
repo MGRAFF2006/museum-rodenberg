@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { useAdminMutation } from './useAdminMutation';
+import { internal } from '../../convex/_generated/api';
 import { Language, MediaItem, EntityRecord } from '../types';
 import { extractMediaFromMarkdown } from '../utils/markdownUtils';
 import { useContentTranslation } from './useContentTranslation';
@@ -58,10 +58,10 @@ export function useEditorForm(config: EditorConfig) {
   const { isValidating, validationErrors, validateAssets, setValidationErrors } = useAssetValidation();
 
   // Convex mutations
-  const saveExhibition = useMutation(api.exhibitions.save);
-  const removeExhibition = useMutation(api.exhibitions.remove);
-  const saveArtifact = useMutation(api.artifacts.save);
-  const removeArtifact = useMutation(api.artifacts.remove);
+  const saveExhibition = useAdminMutation(internal.exhibitions.save);
+  const removeExhibition = useAdminMutation(internal.exhibitions.remove);
+  const saveArtifact = useAdminMutation(internal.artifacts.save);
+  const removeArtifact = useAdminMutation(internal.artifacts.remove);
 
   const [activeLang, setActiveLang] = useState<Language>('de');
 
@@ -105,7 +105,7 @@ export function useEditorForm(config: EditorConfig) {
     };
 
     // Extract from configured translation fields
-    Object.values(formData.translations || {}).forEach((trans: Record<string, string>) => {
+    Object.values(formData.translations || {}).forEach((trans) => {
       contentMediaFields.forEach(field => {
         extractFromText(trans?.[field] || '');
       });
@@ -184,7 +184,7 @@ export function useEditorForm(config: EditorConfig) {
           m.audio.forEach(a => currentContent.audio.add(a.url));
         };
 
-        Object.values(entity.translations || {}).forEach((trans: Record<string, string>) => {
+        Object.values(entity.translations || {}).forEach((trans) => {
           contentMediaFields.forEach(field => extract(trans?.[field] || ''));
         });
         Object.values(entity.detailedContent || {}).forEach((c: string) => extract(c));

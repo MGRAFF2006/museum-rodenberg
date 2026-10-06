@@ -10,7 +10,7 @@ export default defineConfig({
     devServerApiPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico'],
+      includeAssets: ['museum-icon.svg'],
       manifest: {
         name: 'Museum der Stadt Rodenberg',
         short_name: 'Museum Rodenberg',
@@ -22,27 +22,12 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/',
         categories: ['education', 'culture'],
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
-        ],
+        icons: [{ src: 'museum-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['uploads/**', 'assets/Admin-*.js', 'assets/QRScanner-*.js'],
+        navigateFallbackDenylist: [/^\/(api|convex|uploads|healthz)(\/|$)/],
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {

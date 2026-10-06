@@ -4,7 +4,8 @@ dist-ssr
 .git
 .gitignore
 .env
-.env.local
+.env.*
+!.env.example
 *.log
 *.tmp
 *.temp
@@ -13,3 +14,7 @@ dist-ssr
 .vscode
 *.md
 !README.md
+
+backups
+
+.cloudflare-tunnel-credentials.json

@@ -1,0 +1,4 @@
+ingress:
+  - hostname: museum.humunkulud.com
+    service: http://museum:3000
+  - service: http_status:404

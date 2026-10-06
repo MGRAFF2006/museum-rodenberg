@@ -17,7 +17,7 @@ import './index.css';
 // Connect to self-hosted Convex backend.
 // In Docker, museum container connects to convex-backend service.
 // In dev, connect to localhost:3210.
-const CONVEX_URL = import.meta.env.VITE_CONVEX_URL || 'http://127.0.0.1:3210';
+const CONVEX_URL = import.meta.env.VITE_CONVEX_URL || `${window.location.origin}/convex`;
 console.log('[museum] Convex URL:', CONVEX_URL);
 const convex = new ConvexReactClient(CONVEX_URL);
 
@@ -25,15 +25,15 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <ConvexProvider client={convex}>
+        <BrowserRouter>
         <LanguageProvider>
           <ContentProvider>
             <TextToSpeechProvider>
-              <BrowserRouter>
-                <App />
-              </BrowserRouter>
+              <App />
             </TextToSpeechProvider>
           </ContentProvider>
         </LanguageProvider>
+        </BrowserRouter>
       </ConvexProvider>
     </ErrorBoundary>
   </StrictMode>

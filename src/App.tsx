@@ -42,6 +42,7 @@ function App() {
     getArtifactsByExhibition,
     findByQRCode,
     featuredExhibitionId,
+    isLoading,
   } = useContentData();
 
   const searchResults = useSearch(searchQuery, exhibitions, artifacts);
@@ -106,7 +107,7 @@ function App() {
       )}
       
       <Suspense fallback={<LazyFallback />}>
-      <Routes>
+      {isLoading ? <LazyFallback /> : <Routes>
         <Route
           path="/"
           element={
@@ -218,7 +219,7 @@ function App() {
             </div>
           }
         />
-      </Routes>
+      </Routes>}
       </Suspense>
       
       <Suspense fallback={null}>

@@ -59,7 +59,7 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
     (exhibition.media.audio && exhibition.media.audio.length > 0)
   );
 
-  const hasDetailedContent = isEnabled('detailedContent') && exhibition.detailedContent && exhibition.detailedContent[currentLanguage];
+  const hasDetailedContent = isEnabled('detailedContent') && exhibition.detailedContent && (exhibition.detailedContent[currentLanguage] || exhibition.detailedContent.de);
 
 
   return (
@@ -195,7 +195,7 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
                       onClick={() => handleMediaClick('video', video.url)}
                     >
                       <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity">
-                         <video src={video.url} className="w-full h-full object-cover" />
+                         <video preload="none" src={video.url} className="w-full h-full object-cover" />
                       </div>
                       <Play className="h-10 w-10 text-white z-10" />
                       <span className="text-[10px] text-white absolute bottom-1 left-1 right-1 truncate text-center z-10 bg-black/50 px-1 rounded">
@@ -361,7 +361,7 @@ export const ExhibitionDetail: React.FC<ExhibitionDetailProps> = ({
           isOpen={isDetailedContentOpen}
           onClose={() => setIsDetailedContentOpen(false)}
           title={exhibition.title}
-          content={exhibition.detailedContent![currentLanguage] || ''}
+          content={exhibition.detailedContent![currentLanguage] || exhibition.detailedContent!.de || ''}
           media={exhibition.media as RequiredMedia}
         />
       )}

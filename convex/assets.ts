@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
 // ── Queries ──────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ export const getByAssetId = query({
 // ── Mutations ────────────────────────────────────────────────────
 
 /** Create or update an asset. */
-export const save = mutation({
+export const save = internalMutation({
   args: {
     assetId: v.string(),
     name: v.string(),
@@ -52,7 +52,7 @@ export const save = mutation({
 });
 
 /** Delete an asset by assetId. */
-export const remove = mutation({
+export const remove = internalMutation({
   args: { assetId: v.string() },
   handler: async (ctx, args) => {
     const existing = await ctx.db

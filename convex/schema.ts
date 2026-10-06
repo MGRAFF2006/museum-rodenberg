@@ -30,6 +30,7 @@ export default defineSchema({
     description: v.string(),
     detailedContent: v.optional(v.string()), // markdown
   })
+    .index("by_language", ["language"])
     .index("by_exhibition", ["exhibitionId"])
     .index("by_exhibition_lang", ["exhibitionId", "language"]),
 
@@ -60,6 +61,7 @@ export default defineSchema({
     significance: v.optional(v.string()),
     detailedContent: v.optional(v.string()), // markdown
   })
+    .index("by_language", ["language"])
     .index("by_artifact", ["artifactId"])
     .index("by_artifact_lang", ["artifactId", "language"]),
 

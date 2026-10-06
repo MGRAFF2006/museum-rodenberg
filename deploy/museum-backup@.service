@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up Museum Rodenberg database and uploads
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/%i/Projects/museum-rodenberg
+Environment=MUSEUM_BACKUP_ROOT=/srv/homelab/dbdumps/museum
+ExecStart=/usr/bin/bash scripts/backup-production.sh

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useCallback, useMemo, ReactNode } from 'react';
 import { useQuery } from 'convex/react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../../convex/_generated/api';
 import { useLanguage } from '../hooks/useLanguage';
 import { getTranslatedContent } from '../utils/translationUtils';
@@ -37,23 +38,28 @@ const ContentContext = createContext<ContentContextType | undefined>(undefined);
 export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { currentLanguage } = useLanguage();
 
-  // Language-filtered queries — only fetch current language + de fallback.
-  // This sends ~1/7th the translation data vs the full list query.
-  // DetailedContent is stripped server-side (only needed on detail pages).
-  const convexExhibitions = useQuery(
-    api.exhibitions.listForLanguage,
-    { language: currentLanguage }
-  ) as ConvexExhibition[] | undefined;
-  const convexArtifacts = useQuery(
-    api.artifacts.listForLanguage,
-    { language: currentLanguage }
-  ) as ConvexArtifact[] | undefined;
+  const { pathname } = useLocation();
+  const isAdmin = pathname === '/admin';
+  const detail = pathname.match(/^\/(exhibition|artifact)\/([^/]+)/);
+  const detailSlug = detail ? decodeURIComponent(detail[2]) : undefined;
+  const summaryExhibitions = useQuery(api.exhibitions.listForLanguage,
+    isAdmin ? 'skip' : { language: currentLanguage });
+  const summaryArtifacts = useQuery(api.artifacts.listForLanguage,
+    isAdmin ? 'skip' : { language: currentLanguage });
+  const adminExhibitions = useQuery(api.exhibitions.list, isAdmin ? {} : 'skip');
+  const adminArtifacts = useQuery(api.artifacts.list, isAdmin ? {} : 'skip');
+  const fullExhibition = useQuery(api.exhibitions.getBySlug,
+    detail?.[1] === 'exhibition' && detailSlug ? { slug: detailSlug, language: currentLanguage } : 'skip');
+  const fullArtifact = useQuery(api.artifacts.getBySlug,
+    detail?.[1] === 'artifact' && detailSlug ? { slug: detailSlug, language: currentLanguage } : 'skip');
+  const convexExhibitions = (isAdmin ? adminExhibitions : summaryExhibitions) as ConvexExhibition[] | undefined;
+  const convexArtifacts = (isAdmin ? adminArtifacts : summaryArtifacts) as ConvexArtifact[] | undefined;
   const convexAssets = useQuery(api.assets.list) as ConvexAsset[] | undefined;
   const featuredSlug = useQuery(api.exhibitions.getFeatured) as string | null | undefined;
-
-  const isLoading = convexExhibitions === undefined
-    || convexArtifacts === undefined
-    || convexAssets === undefined;
+  const isLoading = convexExhibitions === undefined || convexArtifacts === undefined
+    || convexAssets === undefined
+    || (detail?.[1] === 'exhibition' && fullExhibition === undefined)
+    || (detail?.[1] === 'artifact' && fullArtifact === undefined);
 
   // Build asset lookup maps — both by ID and by URL for O(1) resolveAsset
   const { assetsMap, urlToAsset } = useMemo(() => {
@@ -89,8 +95,9 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
     for (const ex of convexExhibitions) {
       map[ex.slug] = convexExhibitionToRaw(ex);
     }
+    if (fullExhibition) map[fullExhibition.slug] = convexExhibitionToRaw(fullExhibition);
     return map;
-  }, [convexExhibitions]);
+  }, [convexExhibitions, fullExhibition]);
 
   const rawArtifactsMap = useMemo<Record<string, Record<string, unknown>>>(() => {
     if (!convexArtifacts) return {};
@@ -98,8 +105,9 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
     for (const art of convexArtifacts) {
       map[art.slug] = convexArtifactToRaw(art);
     }
+    if (fullArtifact) map[fullArtifact.slug] = convexArtifactToRaw(fullArtifact);
     return map;
-  }, [convexArtifacts]);
+  }, [convexArtifacts, fullArtifact]);
 
   // Translated exhibitions — reuses rawExhibitionsMap (no double conversion)
   const exhibitions = useMemo<Exhibition[]>(() => {
@@ -148,8 +156,7 @@ export const ContentProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
   }, [artifacts, exhibitions]);
 
-  // getRaw* returns language-filtered data (current lang + de).
-  // Admin editors that need all languages use useQuery(api.*.getBySlug) directly.
+  // Admin routes subscribe to complete records so bulk editing preserves every language.
   const getRawArtifactById = useCallback((id: string): Record<string, unknown> | undefined => {
     return rawArtifactsMap[id];
   }, [rawArtifactsMap]);

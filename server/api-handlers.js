@@ -16,6 +16,8 @@
 import fs from 'fs';
 import path from 'path';
 import busboy from 'busboy';
+import crypto from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
 
 function isWithinDirectory(directory, candidate) {
   const relative = path.relative(directory, candidate);
@@ -51,43 +53,68 @@ function resolveUploadPath(rootDir, uploadPath) {
  * Asset metadata is NOT written to any JSON file — the client saves
  * it to Convex after the upload completes.
  */
-export function uploadMedia(rootDir, headers, reqStream) {
-  return new Promise((resolve, reject) => {
-    const bb = busboy({ headers });
-    const urls = [];
-    const assets = [];
-    const uploadDir = path.resolve(rootDir, 'public/uploads');
+const MEDIA_EXTENSIONS = new Map([
+  ['image/jpeg', '.jpg'], ['image/png', '.png'], ['image/webp', '.webp'],
+  ['image/gif', '.gif'], ['image/avif', '.avif'], ['audio/mpeg', '.mp3'],
+  ['audio/wav', '.wav'], ['audio/x-wav', '.wav'], ['audio/ogg', '.ogg'],
+  ['audio/mp4', '.m4a'], ['audio/webm', '.webm'], ['audio/flac', '.flac'],
+  ['video/mp4', '.mp4'], ['video/webm', '.webm'], ['video/ogg', '.ogv'],
+]);
 
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    bb.on('file', (_name, file, info) => {
-      const { filename, mimeType } = info;
-      const safeFilename = filename.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
-      const id = safeFilename.replace(/\.[^/.]+$/, '');
-      const saveTo = path.join(uploadDir, safeFilename);
-      const url = `/uploads/${safeFilename}`;
-
-      file.pipe(fs.createWriteStream(saveTo));
-      urls.push(url);
-
-      let type = 'other';
-      if (mimeType.startsWith('image/')) type = 'image';
-      else if (mimeType.startsWith('audio/')) type = 'audio';
-      else if (mimeType.startsWith('video/')) type = 'video';
-
-      assets.push({ id, name: filename, alt: filename, url, type });
+export async function uploadMedia(rootDir, headers, reqStream) {
+  const uploadDir = path.resolve(rootDir, 'public/uploads');
+  await fs.promises.mkdir(uploadDir, { recursive: true });
+  const urls = [];
+  const assets = [];
+  const writes = [];
+  const createdPaths = [];
+  let failure;
+  const invalidUpload = (message, status = 400) => Object.assign(new Error(message), { status });
+  try {
+    await new Promise((resolve, reject) => {
+      let bb;
+      try {
+        bb = busboy({ headers, limits: { fileSize: 100 * 1024 * 1024, files: 10, fields: 10, parts: 20 } });
+      } catch {
+        reject(invalidUpload('A multipart file upload is required'));
+        return;
+      }
+      bb.on('file', (_name, file, { filename, mimeType }) => {
+        const extension = MEDIA_EXTENSIONS.get(mimeType);
+        if (!extension) {
+          failure = invalidUpload('Unsupported media type', 415);
+          file.resume();
+          return;
+        }
+        const id = crypto.randomUUID();
+        const saveTo = path.join(uploadDir, `${id}${extension}`);
+        const url = `/uploads/${id}${extension}`;
+        createdPaths.push(saveTo);
+        urls.push(url);
+        assets.push({ id, name: filename, alt: filename, url, type: mimeType.split('/')[0] });
+        writes.push(pipeline(file, fs.createWriteStream(saveTo, { flags: 'wx' }))
+          .then(() => {
+            if (file.truncated) throw invalidUpload('File exceeds the 100 MiB limit', 413);
+          }).catch((error) => { failure = error; }));
+      });
+      for (const event of ['filesLimit', 'fieldsLimit', 'partsLimit']) {
+        bb.on(event, () => { failure = invalidUpload('Too many upload parts', 413); });
+      }
+      bb.once('close', resolve);
+      bb.once('error', reject);
+      reqStream.once('aborted', () => bb.destroy(invalidUpload('Upload aborted')));
+      reqStream.once('error', (error) => bb.destroy(error));
+      reqStream.pipe(bb);
     });
-
-    bb.on('finish', () => {
-      resolve({ urls, url: urls[0], assets });
-    });
-
-    bb.on('error', reject);
-
-    reqStream.pipe(bb);
-  });
+    await Promise.all(writes);
+    if (failure) throw failure;
+    if (!urls.length) throw invalidUpload('No media files supplied');
+    return { urls, url: urls[0], assets };
+  } catch (error) {
+    await Promise.all(writes);
+    await Promise.all(createdPaths.map((file) => fs.promises.rm(file, { force: true })));
+    throw error;
+  }
 }
 
 // ── Translation proxy ───────────────────────────────────────────
@@ -115,6 +142,7 @@ export async function translate(body, apiUrl, apiKey) {
       api_key: apiKey,
     }),
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!response.ok) {

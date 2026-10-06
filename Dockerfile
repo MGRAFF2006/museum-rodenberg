@@ -1,43 +1,23 @@
-# ── Build stage ─────────────────────────────────────────────────
-FROM node:20-alpine AS build
-
+FROM node:22-alpine AS build
 WORKDIR /app
-
-# Vite bakes VITE_* env vars into the JS bundle at build time.
-# On Sevalla, set VITE_CONVEX_URL in env vars (available at build).
-# For Docker Compose, override with --build-arg or .env.
-ARG VITE_CONVEX_URL
+# Empty by default: the browser uses its own origin at /convex.
+ARG VITE_CONVEX_URL=
 ENV VITE_CONVEX_URL=${VITE_CONVEX_URL}
-
-# Install dependencies first (layer caching)
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 RUN npm ci
-
-# Copy source and build the Vite frontend
 COPY . .
-RUN echo "Building with VITE_CONVEX_URL=${VITE_CONVEX_URL:-<not set>}" && npm run build
+RUN npm run build && rm -rf dist/uploads
 
-# ── Production stage ───────────────────────────────────────────
-FROM node:20-alpine AS production
-
+FROM node:22-alpine AS production
+ENV NODE_ENV=production HOST=0.0.0.0
 WORKDIR /app
-
-# Install only production dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
-
-# Copy built frontend and server code
-COPY --from=build /app/dist ./dist
-COPY server ./server
-
-# Copy entrypoint (seeds persistent disk with build-time uploads on first run)
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
-
-# Content and uploads are bind-mounted at runtime (see docker-compose.yml),
-# but we copy defaults so the image works standalone too.
-COPY src/content ./src/content
-COPY public/uploads ./public/uploads
-
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node server ./server
+COPY --chown=node:node public/uploads ./seed-uploads
+RUN mkdir -p public/uploads && chown -R node:node public
+COPY --chmod=755 docker-entrypoint.sh ./docker-entrypoint.sh
+USER node
 EXPOSE 3000
-
 ENTRYPOINT ["./docker-entrypoint.sh"]

@@ -1,0 +1,121 @@
+name: museum-rodenberg
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  convex-backend:
+    # Verified upstream amd64 image on 2026-10-06. Upgrade after exporting data.
+    image: ${CONVEX_IMAGE:-ghcr.io/get-convex/convex-backend@sha256:b63de1f9bc72a868d9e979145200f46f10b965a1cae1ab2cc00462dcaf7e26ed}
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    ports:
+      - "127.0.0.1:${CONVEX_PORT:-3213}:3210"
+    volumes:
+      - convex-data:/convex/data
+    environment:
+      CONVEX_CLOUD_ORIGIN: ${PUBLIC_ORIGIN:-https://museum.humunkulud.com}/convex
+      CONVEX_SITE_ORIGIN: ${PUBLIC_ORIGIN:-https://museum.humunkulud.com}/convex-site
+      RUST_LOG: warn
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3210/version"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *logging
+
+  convex-setup:
+    build:
+      context: .
+      target: build
+    command: ["npx", "convex", "deploy", "--yes", "--typecheck", "enable"]
+    environment:
+      CONVEX_SELF_HOSTED_URL: http://convex-backend:3210
+      CONVEX_SELF_HOSTED_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-}
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    restart: "no"
+    profiles: ["setup"]
+    logging: *logging
+
+  museum:
+    build:
+      context: .
+      target: production
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:${MUSEUM_PORT:-3003}:3000"
+    volumes:
+      - uploads:/app/public/uploads
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set a strong ADMIN_PASSWORD in .env.production}
+      CONVEX_SELF_HOSTED_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-}
+      CONVEX_BACKEND_URL: http://convex-backend:3210
+      LIBRETRANSLATE_API_URL: ${LIBRETRANSLATE_API_URL:-http://libretranslate:5000/translate}
+      LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
+      TRUST_PROXY: "1"
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging: *logging
+
+  cloudflared:
+    user: "1000:1000"
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.10.0@sha256:1a50cc8893b3f0dd283805d2efcd3336210aced60a83d967fb2bbc8ab69b5f35}
+    command: ["tunnel", "--config", "/etc/cloudflared/config.yml", "--no-autoupdate", "run", "--credentials-file", "/run/secrets/tunnel-credentials", "${CLOUDFLARE_TUNNEL_ID:-}"]
+    restart: unless-stopped
+    secrets: [tunnel-credentials]
+    volumes:
+      - ./deploy/cloudflared.yml:/etc/cloudflared/config.yml:ro
+    depends_on:
+      museum:
+        condition: service_healthy
+    profiles: ["public"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging: *logging
+
+  libretranslate:
+    image: ${LIBRETRANSLATE_IMAGE:-libretranslate/libretranslate@sha256:037451bd2fabc8f9a0d0cb39c1dc8d97849b0031a6e477d42eabefc7a60fcb15}
+    restart: unless-stopped
+    volumes:
+      - lt-data:/home/libretranslate/.local
+    environment:
+      LT_LOAD_ONLY: de,en,fr,es,it,nl,pl
+      LT_DISABLE_WEB_UI: "true"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/languages', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
+    cpus: 2
+    mem_limit: 4g
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    profiles: ["translate"]
+    logging: *logging
+
+secrets:
+  tunnel-credentials:
+    file: ${CLOUDFLARE_TUNNEL_CREDENTIALS_FILE:-./.cloudflare-tunnel-credentials.json}
+
+volumes:
+  convex-data:
+  uploads:
+  lt-data:

@@ -15,7 +15,7 @@
  */
 
 import { ConvexHttpClient } from "convex/browser";
-import { api } from "../convex/_generated/api.js";
+import { internal } from "../convex/_generated/api.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,8 +51,8 @@ const envFile = loadEnv(".env");
 const CONVEX_URL = envLocal.CONVEX_SELF_HOSTED_URL || envFile.CONVEX_SELF_HOSTED_URL;
 const ADMIN_KEY = envLocal.CONVEX_SELF_HOSTED_ADMIN_KEY || envFile.CONVEX_SELF_HOSTED_ADMIN_KEY;
 
-if (!CONVEX_URL) {
-  console.error("ERROR: CONVEX_SELF_HOSTED_URL not set in .env.local or .env");
+if (!CONVEX_URL || !ADMIN_KEY) {
+  console.error("ERROR: CONVEX_SELF_HOSTED_URL and CONVEX_SELF_HOSTED_ADMIN_KEY must be set in .env.local or .env");
   process.exit(1);
 }
 
@@ -82,7 +82,7 @@ console.log(`  Assets:      ${Object.keys(assets.assets).length}`);
 console.log("\n--- Migrating assets ---");
 for (const [id, asset] of Object.entries(assets.assets)) {
   console.log(`  Asset: ${id}`);
-  await client.mutation(api.assets.save, {
+  await client.mutation(internal.assets.save, {
     assetId: id,
     name: asset.name || id,
     alt: asset.alt || id,
@@ -146,7 +146,7 @@ for (const [slug, ex] of Object.entries(exhibitions.exhibitions)) {
     }
   }
 
-  await client.mutation(api.exhibitions.save, {
+  await client.mutation(internal.exhibitions.save, {
     slug,
     qrCode: ex.qrCode || "",
     image: ex.image || "",
@@ -223,7 +223,7 @@ for (const [slug, art] of Object.entries(artifacts.artifacts)) {
     }
   }
 
-  await client.mutation(api.artifacts.save, {
+  await client.mutation(internal.artifacts.save, {
     slug,
     qrCode: art.qrCode || "",
     exhibitionSlug: art.exhibition || undefined,
@@ -243,7 +243,7 @@ console.log(
 
 // ── Set featured exhibition ──────────────────────────────────────
 console.log("\n--- Setting featured exhibition ---");
-await client.mutation(api.exhibitions.setFeatured, {
+await client.mutation(internal.exhibitions.setFeatured, {
   slug: exhibitions.featured,
 });
 console.log(`  Featured: ${exhibitions.featured}`);

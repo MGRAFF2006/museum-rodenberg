@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <title>Museum Rodenberg</title>
+  <rect width="180" height="180" rx="28" fill="#fffaf5"/>
+  <g transform="translate(12 24)" fill="none" stroke="#7c2d12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 48 78 12l60 36H18Z" fill="#7c2d12" stroke-width="6"/>
+    <path d="M29 56h98M35 116h86M25 128h106" stroke-width="8"/>
+    <path d="M43 59v54M66 59v54M90 59v54M113 59v54" stroke-width="10"/>
+  </g>
+</svg>

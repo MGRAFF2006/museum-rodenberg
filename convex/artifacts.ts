@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
 // ── Queries ──────────────────────────────────────────────────────
@@ -48,7 +48,10 @@ export const listForLanguage = query({
 
     const [artifacts, allTranslations, allMedia] = await Promise.all([
       ctx.db.query("artifacts").collect(),
-      ctx.db.query("artifact_translations").collect(),
+      Promise.all([...langs].map((language) => ctx.db
+        .query("artifact_translations")
+        .withIndex("by_language", (q) => q.eq("language", language))
+        .collect())).then((rows) => rows.flat()),
       ctx.db
         .query("media")
         .withIndex("by_parent", (q) => q.eq("parentType", "artifact"))
@@ -58,7 +61,6 @@ export const listForLanguage = query({
     // Build lookup maps — filter to requested languages only
     const translationsByArtId = new Map<string, typeof allTranslations>();
     for (const t of allTranslations) {
-      if (!langs.has(t.language)) continue;
       const key = t.artifactId;
       const arr = translationsByArtId.get(key) ?? [];
       // Strip detailedContent to reduce payload (only needed on detail pages)
@@ -83,7 +85,7 @@ export const listForLanguage = query({
 
 /** Get a single artifact by slug, with translations and media. */
 export const getBySlug = query({
-  args: { slug: v.string() },
+  args: { slug: v.string(), language: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const artifact = await ctx.db
       .query("artifacts")
@@ -91,10 +93,14 @@ export const getBySlug = query({
       .first();
     if (!artifact) return null;
 
-    const translations = await ctx.db
-      .query("artifact_translations")
-      .withIndex("by_artifact", (q) => q.eq("artifactId", artifact._id))
-      .collect();
+    const translations = args.language
+      ? (await Promise.all([...new Set([args.language, "de"])].map((language) => ctx.db
+          .query("artifact_translations")
+          .withIndex("by_artifact_lang", (q) => q.eq("artifactId", artifact._id).eq("language", language))
+          .collect()))).flat()
+      : await ctx.db.query("artifact_translations")
+          .withIndex("by_artifact", (q) => q.eq("artifactId", artifact._id))
+          .collect();
     const mediaItems = await ctx.db
       .query("media")
       .withIndex("by_parent", (q) =>
@@ -158,7 +164,7 @@ export const getByExhibition = query({
 // ── Mutations ────────────────────────────────────────────────────
 
 /** Create or update an artifact. */
-export const save = mutation({
+export const save = internalMutation({
   args: {
     slug: v.string(),
     qrCode: v.string(),
@@ -258,7 +264,7 @@ export const save = mutation({
 });
 
 /** Delete an artifact and its translations/media. */
-export const remove = mutation({
+export const remove = internalMutation({
   args: { slug: v.string() },
   handler: async (ctx, args) => {
     const artifact = await ctx.db

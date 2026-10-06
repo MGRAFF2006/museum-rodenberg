@@ -42,7 +42,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
     (artifact.media.audio && artifact.media.audio.length > 0)
   );
 
-  const hasDetailedContent = isEnabled('detailedContent') && artifact.detailedContent && artifact.detailedContent[currentLanguage];
+  const hasDetailedContent = isEnabled('detailedContent') && artifact.detailedContent && (artifact.detailedContent[currentLanguage] || artifact.detailedContent.de);
 
   const handleMediaClick = (type: 'image' | 'video' | 'audio', url: string) => {
     if (isMobile && onMediaViewerClick) {
@@ -227,7 +227,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
                       onClick={() => handleMediaClick('video', video.url)}
                     >
                       <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity">
-                         <video src={video.url} className="w-full h-full object-cover" />
+                         <video preload="none" src={video.url} className="w-full h-full object-cover" />
                       </div>
                       <Play className="h-10 w-10 text-white z-10" />
                       <span className="text-[10px] text-white absolute bottom-1 left-1 right-1 truncate text-center z-10 bg-black/50 px-1 rounded">
@@ -373,7 +373,7 @@ export const ArtifactDetail: React.FC<ArtifactDetailProps> = ({
           isOpen={isDetailedContentOpen}
           onClose={() => setIsDetailedContentOpen(false)}
           title={artifact.title}
-          content={artifact.detailedContent![currentLanguage] || ''}
+          content={artifact.detailedContent![currentLanguage] || artifact.detailedContent!.de || ''}
           media={artifact.media as RequiredMedia}
         />
       )}

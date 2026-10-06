@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
 // ── Queries ──────────────────────────────────────────────────────
@@ -48,7 +48,10 @@ export const listForLanguage = query({
 
     const [exhibitions, allTranslations, allMedia] = await Promise.all([
       ctx.db.query("exhibitions").collect(),
-      ctx.db.query("exhibition_translations").collect(),
+      Promise.all([...langs].map((language) => ctx.db
+        .query("exhibition_translations")
+        .withIndex("by_language", (q) => q.eq("language", language))
+        .collect())).then((rows) => rows.flat()),
       ctx.db
         .query("media")
         .withIndex("by_parent", (q) => q.eq("parentType", "exhibition"))
@@ -58,7 +61,6 @@ export const listForLanguage = query({
     // Build lookup maps — filter to requested languages only
     const translationsByExId = new Map<string, typeof allTranslations>();
     for (const t of allTranslations) {
-      if (!langs.has(t.language)) continue;
       const key = t.exhibitionId;
       const arr = translationsByExId.get(key) ?? [];
       // Strip detailedContent to reduce payload (only needed on detail pages)
@@ -83,7 +85,7 @@ export const listForLanguage = query({
 
 /** Get a single exhibition by slug, with translations and media. */
 export const getBySlug = query({
-  args: { slug: v.string() },
+  args: { slug: v.string(), language: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const exhibition = await ctx.db
       .query("exhibitions")
@@ -91,10 +93,14 @@ export const getBySlug = query({
       .first();
     if (!exhibition) return null;
 
-    const translations = await ctx.db
-      .query("exhibition_translations")
-      .withIndex("by_exhibition", (q) => q.eq("exhibitionId", exhibition._id))
-      .collect();
+    const translations = args.language
+      ? (await Promise.all([...new Set([args.language, "de"])].map((language) => ctx.db
+          .query("exhibition_translations")
+          .withIndex("by_exhibition_lang", (q) => q.eq("exhibitionId", exhibition._id).eq("language", language))
+          .collect()))).flat()
+      : await ctx.db.query("exhibition_translations")
+          .withIndex("by_exhibition", (q) => q.eq("exhibitionId", exhibition._id))
+          .collect();
     const mediaItems = await ctx.db
       .query("media")
       .withIndex("by_parent", (q) =>
@@ -119,7 +125,7 @@ export const getFeatured = query({
 // ── Mutations ────────────────────────────────────────────────────
 
 /** Create or update an exhibition. */
-export const save = mutation({
+export const save = internalMutation({
   args: {
     slug: v.string(),
     qrCode: v.string(),
@@ -236,7 +242,7 @@ export const save = mutation({
 });
 
 /** Delete an exhibition and its translations/media. */
-export const remove = mutation({
+export const remove = internalMutation({
   args: { slug: v.string() },
   handler: async (ctx, args) => {
     const exhibition = await ctx.db
@@ -294,7 +300,7 @@ export const remove = mutation({
 });
 
 /** Set the featured exhibition. */
-export const setFeatured = mutation({
+export const setFeatured = internalMutation({
   args: { slug: v.string() },
   handler: async (ctx, args) => {
     const setting = await ctx.db

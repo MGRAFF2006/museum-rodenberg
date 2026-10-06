@@ -26,6 +26,9 @@ public/translations/.hash
 *.sln
 *.sw?
 .env
+.env.*
+!.env.example
+!.env.production.example
 
 # Temporary files
 *.tmp
@@ -39,3 +42,5 @@ backups/
 
 # Convex generated files are committed as stubs for build compatibility.
 # Running `npx convex dev` will overwrite them with properly typed versions.
+
+.cloudflare-tunnel-credentials.json

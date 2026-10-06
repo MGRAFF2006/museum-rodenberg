@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Plus, Edit2, LogOut, Image as ImageIcon, FileText, Languages, Loader2 } from 'lucide-react';
-import { useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { useAdminMutation } from '../../hooks/useAdminMutation';
+import { internal } from '../../../convex/_generated/api';
 import { useContentData } from '../../hooks/useContentData';
 import { useLanguage } from '../../hooks/useLanguage';
 import { useContentTranslation } from '../../hooks/useContentTranslation';
@@ -30,8 +30,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedExhibitionId, setSelectedExhibitionId] = useState<string | null>(null);
 
   // Convex mutations for saving translated content
-  const saveExhibition = useMutation(api.exhibitions.save);
-  const saveArtifact = useMutation(api.artifacts.save);
+  const saveExhibition = useAdminMutation(internal.exhibitions.save);
+  const saveArtifact = useAdminMutation(internal.artifacts.save);
 
   const filteredArtifacts = useMemo(() => {
     if (!selectedExhibitionId) return artifacts;
@@ -169,7 +169,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (!original) continue;
 
         // Merge new translations with existing
-        const mergedTranslations: Record<string, Record<string, string>> = {
+        const mergedTranslations: Record<string, Record<string, string | undefined>> = {
           ...(original.translations || {}),
         };
         for (const [lang, fields] of Object.entries(item.translations)) {
