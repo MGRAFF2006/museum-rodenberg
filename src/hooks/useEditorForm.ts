@@ -384,7 +384,7 @@ export function useEditorForm(config: EditorConfig) {
   }, [getFieldsToTranslate, getUnifiedTranslations, formData._hashes, handleTranslationUpdate, t, translateFields]);
 
   const handleSave = useCallback(async () => {
-    if (!isReady) return;
+    if (!isReady || isTranslating) return;
 
     const isValid = await validateAssets(formData);
     if (!isValid) {
@@ -497,7 +497,7 @@ export function useEditorForm(config: EditorConfig) {
       console.error('Error saving:', error);
       alert(t('errorSaving'));
     }
-  }, [isReady, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t]);
+  }, [isReady, isTranslating, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm(t(deleteConfirmKey))) return;

@@ -8,6 +8,7 @@ import type { EntityRecord } from '../../types';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  translating: false,
   save: vi.fn().mockResolvedValue(undefined),
   validate: vi.fn().mockResolvedValue(true),
   onBack: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock('../useContentData', () => ({ useContentData: () => ({
   artifacts: [{ id: 'first', title: 'Partial visitor artifact' }],
 }) }));
 vi.mock('../useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
-vi.mock('../useContentTranslation', () => ({ useContentTranslation: () => ({ isTranslating: false, translationProgress: { current: 0, total: 0 }, translateFields: vi.fn() }) }));
+vi.mock('../useContentTranslation', () => ({ useContentTranslation: () => ({ isTranslating: mocks.translating, translationProgress: { current: 0, total: 0 }, translateFields: vi.fn() }) }));
 vi.mock('../useAssetValidation', () => ({ useAssetValidation: () => ({ isValidating: false, validationErrors: [], validateAssets: mocks.validate, setValidationErrors: vi.fn() }) }));
 vi.mock('../../components/Admin/AssetSelector', () => ({ AssetSelector: () => null }));
 vi.mock('../../components/Admin/VisualEditor', () => ({ VisualEditor: ({ content }: { content: string }) => <textarea readOnly value={content} /> }));
@@ -56,7 +57,7 @@ const baseConfig: EditorConfig = {
   getFieldsToTranslate: () => [], deleteConfirmKey: 'deleteArtifactConfirm',
 };
 
-beforeEach(() => { vi.clearAllMocks(); mocks.query.mockReturnValue(undefined); });
+beforeEach(() => { mocks.translating = false; vi.clearAllMocks(); mocks.query.mockReturnValue(undefined); });
 afterEach(cleanup);
 
 describe('useEditorForm hydration', () => {
@@ -168,4 +169,17 @@ for (const [name, Editor] of [['artifact', ArtifactEditor], ['exhibition', Exhib
 
 it.each([true, false])('preserves exhibition isFeatured=%s in raw editor data', isFeatured => {
   expect(convexExhibitionToRaw({ ...fixture('first'), isFeatured }).isFeatured).toBe(isFeatured);
+});
+
+ it('prevents saving a draft while translation is still running', async () => {
+  mocks.translating = true;
+  const { result, rerender } = renderHook(() => useEditorForm({ ...baseConfig, id: 'new' }));
+  await act(() => result.current.handleSave());
+  expect(mocks.validate).not.toHaveBeenCalled();
+  expect(mocks.save).not.toHaveBeenCalled();
+  mocks.translating = false;
+  rerender();
+  await act(() => result.current.handleSave());
+  expect(mocks.validate).toHaveBeenCalledOnce();
+  expect(mocks.save).toHaveBeenCalledOnce();
 });
