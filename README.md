@@ -65,4 +65,4 @@ src/hooks/       Content, language, search, and accessibility hooks
 
 ## License
 
-Licensed under the [MIT License](LICENSE).
+Licensed under the [GNU General Public License, version 2](LICENSE).
