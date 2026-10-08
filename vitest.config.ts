@@ -1,8 +1,8 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, type UserConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  plugins: [react() as any],
+  plugins: [react() as NonNullable<UserConfig['plugins']>[number]],
   test: {
     globals: true,
     environment: 'jsdom',
