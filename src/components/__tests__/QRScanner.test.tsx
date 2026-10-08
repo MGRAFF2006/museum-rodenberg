@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { QRScanner } from '../QRScanner';
-const state = vi.hoisted(() => ({ instances: [] as { id: string; clear: ReturnType<typeof vi.fn>; success?: (value: string) => void; miss?: () => void }[] }));
+const state = vi.hoisted(() => ({ instances: [] as { id: string; clear: ReturnType<typeof vi.fn<() => Promise<void>>>; success?: (value: string) => void; miss?: () => void }[] }));
 vi.mock('../../hooks/useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
 vi.mock('html5-qrcode', () => ({ Html5QrcodeScanner: class {
   instance: typeof state.instances[number];

@@ -15,6 +15,8 @@
 
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'node:crypto';
+import { protectMarkdownDestinations } from '../src/utils/markdownParsing.js';
 
 function isWithinDirectory(directory, candidate) {
   const relative = path.relative(directory, candidate);
@@ -66,11 +68,8 @@ export async function translate(body, apiUrl, apiKey) {
   }
 
   // Protect Markdown URLs and images
-  const placeholders = [];
-  const protectedText = text.replace(/(!?\[.*?\])\((.*?)\)/g, (_match, bracketed, url) => {
-    placeholders.push(url);
-    return `${bracketed}(ASSETURL${placeholders.length - 1})`;
-  });
+  const tokenNamespace = randomUUID().replaceAll('-', '');
+  const { text: protectedText, destinations: placeholders } = protectMarkdownDestinations(text, tokenNamespace);
 
   const deadline = AbortSignal.timeout(30_000);
   let response;
@@ -107,11 +106,11 @@ export async function translate(body, apiUrl, apiKey) {
     return { status: 502, body: { error: 'Invalid translation response', retryable: false } };
   }
 
-  // One indexed callback avoids prefix collisions (1 versus 10) and replacement
-  // string interpretation of literal '$' characters in protected destinations.
+  // A request-specific namespace keeps literal ASSETURL/URL prose untouched.
+  // Restore in one callback to preserve literal '$' characters and multi-digit indices.
   translatedText = translatedText.replace(
-    /\bASSET\s*URL\s*(\d+)\b|_+\s*URL\s*_+\s*(\d+)\s*_+|\bURL\s*(\d+)\b/gi,
-    (match, first, second, third) => placeholders[Number(first ?? second ?? third)] ?? match,
+    new RegExp(`__\\s*${tokenNamespace}\\s*_\\s*(\\d+)\\s*__`, 'gi'),
+    (match, index) => placeholders[Number(index)] ?? match,
   );
   // Preserve all surrounding Markdown whitespace; translator output may already
   // be valid and normalizing optional image prefixes consumed prose separators.

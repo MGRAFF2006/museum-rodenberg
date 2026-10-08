@@ -1,5 +1,7 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+import { requireServerSecret } from "./auth";
+import { validateContentInput } from "./contentValidation";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -71,7 +73,8 @@ export const listForLanguage = query({
       const key = t.exhibitionId;
       const arr = translationsByExId.get(key) ?? [];
       // Strip detailedContent to reduce payload (only needed on detail pages)
-      const { detailedContent: _, ...rest } = t;
+      const rest = { ...t };
+      delete rest.detailedContent;
       arr.push(rest as typeof t);
       translationsByExId.set(key, arr);
     }
@@ -110,7 +113,7 @@ export const getBySlug = query({
         q.eq("parentType", "exhibition").eq("parentSlug", exhibition.slug)
       )
       .collect();
-    return { ...exhibition, translations, media: mediaItems };
+    return { ...exhibition, revision: exhibition.revision ?? 0, translations, media: mediaItems };
   },
 });
 
@@ -129,8 +132,10 @@ export const getFeatured = query({
 
 /** Create or update an exhibition. */
 export const save = mutation({
-  args: {
+  args: { serverSecret: v.optional(v.string()),
     slug: v.string(),
+    expectedRevision: v.optional(v.number()),
+    expectedDocumentId: v.optional(v.string()),
     qrCode: v.string(),
     image: v.string(),
     dateRange: v.optional(v.string()),
@@ -140,6 +145,9 @@ export const save = mutation({
     sponsor: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     enabledAttributes: v.optional(v.array(v.string())),
+    createOnly: v.optional(v.boolean()),
+    replaceTranslations: v.optional(v.boolean()),
+    removeLanguages: v.optional(v.array(v.string())),
     isFeatured: v.boolean(),
     artifactSlugs: v.array(v.string()),
     // Translations as an array of objects
@@ -169,8 +177,10 @@ export const save = mutation({
       )
     ),
   },
-  handler: async (ctx, args) => {
-    const { translations, mediaItems, ...exhibitionData } = args;
+  handler: async (ctx, { serverSecret, createOnly, replaceTranslations, removeLanguages, ...args }) => {
+    requireServerSecret(serverSecret);
+    validateContentInput(args.slug, args.translations);
+    const { translations, mediaItems, expectedRevision, expectedDocumentId, ...exhibitionData } = args;
 
     // Check if exhibition already exists
     const existing = await ctx.db
@@ -178,12 +188,19 @@ export const save = mutation({
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
 
+    if (createOnly && existing) throw new Error("An exhibition with this ID already exists");
+    if (existing
+      ? expectedRevision !== (existing.revision ?? 0) || expectedDocumentId !== existing._id
+      : expectedRevision !== undefined || expectedDocumentId !== undefined) {
+      throw new ConvexError({ code: "STALE_CONTENT" });
+    }
+    const revision = existing ? (existing.revision ?? 0) + 1 : 0;
     let exhibitionId;
     if (existing) {
-      await ctx.db.patch(existing._id, exhibitionData);
+      await ctx.db.patch(existing._id, { ...exhibitionData, revision });
       exhibitionId = existing._id;
     } else {
-      exhibitionId = await ctx.db.insert("exhibitions", exhibitionData);
+      exhibitionId = await ctx.db.insert("exhibitions", { ...exhibitionData, revision });
     }
 
     // If marked featured, update settings
@@ -220,17 +237,31 @@ export const save = mutation({
       }
     }
 
-    // Replace media items
-    const existingMedia = await ctx.db
-      .query("media")
-      .withIndex("by_parent", (q) =>
-        q.eq("parentType", "exhibition").eq("parentSlug", args.slug)
-      )
-      .collect();
-    for (const m of existingMedia) {
-      await ctx.db.delete(m._id);
+    if (replaceTranslations || removeLanguages?.length) {
+      const languages = new Set(translations.map((t) => t.language));
+      const removed = new Set(removeLanguages);
+      const stored = await ctx.db
+        .query("exhibition_translations")
+        .withIndex("by_exhibition", (q) => q.eq("exhibitionId", exhibitionId))
+        .collect();
+      for (const translation of stored) {
+        if (!languages.has(translation.language) && (replaceTranslations || removed.has(translation.language))) {
+          await ctx.db.delete(translation._id);
+        }
+      }
     }
-    if (mediaItems) {
+
+    // Omission preserves media; a supplied array replaces it, including [].
+    if (mediaItems !== undefined) {
+      const existingMedia = await ctx.db
+        .query("media")
+        .withIndex("by_parent", (q) =>
+          q.eq("parentType", "exhibition").eq("parentSlug", args.slug)
+        )
+        .collect();
+      for (const m of existingMedia) {
+        await ctx.db.delete(m._id);
+      }
       for (const m of mediaItems) {
         await ctx.db.insert("media", {
           parentType: "exhibition",
@@ -246,13 +277,22 @@ export const save = mutation({
 
 /** Delete an exhibition and its translations/media. */
 export const remove = mutation({
-  args: { slug: v.string() },
-  handler: async (ctx, args) => {
+  args: {
+    serverSecret: v.optional(v.string()),
+    slug: v.string(),
+    expectedRevision: v.optional(v.number()),
+    expectedDocumentId: v.optional(v.string()),
+  },
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const exhibition = await ctx.db
       .query("exhibitions")
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
-    if (!exhibition) return;
+    if (!exhibition || args.expectedRevision !== (exhibition.revision ?? 0) ||
+      args.expectedDocumentId !== exhibition._id) {
+      throw new ConvexError({ code: "STALE_CONTENT" });
+    }
 
     // Delete translations
     const translations = await ctx.db
@@ -295,7 +335,7 @@ export const remove = mutation({
       .withIndex("by_exhibition", (q) => q.eq("exhibitionSlug", args.slug))
       .collect();
     for (const a of childArtifacts) {
-      await ctx.db.patch(a._id, { exhibitionSlug: undefined });
+      await ctx.db.patch(a._id, { exhibitionSlug: undefined, revision: (a.revision ?? 0) + 1 });
     }
 
     await ctx.db.delete(exhibition._id);
@@ -304,8 +344,9 @@ export const remove = mutation({
 
 /** Set the featured exhibition. */
 export const setFeatured = mutation({
-  args: { slug: v.string() },
-  handler: async (ctx, args) => {
+  args: { serverSecret: v.optional(v.string()), slug: v.string() },
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const setting = await ctx.db
       .query("settings")
       .withIndex("by_key", (q) => q.eq("key", "featured_exhibition"))

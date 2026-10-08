@@ -6,7 +6,7 @@ vi.mock('../useContentData', () => ({ useContentData: () => ({ refreshData: vi.f
 vi.mock('../useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
 vi.mock('../useContentTranslation', () => ({ useContentTranslation: () => ({ isTranslating: false, translationProgress: { current: 0, total: 0 }, translateFields: vi.fn() }) }));
 vi.mock('../useAssetValidation', () => ({ useAssetValidation: () => ({ isValidating: false, validationErrors: [], validateAssets: vi.fn(), setValidationErrors: vi.fn() }) }));
-const config: EditorConfig = { contentType: 'artifact', id: 'new', onBack: vi.fn(), initialTranslationFields: { title: '', description: '' }, defaultEnabledAttributes: ['title', 'description'], contentMediaFields: ['description'], getFieldsToTranslate: () => [], loadEntity: () => undefined, deleteConfirmKey: 'delete' };
+const config: EditorConfig = { contentType: 'artifact', id: 'new', onBack: vi.fn(), initialTranslationFields: { title: '', description: '' }, defaultEnabledAttributes: ['title', 'description'], contentMediaFields: ['description'], getFieldsToTranslate: () => [], entity: undefined, deleteConfirmKey: 'delete' };
 afterEach(cleanup);
 it('selects a URL in a newly added empty image row', () => {
   const { result } = renderHook(() => useEditorForm(config));

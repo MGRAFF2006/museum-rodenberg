@@ -15,7 +15,7 @@ The application is a React and TypeScript frontend backed by a self-hosted Conve
 - Full-text collection search and QR-code lookup
 - Accessibility controls and text-to-speech support
 - Password-protected administration and a visual content editor
-- Convex-backed content with local JSON fallback data
+- Convex-backed content with local JSON seed data
 - Docker Compose profiles for Convex, the app, the Convex dashboard, and LibreTranslate
 
 ## Requirements
@@ -28,15 +28,25 @@ The application is a React and TypeScript frontend backed by a self-hosted Conve
 ```bash
 npm ci
 cp .env.example .env
+```
+
+Before starting services, set a strong `ADMIN_PASSWORD` and a separate random `CONVEX_WRITE_SECRET` in ignored `.env`. Then start the backend and generate its admin key:
+
+```bash
 docker compose up -d convex-backend
 docker compose exec convex-backend ./generate_admin_key.sh
 ```
 
-Put the generated key in `.env.local` as `CONVEX_SELF_HOSTED_ADMIN_KEY`, then run:
+Put the generated key in ignored `.env.local` as `CONVEX_SELF_HOSTED_ADMIN_KEY`, with `CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3210`. Push the schema, configure the same `CONVEX_WRITE_SECRET` in the target Convex deployment, and seed its initial collection:
 
 ```bash
+npm run convex:push
+# Configure the Convex deployment write secret before the next command.
+node scripts/migrate-to-convex.mjs
 npm run dev:full
 ```
+
+See [content seeding](docs/content-seeding.md) for the secret setup and verification steps. Seed only a fresh local deployment: these commands write collection data. The app reads Convex; an empty reachable deployment does not automatically display the JSON seed files.
 
 The Vite application is available at <http://localhost:5173>. Use `npm run dev:full:all` to also start the Convex dashboard and LibreTranslate, or `npm run dev:docker` for the production-like Compose stack at <http://localhost:3000>.
 
@@ -45,7 +55,7 @@ Never commit `.env` or `.env.local`, and replace the example admin password befo
 ## Checks
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npm test -- --run
 npm run test:node
 npm run build
@@ -71,3 +81,28 @@ src/hooks/       Content, language, search, and accessibility hooks
 ## License
 
 Licensed under the [GNU General Public License, version 2](LICENSE).
+
+### Authenticated content writes
+
+Editor saves, deletes, asset metadata, and bulk translation saves use the existing
+Express login session through `/api/content-write`. Visitor Convex queries remain
+public. Direct Convex mutations require a separate server-only `CONVEX_WRITE_SECRET`.
+
+Before deploying this change, generate a strong random credential and set the same
+`CONVEX_WRITE_SECRET` in the museum Express runtime and the target Convex deployment
+environment. For local Vite development put it in ignored `.env` together with
+`ADMIN_PASSWORD` and `CONVEX_SELF_HOSTED_URL`; Vite uses the same authenticated API.
+Docker Compose passes `.env`'s credential to the museum service. Set the Convex
+**deployment** variable through its Dashboard environment settings, or supply its
+value to `npx convex env set CONVEX_WRITE_SECRET` through stdin, using the existing
+CLI credentials to select the target. This CLI command does not prompt for a missing value.
+Keep secret values out of command arguments and shell history.
+Setting an environment variable on the backend container alone does not configure
+Convex functions. For production use the target deployment's CLI environment or
+Dashboard environment settings, and the museum host's runtime environment settings.
+
+Deploy the Convex mutation guards and museum application together. Missing or
+mismatched credentials deliberately reject writes. Never use a `VITE_` variable,
+Docker build argument, or browser-side credential. The trusted migration CLI also
+requires `CONVEX_WRITE_SECRET` in ignored `.env`/`.env.local` or its process environment.
+No deployed service is modified by the regression tests.

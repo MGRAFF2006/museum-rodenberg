@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useMutation } from 'convex/react';
+import { ContentConflictError, useProtectedMutation } from './useProtectedMutation';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+
 import { api } from '../../convex/_generated/api';
 import { Language, MediaItem, EntityRecord } from '../types';
 import { extractMediaFromMarkdown } from '../utils/markdownUtils';
@@ -58,12 +59,13 @@ export function useEditorForm(config: EditorConfig) {
   const { isValidating, validationErrors, validateAssets, setValidationErrors } = useAssetValidation();
 
   // Convex mutations
-  const saveExhibition = useMutation(api.exhibitions.save);
-  const removeExhibition = useMutation(api.exhibitions.remove);
-  const saveArtifact = useMutation(api.artifacts.save);
-  const removeArtifact = useMutation(api.artifacts.remove);
+  const saveExhibition = useProtectedMutation(api.exhibitions.save);
+  const removeExhibition = useProtectedMutation(api.exhibitions.remove);
+  const saveArtifact = useProtectedMutation(api.artifacts.save);
+  const removeArtifact = useProtectedMutation(api.artifacts.remove);
 
   const [activeLang, setActiveLang] = useState<Language>('de');
+  const loadedLanguages = useRef<string[]>([]);
 
   const emptyForm = useMemo<EntityRecord>(() => ({
     translations: Object.fromEntries(LANGUAGES.map(lang => [lang, { ...initialTranslationFields }])),
@@ -155,17 +157,20 @@ export function useEditorForm(config: EditorConfig) {
   // Hydrate only once per selected ID; subscription updates must preserve drafts.
   useEffect(() => {
     if (draftId !== id) {
+      loadedLanguages.current = [];
       setDraftId(id);
       setInitializedId(null);
       setFormData(emptyForm);
       setManualMedia({ images: [], videos: [], audio: [] });
     } else if (initializedId === id) {
       return;
+
     }
 
     if (id === 'new') {
       setInitializedId(id);
     } else if (entity?.id === id) {
+      loadedLanguages.current = Object.keys(entity.translations || {});
       const normalizedMedia = {
         images: entity.media?.images || [],
         videos: entity.media?.videos || [],
@@ -359,7 +364,7 @@ export function useEditorForm(config: EditorConfig) {
         formData._hashes || {},
         getUnifiedTranslations(),
       );
-    } catch (e) {
+    } catch {
       alert(t('translationFailed'));
     }
   }, [activeLang, getFieldsToTranslate, getUnifiedTranslations, formData._hashes, handleTranslationUpdate, t, translateFields]);
@@ -378,7 +383,7 @@ export function useEditorForm(config: EditorConfig) {
         formData._hashes || {},
         getUnifiedTranslations(),
       );
-    } catch (e) {
+    } catch {
       alert(t('someTranslationsFailed'));
     }
   }, [getFieldsToTranslate, getUnifiedTranslations, formData._hashes, handleTranslationUpdate, t, translateFields]);
@@ -386,6 +391,7 @@ export function useEditorForm(config: EditorConfig) {
   const handleSave = useCallback(async () => {
     if (!isReady || isTranslating) return;
 
+    const removeLanguages = loadedLanguages.current.filter(lang => !formData.translations?.[lang]?.title);
     const isValid = await validateAssets(formData);
     if (!isValid) {
       alert(t('validationErrors'));
@@ -393,7 +399,7 @@ export function useEditorForm(config: EditorConfig) {
     }
 
     try {
-      const slug = (formData.id || '').toLowerCase();
+      const slug = id === 'new' ? (formData.id || '').toLowerCase() : id;
       const LANGS: Language[] = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl'];
 
       // Build media items array from formData.media
@@ -439,22 +445,26 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              subtitle: t.subtitle || undefined,
+              subtitle: Object.prototype.hasOwnProperty.call(t, 'subtitle') ? t.subtitle || '' : undefined,
               description: t.description || '',
-              detailedContent: formData.detailedContent?.[lang] || undefined,
+              detailedContent: Object.prototype.hasOwnProperty.call(formData.detailedContent || {}, lang) ? formData.detailedContent?.[lang] || '' : undefined,
             };
           });
 
         await saveExhibition({
+          createOnly: id === 'new',
+          removeLanguages,
           slug,
+          expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
+          expectedDocumentId: id === 'new' ? undefined : formData.documentId,
           qrCode: (formData.qrCode as string) || slug,
           image: formData.image || '',
-          dateRange: (formData.dateRange as string) || undefined,
-          location: (formData.location as string) || undefined,
-          curator: (formData.curator as string) || undefined,
-          organizer: (formData.organizer as string) || undefined,
-          sponsor: (formData.sponsor as string) || undefined,
-          tags: (formData.tags as string[]) || undefined,
+          dateRange: (formData.dateRange as string) || '',
+          location: (formData.location as string) || '',
+          curator: (formData.curator as string) || '',
+          organizer: (formData.organizer as string) || '',
+          sponsor: (formData.sponsor as string) || '',
+          tags: formData.tags?.map(tag => tag.trim()).filter(Boolean),
           enabledAttributes: formData.enabledAttributes || undefined,
           isFeatured: (formData.isFeatured as boolean) || false,
           artifactSlugs: (formData.artifacts as string[]) || [],
@@ -470,23 +480,27 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              period: t.period || undefined,
-              artist: t.artist || undefined,
+              period: Object.prototype.hasOwnProperty.call(t, 'period') ? t.period || '' : undefined,
+              artist: Object.prototype.hasOwnProperty.call(t, 'artist') ? t.artist || '' : undefined,
               description: t.description || '',
-              significance: t.significance || undefined,
-              detailedContent: formData.detailedContent?.[lang] || undefined,
+              significance: Object.prototype.hasOwnProperty.call(t, 'significance') ? t.significance || '' : undefined,
+              detailedContent: Object.prototype.hasOwnProperty.call(formData.detailedContent || {}, lang) ? formData.detailedContent?.[lang] || '' : undefined,
             };
           });
 
         await saveArtifact({
+          createOnly: id === 'new',
+          removeLanguages,
           slug,
+          expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
+          expectedDocumentId: id === 'new' ? undefined : formData.documentId,
           qrCode: (formData.qrCode as string) || slug,
-          exhibitionSlug: (formData.exhibition as string) || undefined,
+          exhibitionSlug: (formData.exhibition as string) || '',
           image: formData.image || '',
-          materials: (formData.materials as string[]) || undefined,
-          dimensions: (formData.dimensions as string) || undefined,
-          provenance: (formData.provenance as string) || undefined,
-          tags: (formData.tags as string[]) || undefined,
+          materials: formData.materials?.map(material => material.trim()).filter(Boolean),
+          dimensions: (formData.dimensions as string) || '',
+          provenance: (formData.provenance as string) || '',
+          tags: formData.tags?.map(tag => tag.trim()).filter(Boolean),
           enabledAttributes: formData.enabledAttributes || undefined,
           translations,
           mediaItems,
@@ -497,30 +511,45 @@ export function useEditorForm(config: EditorConfig) {
       refreshData();
       onBack(true);
     } catch (error) {
+      if (error instanceof ContentConflictError) {
+        setValidationErrors([t('contentChangedReload')]);
+        alert(t('contentChangedReload'));
+        return;
+      }
       console.error('Error saving:', error);
       alert(t('errorSaving'));
     }
-  }, [isReady, isTranslating, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t]);
+  }, [isReady, isTranslating, id, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t, setValidationErrors]);
 
   const handleDelete = useCallback(async () => {
+    if (id === 'new') return;
     if (!window.confirm(t(deleteConfirmKey))) return;
 
     try {
-      const slug = (formData.id || id).toLowerCase();
+      const args = {
+        slug: id,
+        expectedRevision: formData.revision ?? 0,
+        expectedDocumentId: formData.documentId,
+      };
 
       if (contentType === 'exhibition') {
-        await removeExhibition({ slug });
+        await removeExhibition(args);
       } else {
-        await removeArtifact({ slug });
+        await removeArtifact(args);
       }
 
       refreshData();
       onBack(true);
     } catch (error) {
+      if (error instanceof ContentConflictError) {
+        setValidationErrors([t('contentChangedReload')]);
+        alert(t('contentChangedReload'));
+        return;
+      }
       console.error('Error deleting:', error);
       alert(t('errorDeleting'));
     }
-  }, [contentType, id, formData.id, deleteConfirmKey, removeExhibition, removeArtifact, refreshData, onBack, t]);
+  }, [contentType, id, formData.revision, formData.documentId, deleteConfirmKey, removeExhibition, removeArtifact, refreshData, onBack, t, setValidationErrors]);
 
   return {
     // State

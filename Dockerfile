@@ -29,6 +29,7 @@ RUN npm ci --omit=dev
 # Copy built frontend and server code
 COPY --from=build /app/dist ./dist
 COPY server ./server
+COPY src/utils/markdownParsing.js ./src/utils/markdownParsing.js
 
 # Copy entrypoint (seeds persistent disk with build-time uploads on first run)
 COPY docker-entrypoint.sh ./docker-entrypoint.sh

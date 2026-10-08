@@ -1,5 +1,7 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+import { requireServerSecret } from "./auth";
+import { validateContentInput } from "./contentValidation";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -71,7 +73,8 @@ export const listForLanguage = query({
       const key = t.artifactId;
       const arr = translationsByArtId.get(key) ?? [];
       // Strip detailedContent to reduce payload (only needed on detail pages)
-      const { detailedContent: _, ...rest } = t;
+      const rest = { ...t };
+      delete rest.detailedContent;
       arr.push(rest as typeof t);
       translationsByArtId.set(key, arr);
     }
@@ -110,7 +113,7 @@ export const getBySlug = query({
         q.eq("parentType", "artifact").eq("parentSlug", artifact.slug)
       )
       .collect();
-    return { ...artifact, translations, media: mediaItems };
+    return { ...artifact, revision: artifact.revision ?? 0, translations, media: mediaItems };
   },
 });
 
@@ -145,8 +148,10 @@ export const getByExhibition = query({
 
 /** Create or update an artifact. */
 export const save = mutation({
-  args: {
+  args: { serverSecret: v.optional(v.string()),
     slug: v.string(),
+    expectedRevision: v.optional(v.number()),
+    expectedDocumentId: v.optional(v.string()),
     qrCode: v.string(),
     exhibitionSlug: v.optional(v.string()),
     image: v.string(),
@@ -155,6 +160,9 @@ export const save = mutation({
     provenance: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     enabledAttributes: v.optional(v.array(v.string())),
+    createOnly: v.optional(v.boolean()),
+    replaceTranslations: v.optional(v.boolean()),
+    removeLanguages: v.optional(v.array(v.string())),
     // Translations as an array
     translations: v.array(
       v.object({
@@ -184,8 +192,11 @@ export const save = mutation({
       )
     ),
   },
-  handler: async (ctx, args) => {
-    const { translations, mediaItems, ...artifactData } = args;
+  handler: async (ctx, { serverSecret, createOnly, replaceTranslations, removeLanguages, ...args }) => {
+    requireServerSecret(serverSecret);
+    validateContentInput(args.slug, args.translations);
+    const { translations, mediaItems, expectedRevision, expectedDocumentId, ...artifactData } = args;
+    if (artifactData.exhibitionSlug === "") artifactData.exhibitionSlug = undefined;
 
     // Check if artifact already exists
     const existing = await ctx.db
@@ -193,12 +204,19 @@ export const save = mutation({
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
 
+    if (createOnly && existing) throw new Error("An artifact with this ID already exists");
+    if (existing
+      ? expectedRevision !== (existing.revision ?? 0) || expectedDocumentId !== existing._id
+      : expectedRevision !== undefined || expectedDocumentId !== undefined) {
+      throw new ConvexError({ code: "STALE_CONTENT" });
+    }
+    const revision = existing ? (existing.revision ?? 0) + 1 : 0;
     let artifactId;
     if (existing) {
-      await ctx.db.patch(existing._id, artifactData);
+      await ctx.db.patch(existing._id, { ...artifactData, revision });
       artifactId = existing._id;
     } else {
-      artifactId = await ctx.db.insert("artifacts", artifactData);
+      artifactId = await ctx.db.insert("artifacts", { ...artifactData, revision });
     }
 
     // Upsert translations
@@ -219,17 +237,31 @@ export const save = mutation({
       }
     }
 
-    // Replace media items
-    const existingMedia = await ctx.db
-      .query("media")
-      .withIndex("by_parent", (q) =>
-        q.eq("parentType", "artifact").eq("parentSlug", args.slug)
-      )
-      .collect();
-    for (const m of existingMedia) {
-      await ctx.db.delete(m._id);
+    if (replaceTranslations || removeLanguages?.length) {
+      const languages = new Set(translations.map((t) => t.language));
+      const removed = new Set(removeLanguages);
+      const stored = await ctx.db
+        .query("artifact_translations")
+        .withIndex("by_artifact", (q) => q.eq("artifactId", artifactId))
+        .collect();
+      for (const translation of stored) {
+        if (!languages.has(translation.language) && (replaceTranslations || removed.has(translation.language))) {
+          await ctx.db.delete(translation._id);
+        }
+      }
     }
-    if (mediaItems) {
+
+    // Omission preserves media; a supplied array replaces it, including [].
+    if (mediaItems !== undefined) {
+      const existingMedia = await ctx.db
+        .query("media")
+        .withIndex("by_parent", (q) =>
+          q.eq("parentType", "artifact").eq("parentSlug", args.slug)
+        )
+        .collect();
+      for (const m of existingMedia) {
+        await ctx.db.delete(m._id);
+      }
       for (const m of mediaItems) {
         await ctx.db.insert("media", {
           parentType: "artifact",
@@ -245,13 +277,22 @@ export const save = mutation({
 
 /** Delete an artifact and its translations/media. */
 export const remove = mutation({
-  args: { slug: v.string() },
-  handler: async (ctx, args) => {
+  args: {
+    serverSecret: v.optional(v.string()),
+    slug: v.string(),
+    expectedRevision: v.optional(v.number()),
+    expectedDocumentId: v.optional(v.string()),
+  },
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const artifact = await ctx.db
       .query("artifacts")
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
-    if (!artifact) return;
+    if (!artifact || args.expectedRevision !== (artifact.revision ?? 0) ||
+      args.expectedDocumentId !== artifact._id) {
+      throw new ConvexError({ code: "STALE_CONTENT" });
+    }
 
     // Delete translations
     const translations = await ctx.db
@@ -283,7 +324,7 @@ export const remove = mutation({
         const updatedSlugs = exhibition.artifactSlugs.filter(
           (s) => s !== args.slug
         );
-        await ctx.db.patch(exhibition._id, { artifactSlugs: updatedSlugs });
+        await ctx.db.patch(exhibition._id, { artifactSlugs: updatedSlugs, revision: (exhibition.revision ?? 0) + 1 });
       }
     }
 

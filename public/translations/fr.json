@@ -98,5 +98,10 @@
   "altText": "Texte alternatif",
   "name": "Nom",
   "logout": "Déconnexion",
-  "qrCameraUnavailable": "Impossible de démarrer ou d’arrêter la caméra. Fermez le scanner et réessayez."
+  "qrCameraUnavailable": "Impossible de démarrer ou d’arrêter la caméra. Fermez le scanner et réessayez.",
+  "audioPlaybackError": "Impossible de lire cet audio. Veuillez réessayer.",
+  "playAudio": "Lire l’audio",
+  "pauseAudio": "Mettre l’audio en pause",
+  "contentChangedReload": "Ce contenu a été modifié ou supprimé. Vos modifications non enregistrées sont conservées ici. Revenez à la vue d’ensemble et rouvrez l’élément pour charger sa dernière version.",
+  "onePerLine": "Un élément par ligne"
 }
