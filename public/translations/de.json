@@ -154,5 +154,8 @@
   "assetLabel": "Medium",
   "mediaLabel": "Medien",
   "qrCameraUnavailable": "Die Kamera konnte nicht gestartet oder beendet werden. Bitte schließen Sie den Scanner und versuchen Sie es erneut.",
-  "contentChangedReload": "Dieser Inhalt wurde geändert oder gelöscht. Ihre ungespeicherten Änderungen bleiben hier erhalten. Gehen Sie zurück zur Übersicht und öffnen Sie den Eintrag erneut, um die aktuelle Version zu laden."
+  "contentChangedReload": "Dieser Inhalt wurde geändert oder gelöscht. Ihre ungespeicherten Änderungen bleiben hier erhalten. Gehen Sie zurück zur Übersicht und öffnen Sie den Eintrag erneut, um die aktuelle Version zu laden.",
+  "audioPlaybackError": "Audio konnte nicht abgespielt werden. Bitte versuchen Sie es erneut.",
+  "playAudio": "Audio abspielen",
+  "pauseAudio": "Audio pausieren"
 }
