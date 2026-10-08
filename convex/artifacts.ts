@@ -187,6 +187,7 @@ export const save = mutation({
     enabledAttributes: v.optional(v.array(v.string())),
     createOnly: v.optional(v.boolean()),
     replaceTranslations: v.optional(v.boolean()),
+    removeLanguages: v.optional(v.array(v.string())),
     // Translations as an array
     translations: v.array(
       v.object({
@@ -216,7 +217,7 @@ export const save = mutation({
       )
     ),
   },
-  handler: async (ctx, { serverSecret, createOnly, replaceTranslations, ...args }) => {
+  handler: async (ctx, { serverSecret, createOnly, replaceTranslations, removeLanguages, ...args }) => {
     requireServerSecret(serverSecret);
     validateContentInput(args.slug, args.translations);
     const { translations, mediaItems, expectedRevision, expectedDocumentId, ...artifactData } = args;
@@ -267,14 +268,17 @@ export const save = mutation({
       }
     }
 
-    if (replaceTranslations) {
+    if (replaceTranslations || removeLanguages?.length) {
       const languages = new Set(translations.map((t) => t.language));
+      const removed = new Set(removeLanguages);
       const stored = await ctx.db
         .query("artifact_translations")
         .withIndex("by_artifact", (q) => q.eq("artifactId", artifactId))
         .collect();
       for (const translation of stored) {
-        if (!languages.has(translation.language)) await ctx.db.delete(translation._id);
+        if (!languages.has(translation.language) && (replaceTranslations || removed.has(translation.language))) {
+          await ctx.db.delete(translation._id);
+        }
       }
     }
 
