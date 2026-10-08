@@ -11,6 +11,7 @@ import {
   TranslationProgress,
   ValidationBanners,
   AttributeCheckboxes,
+  ArrayMetadataField,
   MediaSection,
   LanguageTabs,
   TranslatableTextField,
@@ -151,6 +152,9 @@ export const ExhibitionEditor: React.FC<ExhibitionEditorProps> = ({ id, onBack }
               <label className="block text-sm font-medium text-neutral-700 mb-1">{t('sponsor')}</label>
               <input type="text" className="input w-full px-3 py-2 border rounded-md" value={formData.sponsor || ''} onChange={(e) => handleChange('sponsor', e.target.value)} />
             </div>
+          )}
+          {formData.enabledAttributes?.includes('tags') && (
+            <ArrayMetadataField field="tags" label={t('tags')} values={formData.tags || []} onChange={handleChange} t={t} />
           )}
         </div>
 

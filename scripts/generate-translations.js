@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import { protectMarkdownDestinations, restoreMarkdownDestinations, splitMarkdownSource } from '../src/utils/markdownParsing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../.env') });
@@ -66,10 +67,12 @@ async function translateText(text, targetLanguage, attempt = 0) {
   }
 
   try {
+    const tokenNamespace = crypto.randomUUID().replaceAll('-', '');
+    const protectedMarkdown = protectMarkdownDestinations(text, tokenNamespace);
     const response = await fetch(API_URL, {
       method: 'POST',
       body: JSON.stringify({
-        q: text,
+        q: protectedMarkdown.text,
         source: 'de',
         target: targetLanguage,
         format: 'text',
@@ -84,7 +87,7 @@ async function translateText(text, targetLanguage, attempt = 0) {
     }
 
     const data = await response.json();
-    const result = data.translatedText;
+    const result = restoreMarkdownDestinations(data.translatedText, protectedMarkdown.destinations, tokenNamespace);
     
     translationCache.set(cacheKey, result);
     saveCache(); 
@@ -264,14 +267,14 @@ async function translateContent() {
         } else if (deMD) {
           process.stdout.write('\r\x1b[K');
           console.log(`    [${id}] [${langCode}] detailedContent... translating chunks`);
-          const chunks = deMD.split('\n\n');
+          const chunks = splitMarkdownSource(deMD);
           const translatedChunks = [];
           let mdUpdated = false;
           
-          for (const chunk of chunks) {
+          for (const block of chunks) {
+            const chunk = block.content;
             if (chunk.trim()) {
-              const mediaMatch = chunk.match(/^\[(Audio|Video):.*?\]\(.*?\)$/);
-              if (mediaMatch) {
+              if (block.type === 'embedding') {
                 translatedChunks.push(chunk);
                 continue;
               }
@@ -279,11 +282,11 @@ async function translateContent() {
               translatedChunks.push(result.text);
               if (result.text !== chunk) mdUpdated = true;
             } else {
-              translatedChunks.push('');
+              translatedChunks.push(chunk);
             }
           }
           if (mdUpdated) {
-            item.detailedContent[langCode] = translatedChunks.join('\n\n');
+            item.detailedContent[langCode] = translatedChunks.join('');
             fs.writeFileSync(filePath, JSON.stringify(content, null, 2));
             console.log(`    [${id}] [${langCode}] detailedContent -> updated.`);
           }
