@@ -71,7 +71,8 @@ export const listForLanguage = query({
       const key = t.exhibitionId;
       const arr = translationsByExId.get(key) ?? [];
       // Strip detailedContent to reduce payload (only needed on detail pages)
-      const { detailedContent: _, ...rest } = t;
+      const rest = { ...t };
+      delete rest.detailedContent;
       arr.push(rest as typeof t);
       translationsByExId.set(key, arr);
     }
