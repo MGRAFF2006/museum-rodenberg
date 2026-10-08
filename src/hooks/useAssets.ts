@@ -1,5 +1,6 @@
+import { useProtectedMutation } from './useProtectedMutation';
 import { useCallback } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Asset } from '../types';
 import { authFetch } from '../utils/auth';
@@ -7,8 +8,8 @@ import { authFetch } from '../utils/auth';
 export const useAssets = () => {
   // Reactive asset list from Convex
   const convexAssets = useQuery(api.assets.list);
-  const saveAssetMutation = useMutation(api.assets.save);
-  const removeAssetMutation = useMutation(api.assets.remove);
+  const saveAssetMutation = useProtectedMutation(api.assets.save);
+  const removeAssetMutation = useProtectedMutation(api.assets.remove);
 
   const isLoading = convexAssets === undefined;
 

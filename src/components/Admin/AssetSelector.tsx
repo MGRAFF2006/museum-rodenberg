@@ -3,6 +3,7 @@ import { Image as ImageIcon, X, Upload, Check, FileAudio, FileVideo, File as Fil
 import { useLanguage } from '../../hooks/useLanguage';
 import { useAssets } from '../../hooks/useAssets';
 import { Asset } from '../../types';
+import { authFetch } from '../../utils/auth';
 
 export type AssetType = 'image' | 'audio' | 'video' | 'all';
 
@@ -23,6 +24,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
 }) => {
   const { assets, isLoading, saveAsset } = useAssets();
   const { t } = useLanguage();
+  const [uploadError, setUploadError] = useState('');
 
   const filteredAssets = assets.filter(asset => {
     if (assetType === 'all') return true;
@@ -40,6 +42,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
 
     input.onchange = async () => {
       if (input.files && input.files[0]) {
+        setUploadError('');
         const formData = new FormData();
         const endpoint = assetType === 'image' ? '/api/upload-image' : '/api/upload-media';
         const fieldName = assetType === 'image' ? 'image' : 'file';
@@ -47,12 +50,16 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
         formData.append(fieldName, input.files[0]);
         
         try {
-          const response = await fetch(endpoint, {
+          const response = await authFetch(endpoint, {
             method: 'POST',
             body: formData,
           });
+          if (!response.ok) {
+            throw new Error(response.status === 401 ? 'Please log in again' : 'Upload failed. Please try again.');
+          }
           const data = await response.json();
           const asset = data.assets?.[0] || (data.url && { id: data.url.split('/').pop().split('.')[0] });
+          if (!asset) throw new Error('Upload failed. Please try again.');
           if (asset) {
             // Save asset metadata to Convex
             if (data.assets && Array.isArray(data.assets)) {
@@ -71,6 +78,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
           }
         } catch (error) {
           console.error('Upload failed:', error);
+          setUploadError(error instanceof Error ? error.message : 'Upload failed. Please try again.');
         }
       }
     };
@@ -118,6 +126,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = ({
         </div>
         
         <div className="p-6 overflow-y-auto flex-1">
+          {uploadError && <p role="alert" className="mb-4 text-red-500 text-sm">{uploadError}</p>}
           {isLoading ? (
             <div className="flex justify-center items-center py-20">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>

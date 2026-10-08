@@ -16,7 +16,7 @@ export const useSearch = (
       return { exhibitions: [], artifacts: [] };
     }
 
-    const lowerQuery = query.toLowerCase();
+    const lowerQuery = query.trim().toLowerCase();
     
     const matchingExhibitions = exhibitions.filter(ex =>
       ex.title.toLowerCase().includes(lowerQuery) ||
