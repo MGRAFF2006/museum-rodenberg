@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, FastForward } from 'lucide-react';
+import { useLanguage } from '../hooks/useLanguage';
 
 interface AudioPlayerProps {
   url: string;
@@ -7,7 +8,10 @@ interface AudioPlayerProps {
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ url, title }) => {
+  const { t } = useLanguage();
   const audioRef = useRef<HTMLAudioElement>(null);
+  const playRequestRef = useRef(0);
+  const [playbackError, setPlaybackError] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -15,6 +19,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ url, title }) => {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    const requests = playRequestRef;
+    requests.current++;
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setPlaybackError(false);
+    return () => {
+      requests.current++;
+      audio?.pause();
+    };
+  }, [url]);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = Number(e.target.value);
@@ -28,14 +46,22 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ url, title }) => {
     }
   };
 
-  const togglePlay = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
+  const togglePlay = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const request = ++playRequestRef.current;
+    setPlaybackError(false);
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      try {
+        await audio.play();
+      } catch {
+        if (playRequestRef.current === request) {
+          setIsPlaying(false);
+          setPlaybackError(true);
+        }
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -96,10 +122,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ url, title }) => {
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={() => setIsPlaying(false)}
-        onPlay={() => setIsPlaying(true)}
+        onPlay={() => { setIsPlaying(true); setPlaybackError(false); }}
         onPause={() => setIsPlaying(false)}
+        onError={() => { setIsPlaying(false); setPlaybackError(true); }}
         preload="metadata"
       />
+      {playbackError && <p role="alert" className="text-sm text-red-700 mb-4">{t('audioPlaybackError')}</p>}
       
       {title && (
         <div className="mb-4">
@@ -143,6 +171,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ url, title }) => {
           
           <button
             onClick={togglePlay}
+            aria-label={isPlaying ? t('pauseAudio') : t('playAudio')}
             className="p-4 bg-primary-600 text-white rounded-full hover:bg-primary-700 transition-all shadow-lg active:scale-95 flex items-center justify-center hover:shadow-primary-200"
           >
             {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 fill-current translate-x-0.5" />}
