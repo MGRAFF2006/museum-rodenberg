@@ -522,24 +522,34 @@ export function useEditorForm(config: EditorConfig) {
   }, [isReady, isTranslating, id, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t, setValidationErrors]);
 
   const handleDelete = useCallback(async () => {
+    if (id === 'new') return;
     if (!window.confirm(t(deleteConfirmKey))) return;
 
     try {
-      const slug = (formData.id || id).toLowerCase();
+      const args = {
+        slug: id,
+        expectedRevision: formData.revision ?? 0,
+        expectedDocumentId: formData.documentId,
+      };
 
       if (contentType === 'exhibition') {
-        await removeExhibition({ slug });
+        await removeExhibition(args);
       } else {
-        await removeArtifact({ slug });
+        await removeArtifact(args);
       }
 
       refreshData();
       onBack(true);
     } catch (error) {
+      if (error instanceof ContentConflictError) {
+        setValidationErrors([t('contentChangedReload')]);
+        alert(t('contentChangedReload'));
+        return;
+      }
       console.error('Error deleting:', error);
       alert(t('errorDeleting'));
     }
-  }, [contentType, id, formData.id, deleteConfirmKey, removeExhibition, removeArtifact, refreshData, onBack, t]);
+  }, [contentType, id, formData.revision, formData.documentId, deleteConfirmKey, removeExhibition, removeArtifact, refreshData, onBack, t, setValidationErrors]);
 
   return {
     // State
