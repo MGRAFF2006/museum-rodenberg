@@ -16,6 +16,7 @@
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'node:crypto';
+import { protectMarkdownDestinations } from '../src/utils/markdownParsing.js';
 
 function isWithinDirectory(directory, candidate) {
   const relative = path.relative(directory, candidate);
@@ -67,12 +68,8 @@ export async function translate(body, apiUrl, apiKey) {
   }
 
   // Protect Markdown URLs and images
-  const placeholders = [];
   const tokenNamespace = randomUUID().replaceAll('-', '');
-  const protectedText = text.replace(/(!?\[.*?\])\((.*?)\)/g, (_match, bracketed, url) => {
-    placeholders.push(url);
-    return `${bracketed}(__${tokenNamespace}_${placeholders.length - 1}__)`;
-  });
+  const { text: protectedText, destinations: placeholders } = protectMarkdownDestinations(text, tokenNamespace);
 
   const deadline = AbortSignal.timeout(30_000);
   let response;
