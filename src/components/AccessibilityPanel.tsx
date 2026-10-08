@@ -4,9 +4,7 @@ import { useAccessibility, FontSize, FontFamily, ContrastMode } from '../hooks/u
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import { useLanguage } from '../hooks/useLanguage';
 
-interface AccessibilityPanelProps {}
-
-export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = () => {
+export const AccessibilityPanel: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { settings, updateSettings, resetSettings: resetAccSettings } = useAccessibility();
   const { getVoicesForLanguage, settings: ttsSettings, updateSettings: updateTTSSettings, resetSettings: resetTTSSettings } = useTextToSpeech();
