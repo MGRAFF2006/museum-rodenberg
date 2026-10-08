@@ -9,6 +9,7 @@ vi.mock('../../utils/auth', () => ({ authFetch: async (_input: RequestInfo | URL
   const result = await save(request.args);
   return new Response(JSON.stringify({ result }));
 } }));
+
 vi.mock('../useContentData', () => ({ useContentData: () => ({ refreshData: vi.fn() }) }));
 vi.mock('../useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
 vi.mock('../useContentTranslation', () => ({ useContentTranslation: () => ({ isTranslating: false, translationProgress: null, translateFields: vi.fn() }) }));

@@ -440,21 +440,23 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              subtitle: t.subtitle || undefined,
+              subtitle: t.subtitle || '',
               description: t.description || '',
-              detailedContent: formData.detailedContent?.[lang] || undefined,
+              detailedContent: formData.detailedContent?.[lang] || '',
             };
           });
 
         await saveExhibition({
+          createOnly: id === 'new',
+          replaceTranslations: true,
           slug,
           qrCode: (formData.qrCode as string) || slug,
           image: formData.image || '',
-          dateRange: (formData.dateRange as string) || undefined,
-          location: (formData.location as string) || undefined,
-          curator: (formData.curator as string) || undefined,
-          organizer: (formData.organizer as string) || undefined,
-          sponsor: (formData.sponsor as string) || undefined,
+          dateRange: (formData.dateRange as string) || '',
+          location: (formData.location as string) || '',
+          curator: (formData.curator as string) || '',
+          organizer: (formData.organizer as string) || '',
+          sponsor: (formData.sponsor as string) || '',
           tags: formData.tags?.map(tag => tag.trim()).filter(Boolean),
           enabledAttributes: formData.enabledAttributes || undefined,
           isFeatured: (formData.isFeatured as boolean) || false,
@@ -471,22 +473,24 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              period: t.period || undefined,
-              artist: t.artist || undefined,
+              period: t.period || '',
+              artist: t.artist || '',
               description: t.description || '',
-              significance: t.significance || undefined,
-              detailedContent: formData.detailedContent?.[lang] || undefined,
+              significance: t.significance || '',
+              detailedContent: formData.detailedContent?.[lang] || '',
             };
           });
 
         await saveArtifact({
+          createOnly: id === 'new',
+          replaceTranslations: true,
           slug,
           qrCode: (formData.qrCode as string) || slug,
-          exhibitionSlug: (formData.exhibition as string) || undefined,
+          exhibitionSlug: (formData.exhibition as string) || '',
           image: formData.image || '',
           materials: formData.materials?.map(material => material.trim()).filter(Boolean),
-          dimensions: (formData.dimensions as string) || undefined,
-          provenance: (formData.provenance as string) || undefined,
+          dimensions: (formData.dimensions as string) || '',
+          provenance: (formData.provenance as string) || '',
           tags: formData.tags?.map(tag => tag.trim()).filter(Boolean),
           enabledAttributes: formData.enabledAttributes || undefined,
           translations,
@@ -501,7 +505,7 @@ export function useEditorForm(config: EditorConfig) {
       console.error('Error saving:', error);
       alert(t('errorSaving'));
     }
-  }, [isReady, isTranslating, formData, contentType, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t]);
+  }, [isReady, isTranslating, formData, contentType, id, validateAssets, saveExhibition, saveArtifact, refreshData, onBack, t]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm(t(deleteConfirmKey))) return;
