@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, type MutationCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { requireServerSecret } from "./auth";
 import { validateContentInput } from "./contentValidation";
@@ -130,6 +130,28 @@ export const getFeatured = query({
 
 // ── Mutations ────────────────────────────────────────────────────
 
+async function updateFeatured(ctx: MutationCtx, slug: string | null) {
+  const exhibitions = await ctx.db.query("exhibitions").collect();
+  for (const exhibition of exhibitions) {
+    const isFeatured = exhibition.slug === slug;
+    if (exhibition.isFeatured !== isFeatured) {
+      await ctx.db.patch(exhibition._id, { isFeatured, revision: (exhibition.revision ?? 0) + 1 });
+    }
+  }
+
+  const setting = await ctx.db
+    .query("settings")
+    .withIndex("by_key", (q) => q.eq("key", "featured_exhibition"))
+    .first();
+  if (slug === null) {
+    if (setting) await ctx.db.delete(setting._id);
+  } else if (setting) {
+    await ctx.db.patch(setting._id, { value: slug });
+  } else {
+    await ctx.db.insert("settings", { key: "featured_exhibition", value: slug });
+  }
+}
+
 /** Create or update an exhibition. */
 export const save = mutation({
   args: { serverSecret: v.optional(v.string()),
@@ -203,20 +225,14 @@ export const save = mutation({
       exhibitionId = await ctx.db.insert("exhibitions", { ...exhibitionData, revision });
     }
 
-    // If marked featured, update settings
     if (args.isFeatured) {
+      await updateFeatured(ctx, args.slug);
+    } else {
       const setting = await ctx.db
         .query("settings")
         .withIndex("by_key", (q) => q.eq("key", "featured_exhibition"))
         .first();
-      if (setting) {
-        await ctx.db.patch(setting._id, { value: args.slug });
-      } else {
-        await ctx.db.insert("settings", {
-          key: "featured_exhibition",
-          value: args.slug,
-        });
-      }
+      if (setting?.value === args.slug) await updateFeatured(ctx, null);
     }
 
     // Upsert translations
@@ -314,21 +330,6 @@ export const remove = mutation({
       await ctx.db.delete(m._id);
     }
 
-    // If this was the featured exhibition, clear it
-    const setting = await ctx.db
-      .query("settings")
-      .withIndex("by_key", (q) => q.eq("key", "featured_exhibition"))
-      .first();
-    if (setting?.value === args.slug) {
-      // Set to first remaining exhibition
-      const remaining = await ctx.db.query("exhibitions").first();
-      if (remaining && remaining._id !== exhibition._id) {
-        await ctx.db.patch(setting._id, { value: remaining.slug });
-      } else {
-        await ctx.db.delete(setting._id);
-      }
-    }
-
     // Clear exhibitionSlug on child artifacts
     const childArtifacts = await ctx.db
       .query("artifacts")
@@ -339,6 +340,15 @@ export const remove = mutation({
     }
 
     await ctx.db.delete(exhibition._id);
+
+    const setting = await ctx.db
+      .query("settings")
+      .withIndex("by_key", (q) => q.eq("key", "featured_exhibition"))
+      .first();
+    if (setting?.value === args.slug) {
+      const remaining = await ctx.db.query("exhibitions").first();
+      await updateFeatured(ctx, remaining?.slug ?? null);
+    }
   },
 });
 
@@ -347,17 +357,11 @@ export const setFeatured = mutation({
   args: { serverSecret: v.optional(v.string()), slug: v.string() },
   handler: async (ctx, { serverSecret, ...args }) => {
     requireServerSecret(serverSecret);
-    const setting = await ctx.db
-      .query("settings")
-      .withIndex("by_key", (q) => q.eq("key", "featured_exhibition"))
+    const exhibition = await ctx.db
+      .query("exhibitions")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
-    if (setting) {
-      await ctx.db.patch(setting._id, { value: args.slug });
-    } else {
-      await ctx.db.insert("settings", {
-        key: "featured_exhibition",
-        value: args.slug,
-      });
-    }
+    if (!exhibition) throw new Error("Exhibition not found");
+    await updateFeatured(ctx, args.slug);
   },
 });
