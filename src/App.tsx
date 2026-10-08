@@ -43,7 +43,6 @@ function App() {
     exhibitions,
     artifacts,
     getExhibitionById,
-    getArtifactById,
     getArtifactsByExhibition,
     findByQRCode,
     featuredExhibitionId,
