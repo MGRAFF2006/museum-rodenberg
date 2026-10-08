@@ -98,5 +98,8 @@
   "name": "Nombre",
   "logout": "Cerrar sesión",
   "qrCameraUnavailable": "No se pudo iniciar o detener la cámara. Cierre el escáner e inténtelo de nuevo.",
-  "onePerLine": "Un elemento por línea"
+  "onePerLine": "Un elemento por línea",
+  "audioPlaybackError": "No se pudo reproducir el audio. Inténtelo de nuevo.",
+  "playAudio": "Reproducir audio",
+  "pauseAudio": "Pausar audio"
 }

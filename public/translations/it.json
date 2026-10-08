@@ -99,5 +99,8 @@
   "name": "Nome",
   "logout": "Esci",
   "qrCameraUnavailable": "Impossibile avviare o arrestare la fotocamera. Chiudi lo scanner e riprova.",
-  "onePerLine": "Un elemento per riga"
+  "onePerLine": "Un elemento per riga",
+  "audioPlaybackError": "Impossibile riprodurre l’audio. Riprova.",
+  "playAudio": "Riproduci audio",
+  "pauseAudio": "Metti in pausa l’audio"
 }

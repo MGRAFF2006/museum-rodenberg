@@ -1,6 +1,7 @@
+import { useProtectedMutation } from '../../hooks/useProtectedMutation';
 import React, { useState, useMemo, useCallback } from 'react';
 import { Plus, Edit2, LogOut, Image as ImageIcon, FileText, Languages, Loader2 } from 'lucide-react';
-import { useMutation } from 'convex/react';
+
 import { api } from '../../../convex/_generated/api';
 import { useContentData } from '../../hooks/useContentData';
 import { useLanguage } from '../../hooks/useLanguage';
@@ -30,8 +31,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedExhibitionId, setSelectedExhibitionId] = useState<string | null>(null);
 
   // Convex mutations for saving translated content
-  const saveExhibition = useMutation(api.exhibitions.save);
-  const saveArtifact = useMutation(api.artifacts.save);
+  const saveExhibition = useProtectedMutation(api.exhibitions.save);
+  const saveArtifact = useProtectedMutation(api.artifacts.save);
 
   const filteredArtifacts = useMemo(() => {
     if (!selectedExhibitionId) return artifacts;

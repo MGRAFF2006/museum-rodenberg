@@ -1,5 +1,6 @@
+import { useProtectedMutation } from './useProtectedMutation';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useMutation } from 'convex/react';
+
 import { api } from '../../convex/_generated/api';
 import { Language, MediaItem, EntityRecord } from '../types';
 import { extractMediaFromMarkdown } from '../utils/markdownUtils';
@@ -58,10 +59,10 @@ export function useEditorForm(config: EditorConfig) {
   const { isValidating, validationErrors, validateAssets, setValidationErrors } = useAssetValidation();
 
   // Convex mutations
-  const saveExhibition = useMutation(api.exhibitions.save);
-  const removeExhibition = useMutation(api.exhibitions.remove);
-  const saveArtifact = useMutation(api.artifacts.save);
-  const removeArtifact = useMutation(api.artifacts.remove);
+  const saveExhibition = useProtectedMutation(api.exhibitions.save);
+  const removeExhibition = useProtectedMutation(api.exhibitions.remove);
+  const saveArtifact = useProtectedMutation(api.artifacts.save);
+  const removeArtifact = useProtectedMutation(api.artifacts.remove);
 
   const [activeLang, setActiveLang] = useState<Language>('de');
 
@@ -359,7 +360,7 @@ export function useEditorForm(config: EditorConfig) {
         formData._hashes || {},
         getUnifiedTranslations(),
       );
-    } catch (e) {
+    } catch {
       alert(t('translationFailed'));
     }
   }, [activeLang, getFieldsToTranslate, getUnifiedTranslations, formData._hashes, handleTranslationUpdate, t, translateFields]);
@@ -378,7 +379,7 @@ export function useEditorForm(config: EditorConfig) {
         formData._hashes || {},
         getUnifiedTranslations(),
       );
-    } catch (e) {
+    } catch {
       alert(t('someTranslationsFailed'));
     }
   }, [getFieldsToTranslate, getUnifiedTranslations, formData._hashes, handleTranslationUpdate, t, translateFields]);

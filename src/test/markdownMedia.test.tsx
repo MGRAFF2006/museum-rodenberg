@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { extractMediaFromMarkdown } from '../utils/markdownUtils';
 
+vi.mock('../hooks/useLanguage', () => ({ useLanguage: () => ({ t: (key: string) => key }) }));
+
 it.each(['audio', 'video', 'image'] as const)('opens safe %s wrappers using keyboard activation', async (type) => {
   const onMediaClick = vi.fn();
   const user = userEvent.setup();
@@ -43,6 +45,7 @@ it.each([
   const markdown = `![Media](${url})`;
   const { container } = render(<MarkdownRenderer content={markdown} />);
   expect(container.querySelector(type)).toHaveAttribute('src', url);
+  if (type === 'audio') expect(screen.getByRole('button', { name: 'playAudio' })).toBeInTheDocument();
   expect(container.querySelector('img')).not.toBeInTheDocument();
   const extracted = extractMediaFromMarkdown(markdown);
   expect(type === 'audio' ? extracted.audio : extracted.videos).toEqual([{ url, title: 'Media' }]);

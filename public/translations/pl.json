@@ -99,5 +99,8 @@
   "name": "Nazwa",
   "logout": "Wyloguj",
   "qrCameraUnavailable": "Nie można uruchomić lub zatrzymać kamery. Zamknij skaner i spróbuj ponownie.",
-  "onePerLine": "Jeden element w wierszu"
+  "onePerLine": "Jeden element w wierszu",
+  "audioPlaybackError": "Nie udało się odtworzyć dźwięku. Spróbuj ponownie.",
+  "playAudio": "Odtwórz dźwięk",
+  "pauseAudio": "Wstrzymaj dźwięk"
 }
