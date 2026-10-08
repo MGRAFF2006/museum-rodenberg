@@ -100,7 +100,7 @@ describe('getTranslatedContent', () => {
     };
 
     const result = getTranslatedContent(content, 'de', 'de', resolveAsset);
-    expect(result.media.images).toEqual(['/uploads/img1.jpg', '/uploads/img2.jpg']);
+    expect(result.media?.images).toEqual(['/uploads/img1.jpg', '/uploads/img2.jpg']);
   });
 });
 
