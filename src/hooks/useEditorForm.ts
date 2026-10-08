@@ -1,5 +1,5 @@
 import { ContentConflictError, useProtectedMutation } from './useProtectedMutation';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import { api } from '../../convex/_generated/api';
 import { Language, MediaItem, EntityRecord } from '../types';
@@ -65,6 +65,7 @@ export function useEditorForm(config: EditorConfig) {
   const removeArtifact = useProtectedMutation(api.artifacts.remove);
 
   const [activeLang, setActiveLang] = useState<Language>('de');
+  const loadedLanguages = useRef<string[]>([]);
 
   const emptyForm = useMemo<EntityRecord>(() => ({
     translations: Object.fromEntries(LANGUAGES.map(lang => [lang, { ...initialTranslationFields }])),
@@ -156,17 +157,20 @@ export function useEditorForm(config: EditorConfig) {
   // Hydrate only once per selected ID; subscription updates must preserve drafts.
   useEffect(() => {
     if (draftId !== id) {
+      loadedLanguages.current = [];
       setDraftId(id);
       setInitializedId(null);
       setFormData(emptyForm);
       setManualMedia({ images: [], videos: [], audio: [] });
     } else if (initializedId === id) {
       return;
+
     }
 
     if (id === 'new') {
       setInitializedId(id);
     } else if (entity?.id === id) {
+      loadedLanguages.current = Object.keys(entity.translations || {});
       const normalizedMedia = {
         images: entity.media?.images || [],
         videos: entity.media?.videos || [],
@@ -387,6 +391,7 @@ export function useEditorForm(config: EditorConfig) {
   const handleSave = useCallback(async () => {
     if (!isReady || isTranslating) return;
 
+    const removeLanguages = loadedLanguages.current.filter(lang => !formData.translations?.[lang]?.title);
     const isValid = await validateAssets(formData);
     if (!isValid) {
       alert(t('validationErrors'));
@@ -440,15 +445,15 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              subtitle: t.subtitle || '',
+              subtitle: Object.prototype.hasOwnProperty.call(t, 'subtitle') ? t.subtitle || '' : undefined,
               description: t.description || '',
-              detailedContent: formData.detailedContent?.[lang] || '',
+              detailedContent: Object.prototype.hasOwnProperty.call(formData.detailedContent || {}, lang) ? formData.detailedContent?.[lang] || '' : undefined,
             };
           });
 
         await saveExhibition({
           createOnly: id === 'new',
-          replaceTranslations: true,
+          removeLanguages,
           slug,
           expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
           expectedDocumentId: id === 'new' ? undefined : formData.documentId,
@@ -475,17 +480,17 @@ export function useEditorForm(config: EditorConfig) {
             return {
               language: lang,
               title: t.title || '',
-              period: t.period || '',
-              artist: t.artist || '',
+              period: Object.prototype.hasOwnProperty.call(t, 'period') ? t.period || '' : undefined,
+              artist: Object.prototype.hasOwnProperty.call(t, 'artist') ? t.artist || '' : undefined,
               description: t.description || '',
-              significance: t.significance || '',
-              detailedContent: formData.detailedContent?.[lang] || '',
+              significance: Object.prototype.hasOwnProperty.call(t, 'significance') ? t.significance || '' : undefined,
+              detailedContent: Object.prototype.hasOwnProperty.call(formData.detailedContent || {}, lang) ? formData.detailedContent?.[lang] || '' : undefined,
             };
           });
 
         await saveArtifact({
           createOnly: id === 'new',
-          replaceTranslations: true,
+          removeLanguages,
           slug,
           expectedRevision: id === 'new' ? undefined : formData.revision ?? 0,
           expectedDocumentId: id === 'new' ? undefined : formData.documentId,
