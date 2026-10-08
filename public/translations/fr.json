@@ -99,6 +99,7 @@
   "name": "Nom",
   "logout": "Déconnexion",
   "qrCameraUnavailable": "Impossible de démarrer ou d’arrêter la caméra. Fermez le scanner et réessayez.",
+  "onePerLine": "Un élément par ligne",
   "audioPlaybackError": "Impossible de lire cet audio. Veuillez réessayer.",
   "playAudio": "Lire l’audio",
   "pauseAudio": "Mettre l’audio en pause"
