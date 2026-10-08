@@ -56,10 +56,25 @@ if (!CONVEX_URL) {
   process.exit(1);
 }
 
+const serverSecret = process.env.CONVEX_WRITE_SECRET || envLocal.CONVEX_WRITE_SECRET || envFile.CONVEX_WRITE_SECRET;
+if (!serverSecret) {
+  console.error("ERROR: CONVEX_WRITE_SECRET must match the target Convex deployment");
+  process.exit(1);
+}
+
 console.log(`Connecting to Convex at ${CONVEX_URL}`);
 const client = new ConvexHttpClient(CONVEX_URL);
 if (ADMIN_KEY) {
   client.setAdminAuth(ADMIN_KEY);
+}
+
+// Convex errors may contain mutation arguments, including the server credential.
+async function write(operation, args) {
+  try {
+    return await client.mutation(operation, { ...args, serverSecret });
+  } catch {
+    throw new Error("Migration content write failed; check target configuration and source data");
+  }
 }
 
 // ── Load JSON data ───────────────────────────────────────────────
@@ -82,7 +97,7 @@ console.log(`  Assets:      ${Object.keys(assets.assets).length}`);
 console.log("\n--- Migrating assets ---");
 for (const [id, asset] of Object.entries(assets.assets)) {
   console.log(`  Asset: ${id}`);
-  await client.mutation(api.assets.save, {
+  await write(api.assets.save, {
     assetId: id,
     name: asset.name || id,
     alt: asset.alt || id,
@@ -146,7 +161,7 @@ for (const [slug, ex] of Object.entries(exhibitions.exhibitions)) {
     }
   }
 
-  await client.mutation(api.exhibitions.save, {
+  await write(api.exhibitions.save, {
     slug,
     qrCode: ex.qrCode || "",
     image: ex.image || "",
@@ -223,7 +238,7 @@ for (const [slug, art] of Object.entries(artifacts.artifacts)) {
     }
   }
 
-  await client.mutation(api.artifacts.save, {
+  await write(api.artifacts.save, {
     slug,
     qrCode: art.qrCode || "",
     exhibitionSlug: art.exhibition || undefined,
@@ -243,7 +258,7 @@ console.log(
 
 // ── Set featured exhibition ──────────────────────────────────────
 console.log("\n--- Setting featured exhibition ---");
-await client.mutation(api.exhibitions.setFeatured, {
+await write(api.exhibitions.setFeatured, {
   slug: exhibitions.featured,
 });
 console.log(`  Featured: ${exhibitions.featured}`);

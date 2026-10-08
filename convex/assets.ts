@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireServerSecret } from "./auth";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ export const getByAssetId = query({
 
 /** Create or update an asset. */
 export const save = mutation({
-  args: {
+  args: { serverSecret: v.optional(v.string()),
     assetId: v.string(),
     name: v.string(),
     alt: v.string(),
@@ -37,7 +38,8 @@ export const save = mutation({
       v.literal("other")
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const existing = await ctx.db
       .query("assets")
       .withIndex("by_assetId", (q) => q.eq("assetId", args.assetId))
@@ -53,8 +55,9 @@ export const save = mutation({
 
 /** Delete an asset by assetId. */
 export const remove = mutation({
-  args: { assetId: v.string() },
-  handler: async (ctx, args) => {
+  args: { serverSecret: v.optional(v.string()), assetId: v.string() },
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const existing = await ctx.db
       .query("assets")
       .withIndex("by_assetId", (q) => q.eq("assetId", args.assetId))
