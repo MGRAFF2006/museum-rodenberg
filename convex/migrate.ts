@@ -44,7 +44,7 @@ const ASSETS_JSON = {
  * Run with: npx ts-node --esm scripts/migrate-to-convex.ts
  */
 export const run = internalAction({
-  handler: async (ctx) => {
+  handler: async () => {
     // This action calls mutations to insert data.
     // Since we can't import JSON from the filesystem inside a Convex action,
     // this is a placeholder. Use the CLI script instead.
