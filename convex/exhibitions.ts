@@ -1,5 +1,5 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireServerSecret } from "./auth";
 import { validateContentInput } from "./contentValidation";
 
@@ -113,7 +113,7 @@ export const getBySlug = query({
         q.eq("parentType", "exhibition").eq("parentSlug", exhibition.slug)
       )
       .collect();
-    return { ...exhibition, translations, media: mediaItems };
+    return { ...exhibition, revision: exhibition.revision ?? 0, translations, media: mediaItems };
   },
 });
 
@@ -134,6 +134,8 @@ export const getFeatured = query({
 export const save = mutation({
   args: { serverSecret: v.optional(v.string()),
     slug: v.string(),
+    expectedRevision: v.optional(v.number()),
+    expectedDocumentId: v.optional(v.string()),
     qrCode: v.string(),
     image: v.string(),
     dateRange: v.optional(v.string()),
@@ -177,7 +179,7 @@ export const save = mutation({
   handler: async (ctx, { serverSecret, createOnly, replaceTranslations, ...args }) => {
     requireServerSecret(serverSecret);
     validateContentInput(args.slug, args.translations);
-    const { translations, mediaItems, ...exhibitionData } = args;
+    const { translations, mediaItems, expectedRevision, expectedDocumentId, ...exhibitionData } = args;
 
     // Check if exhibition already exists
     const existing = await ctx.db
@@ -186,12 +188,18 @@ export const save = mutation({
       .first();
 
     if (createOnly && existing) throw new Error("An exhibition with this ID already exists");
+    if (existing
+      ? expectedRevision !== (existing.revision ?? 0) || expectedDocumentId !== existing._id
+      : expectedRevision !== undefined || expectedDocumentId !== undefined) {
+      throw new ConvexError({ code: "STALE_CONTENT" });
+    }
+    const revision = existing ? (existing.revision ?? 0) + 1 : 0;
     let exhibitionId;
     if (existing) {
-      await ctx.db.patch(existing._id, exhibitionData);
+      await ctx.db.patch(existing._id, { ...exhibitionData, revision });
       exhibitionId = existing._id;
     } else {
-      exhibitionId = await ctx.db.insert("exhibitions", exhibitionData);
+      exhibitionId = await ctx.db.insert("exhibitions", { ...exhibitionData, revision });
     }
 
     // If marked featured, update settings
@@ -315,7 +323,7 @@ export const remove = mutation({
       .withIndex("by_exhibition", (q) => q.eq("exhibitionSlug", args.slug))
       .collect();
     for (const a of childArtifacts) {
-      await ctx.db.patch(a._id, { exhibitionSlug: undefined });
+      await ctx.db.patch(a._id, { exhibitionSlug: undefined, revision: (a.revision ?? 0) + 1 });
     }
 
     await ctx.db.delete(exhibition._id);

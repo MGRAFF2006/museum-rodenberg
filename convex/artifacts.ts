@@ -1,5 +1,5 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireServerSecret } from "./auth";
 import { validateContentInput } from "./contentValidation";
 
@@ -113,7 +113,7 @@ export const getBySlug = query({
         q.eq("parentType", "artifact").eq("parentSlug", artifact.slug)
       )
       .collect();
-    return { ...artifact, translations, media: mediaItems };
+    return { ...artifact, revision: artifact.revision ?? 0, translations, media: mediaItems };
   },
 });
 
@@ -150,6 +150,8 @@ export const getByExhibition = query({
 export const save = mutation({
   args: { serverSecret: v.optional(v.string()),
     slug: v.string(),
+    expectedRevision: v.optional(v.number()),
+    expectedDocumentId: v.optional(v.string()),
     qrCode: v.string(),
     exhibitionSlug: v.optional(v.string()),
     image: v.string(),
@@ -192,7 +194,7 @@ export const save = mutation({
   handler: async (ctx, { serverSecret, createOnly, replaceTranslations, ...args }) => {
     requireServerSecret(serverSecret);
     validateContentInput(args.slug, args.translations);
-    const { translations, mediaItems, ...artifactData } = args;
+    const { translations, mediaItems, expectedRevision, expectedDocumentId, ...artifactData } = args;
     if (artifactData.exhibitionSlug === "") artifactData.exhibitionSlug = undefined;
 
     // Check if artifact already exists
@@ -202,12 +204,18 @@ export const save = mutation({
       .first();
 
     if (createOnly && existing) throw new Error("An artifact with this ID already exists");
+    if (existing
+      ? expectedRevision !== (existing.revision ?? 0) || expectedDocumentId !== existing._id
+      : expectedRevision !== undefined || expectedDocumentId !== undefined) {
+      throw new ConvexError({ code: "STALE_CONTENT" });
+    }
+    const revision = existing ? (existing.revision ?? 0) + 1 : 0;
     let artifactId;
     if (existing) {
-      await ctx.db.patch(existing._id, artifactData);
+      await ctx.db.patch(existing._id, { ...artifactData, revision });
       artifactId = existing._id;
     } else {
-      artifactId = await ctx.db.insert("artifacts", artifactData);
+      artifactId = await ctx.db.insert("artifacts", { ...artifactData, revision });
     }
 
     // Upsert translations
@@ -304,7 +312,7 @@ export const remove = mutation({
         const updatedSlugs = exhibition.artifactSlugs.filter(
           (s) => s !== args.slug
         );
-        await ctx.db.patch(exhibition._id, { artifactSlugs: updatedSlugs });
+        await ctx.db.patch(exhibition._id, { artifactSlugs: updatedSlugs, revision: (exhibition.revision ?? 0) + 1 });
       }
     }
 

@@ -9,6 +9,7 @@
 
 export type ConvexExhibition = {
   _id: string;
+  revision?: number;
   slug: string;
   qrCode: string;
   image: string;
@@ -39,6 +40,7 @@ export type ConvexExhibition = {
 
 export type ConvexArtifact = {
   _id: string;
+  revision?: number;
   slug: string;
   qrCode: string;
   exhibitionSlug?: string;
@@ -118,6 +120,8 @@ export function convexExhibitionToRaw(ex: ConvexExhibition): Record<string, unkn
 
   return {
     id: ex.slug,
+    documentId: ex._id,
+    revision: ex.revision ?? 0,
     qrCode: ex.qrCode,
     image: ex.image,
     dateRange: ex.dateRange,
@@ -159,6 +163,8 @@ export function convexArtifactToRaw(art: ConvexArtifact): Record<string, unknown
 
   return {
     id: art.slug,
+    documentId: art._id,
+    revision: art.revision ?? 0,
     qrCode: art.qrCode,
     exhibition: art.exhibitionSlug,
     image: art.image,
