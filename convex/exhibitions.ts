@@ -247,17 +247,17 @@ export const save = mutation({
       }
     }
 
-    // Replace media items
-    const existingMedia = await ctx.db
-      .query("media")
-      .withIndex("by_parent", (q) =>
-        q.eq("parentType", "exhibition").eq("parentSlug", args.slug)
-      )
-      .collect();
-    for (const m of existingMedia) {
-      await ctx.db.delete(m._id);
-    }
-    if (mediaItems) {
+    // Omission preserves media; a supplied array replaces it, including [].
+    if (mediaItems !== undefined) {
+      const existingMedia = await ctx.db
+        .query("media")
+        .withIndex("by_parent", (q) =>
+          q.eq("parentType", "exhibition").eq("parentSlug", args.slug)
+        )
+        .collect();
+      for (const m of existingMedia) {
+        await ctx.db.delete(m._id);
+      }
       for (const m of mediaItems) {
         await ctx.db.insert("media", {
           parentType: "exhibition",
