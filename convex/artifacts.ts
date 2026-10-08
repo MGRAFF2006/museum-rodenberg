@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireServerSecret } from "./auth";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -146,7 +147,7 @@ export const getByExhibition = query({
 
 /** Create or update an artifact. */
 export const save = mutation({
-  args: {
+  args: { serverSecret: v.optional(v.string()),
     slug: v.string(),
     qrCode: v.string(),
     exhibitionSlug: v.optional(v.string()),
@@ -185,7 +186,8 @@ export const save = mutation({
       )
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const { translations, mediaItems, ...artifactData } = args;
 
     // Check if artifact already exists
@@ -246,8 +248,9 @@ export const save = mutation({
 
 /** Delete an artifact and its translations/media. */
 export const remove = mutation({
-  args: { slug: v.string() },
-  handler: async (ctx, args) => {
+  args: { serverSecret: v.optional(v.string()), slug: v.string() },
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const artifact = await ctx.db
       .query("artifacts")
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))

@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireServerSecret } from "./auth";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ export const getFeatured = query({
 
 /** Create or update an exhibition. */
 export const save = mutation({
-  args: {
+  args: { serverSecret: v.optional(v.string()),
     slug: v.string(),
     qrCode: v.string(),
     image: v.string(),
@@ -170,7 +171,8 @@ export const save = mutation({
       )
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const { translations, mediaItems, ...exhibitionData } = args;
 
     // Check if exhibition already exists
@@ -247,8 +249,9 @@ export const save = mutation({
 
 /** Delete an exhibition and its translations/media. */
 export const remove = mutation({
-  args: { slug: v.string() },
-  handler: async (ctx, args) => {
+  args: { serverSecret: v.optional(v.string()), slug: v.string() },
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const exhibition = await ctx.db
       .query("exhibitions")
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
@@ -305,8 +308,9 @@ export const remove = mutation({
 
 /** Set the featured exhibition. */
 export const setFeatured = mutation({
-  args: { slug: v.string() },
-  handler: async (ctx, args) => {
+  args: { serverSecret: v.optional(v.string()), slug: v.string() },
+  handler: async (ctx, { serverSecret, ...args }) => {
+    requireServerSecret(serverSecret);
     const setting = await ctx.db
       .query("settings")
       .withIndex("by_key", (q) => q.eq("key", "featured_exhibition"))
