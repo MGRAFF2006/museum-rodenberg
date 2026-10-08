@@ -130,6 +130,7 @@
   "assetLabel": "Asset",
   "mediaLabel": "Media",
   "qrCameraUnavailable": "The camera could not start or stop. Close the scanner and try again.",
+  "onePerLine": "One item per line",
   "audioPlaybackError": "Audio could not be played. Please try again.",
   "playAudio": "Play audio",
   "pauseAudio": "Pause audio"
