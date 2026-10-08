@@ -75,7 +75,8 @@ describe('Convex content authorization', () => {
     const ctx = { db: { query: () => chain, insert, patch, delete: del } };
     for (const write of writes) {
       const handler = (write as unknown as { _handler: (ctx: unknown, args: unknown) => Promise<unknown> })._handler;
-      await handler(ctx, { serverSecret: credential, slug: 'fixture', assetId: 'fixture', translations: [], isFeatured: true });
+      await handler(ctx, { serverSecret: credential, slug: 'fixture', assetId: 'fixture',
+        translations: [{ language: 'de', title: 'Fixture', description: '' }], isFeatured: true });
     }
     expect(patch).toHaveBeenCalled();
     expect(del).toHaveBeenCalled();
