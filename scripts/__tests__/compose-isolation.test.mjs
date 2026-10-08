@@ -9,10 +9,26 @@ import { spawnSync } from 'node:child_process';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const hasCompose = spawnSync('docker', ['compose', 'version'], { stdio: 'ignore' }).status === 0;
 
+function configFlags(run = spawnSync) {
+  const help = run('docker', ['compose', 'config', '--help'], { encoding: 'utf8' });
+  return help.status === 0 && help.stdout.includes('--no-env-resolution') ? ['--no-env-resolution'] : [];
+}
+
+const flags = hasCompose ? configFlags() : [];
+
+for (const supported of [true, false]) {
+  test(`configuration supports Compose ${supported ? 'with' : 'without'} --no-env-resolution`, () => {
+    assert.deepEqual(configFlags(() => ({ status: 0, stdout: supported ? '--no-env-resolution' : '--format' })),
+      supported ? ['--no-env-resolution'] : []);
+  });
+}
+
 async function fixture(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'museum-compose-test-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   await fs.copyFile(path.join(root, 'docker-compose.yml'), path.join(dir, 'docker-compose.yml'));
+  // Compose may validate env_file paths even when it skips resolving their values.
+  await fs.writeFile(path.join(dir, '.env.local'), 'CONVEX_SELF_HOSTED_ADMIN_KEY=fixture-only-key\n');
   return dir;
 }
 
@@ -20,7 +36,7 @@ function config(dir, password = 'fixture-password') {
   const env = { ...process.env };
   if (password === undefined) delete env.ADMIN_PASSWORD;
   else env.ADMIN_PASSWORD = password;
-  return spawnSync('docker', ['compose', '--project-directory', dir, '--profile', 'dev', '--profile', 'dashboard', 'config', '--no-env-resolution', '--format', 'json'], {
+  return spawnSync('docker', ['compose', '--project-directory', dir, '--profile', 'dev', '--profile', 'dashboard', 'config', ...flags, '--format', 'json'], {
     cwd: dir, env, encoding: 'utf8',
   });
 }
@@ -50,7 +66,7 @@ test('missing or empty admin password rejects configuration', { skip: !hasCompos
     const env = { ...process.env };
     if (password === null) delete env.ADMIN_PASSWORD;
     else env.ADMIN_PASSWORD = password;
-    const result = spawnSync('docker', ['compose', '--project-directory', dir, 'config', '--no-env-resolution', '--quiet'], { cwd: dir, env, encoding: 'utf8' });
+    const result = spawnSync('docker', ['compose', '--project-directory', dir, 'config', ...flags, '--quiet'], { cwd: dir, env, encoding: 'utf8' });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Set ADMIN_PASSWORD/);
   }
