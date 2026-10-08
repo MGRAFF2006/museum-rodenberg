@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunction } from 'react-router-dom';
+import { Routes, Route, useNavigate, useSearchParams, useParams, NavigateFunction, useLocation } from 'react-router-dom';
 import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
 import { MobileMenu } from './components/MobileMenu';
@@ -32,18 +32,18 @@ const LazyFallback = () => (
 );
 
 function App() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('q') || '';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const {
     exhibitions,
     artifacts,
     getExhibitionById,
-    getArtifactById,
     getArtifactsByExhibition,
     findByQRCode,
     featuredExhibitionId,
@@ -68,11 +68,9 @@ function App() {
 
   const handleSearchChange = (query: string) => {
     if (query.trim()) {
-      setSearchParams({ q: query });
-      navigate(`/search?q=${encodeURIComponent(query)}`);
-    } else {
-      setSearchParams({});
-      navigate('/');
+      navigate(`/search?${new URLSearchParams({ q: query })}`, { replace: location.pathname === '/search' });
+    } else if (location.pathname !== '/' || location.search) {
+      navigate('/', { replace: true });
     }
   };
 

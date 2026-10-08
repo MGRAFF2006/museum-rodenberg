@@ -18,7 +18,7 @@ export const useContentTranslation = () => {
     targetLangs: Language[],
     onUpdate: (lang: Language, fieldKey: string, type: 'translation' | 'detailed', value: string, hash: string) => void,
     existingHashes: Record<string, string> = {},
-    currentTranslations: Record<string, any> = {}
+    currentTranslations: Record<string, Record<string, string | undefined> | undefined> = {}
   ) => {
     if (fields.length === 0 || targetLangs.length === 0) return;
 

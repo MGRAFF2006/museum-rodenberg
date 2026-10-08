@@ -360,7 +360,7 @@ export function useEditorForm(config: EditorConfig) {
         formData._hashes || {},
         getUnifiedTranslations(),
       );
-    } catch (e) {
+    } catch {
       alert(t('translationFailed'));
     }
   }, [activeLang, getFieldsToTranslate, getUnifiedTranslations, formData._hashes, handleTranslationUpdate, t, translateFields]);
@@ -379,7 +379,7 @@ export function useEditorForm(config: EditorConfig) {
         formData._hashes || {},
         getUnifiedTranslations(),
       );
-    } catch (e) {
+    } catch {
       alert(t('someTranslationsFailed'));
     }
   }, [getFieldsToTranslate, getUnifiedTranslations, formData._hashes, handleTranslationUpdate, t, translateFields]);
