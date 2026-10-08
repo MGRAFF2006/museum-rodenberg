@@ -48,6 +48,16 @@ export async function pushConfig(args, root = ROOT, environment = process.env) {
   return { root, prod, url, key, keyFromFlag: values.key !== undefined, env };
 }
 
+// Emit only fixed diagnostic categories: CLI output can include credentials or data.
+function failureCategory(output) {
+  if (/error TS\d+|typecheck.*fail|Found no convex\/tsconfig\.json/i.test(output)) return 'backend typecheck failed';
+  if (/Unauthorized|InvalidAdminKey|invalid admin key|HTTP\s*(401|403)|status code\s*(401|403)/i.test(output)) return 'deployment authentication rejected';
+  if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|fetch failed|connection refused|timed? out/i.test(output)) return 'deployment connection failed';
+  if (/schema validation failed|schema is not valid|SchemaValidationError|InvalidSchema/i.test(output)) return 'deployment schema validation failed';
+  if (/unknown option|invalid argument|error: option/i.test(output)) return 'Convex CLI arguments rejected';
+  return 'unclassified Convex CLI failure; check backend logs, credentials and connectivity';
+}
+
 export async function pushSchema(config, { spawnProcess = spawn, signals = process, log = console.log } = {}) {
   if (config.help) { log(HELP); return; }
   if (config.keyFromFlag) log('Prefer environment credentials: --key can remain in shell history/process arguments.');
@@ -55,12 +65,16 @@ export async function pushSchema(config, { spawnProcess = spawn, signals = proce
   log(`Pushing schema to configured ${config.prod ? 'production' : 'local'} deployment...`);
   await new Promise((resolve, reject) => {
     // deploy accepts explicit self-hosted credentials without dev's env-file writes.
-    // Suppress CLI output, which may contain credentials in diagnostics.
+    // Capture a bounded tail for classification, never forward raw diagnostics.
     const child = spawnProcess(process.execPath, [cli, 'deploy', '--typecheck=enable'], {
-      cwd: config.root, stdio: 'ignore',
+      cwd: config.root, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...config.env, CONVEX_SELF_HOSTED_URL: config.url, CONVEX_SELF_HOSTED_ADMIN_KEY: config.key,
         CONVEX_DEPLOY_KEY: '', CONVEX_DEPLOYMENT: '', CONVEX_VERBOSE: '', CI: '1' },
     });
+    let output = '';
+    const capture = (chunk) => { output = (output + chunk.toString()).slice(-65536); };
+    child.stdout.on('data', capture);
+    child.stderr.on('data', capture);
     let interrupted;
     const interrupt = (signal) => { interrupted = signal; child.kill(signal); };
     const onInt = () => interrupt('SIGINT');
@@ -72,11 +86,12 @@ export async function pushSchema(config, { spawnProcess = spawn, signals = proce
       signals.removeListener('SIGTERM', onTerm);
     };
     child.once('error', () => { cleanup(); reject(new Error('Convex deployment could not start')); });
-    child.once('exit', (code, signal) => {
+    child.once('close', (code, signal) => {
       cleanup();
       if (code === 0 && !interrupted) resolve();
       else {
-        const error = new Error(`Schema push failed (${interrupted || signal || `exit ${code}`})`);
+        const detail = interrupted || signal ? 'deployment interrupted' : failureCategory(output);
+        const error = new Error(`Schema push failed (${interrupted || signal || `exit ${code}`}): ${detail}`);
         error.exitCode = interrupted === 'SIGINT' ? 130 : interrupted === 'SIGTERM' ? 143 : 1;
         reject(error);
       }

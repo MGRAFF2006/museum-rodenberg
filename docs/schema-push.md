@@ -26,8 +26,13 @@ self-hosted URL/key environment variables and required backend typechecking,
 clearing unrelated cloud deployment selectors. A type error must stop publishing.
 Unlike `convex dev --once`, `deploy` does not reconfigure the frontend
 or write `.env.local`, so existing local URLs, formatting and file absence are
-preserved on success, failure or interruption. CLI output is suppressed because
-diagnostics can contain credentials; wrapper errors identify exit status/signal.
+preserved on success, failure or interruption. Raw CLI output is suppressed because
+diagnostics can contain credentials. The wrapper keeps an in-memory tail of at
+most 65,536 UTF-16 code units and reports only fixed failure categories (typecheck, authentication, connection,
+schema validation or CLI arguments) alongside the exit status/signal. Unknown
+failures remain unclassified; inspect backend logs privately rather than exposing
+CLI output. A category is a diagnostic hint, not proof that a failed deploy made
+no changes.
 SIGINT/SIGTERM are forwarded to the child and return a failing exit status.
 Generated Convex code may still be updated by the normal deploy/codegen behavior.
 
