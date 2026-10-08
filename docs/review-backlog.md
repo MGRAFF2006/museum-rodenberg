@@ -1,19 +1,21 @@
 # Review implementation backlog
 
-Updated 2026-10-06. The original 111 findings and seven opportunities retain all 118 stable IDs. The complete F01–F103 inventory and final opportunities O01–O07 are recovered and cross-referenced below. At the feedback snapshot, 36 campaign PRs are merged and 26 implementation PRs are open and ready for review. **Resolved in repository** means the complete mapped code fix is merged; it does not assert deployment or production verification. Open PRs remain **actionable pending review/merge**. Partial findings remain actionable even when their covered portion is merged. **Requiring a decision** records a named editorial/product decision; **blocked** names an unavailable verification prerequisite. “Unprepared” means actionable work remains outside this publication batch.
+Updated 2026-10-08. Detailed review evidence below retains its 2026-10-06 snapshot. The original 111 findings and seven opportunities retain all 118 stable IDs. The complete F01–F103 inventory and final opportunities O01–O07 are recovered and cross-referenced below. At the feedback snapshot, 36 campaign PRs are merged and 26 implementation PRs are open and ready for review. **Resolved in repository** means the complete mapped code fix is merged; it does not assert deployment or production verification. Open PRs remain **actionable pending review/merge**. Partial findings remain actionable even when their covered portion is merged. **Requiring a decision** records a named editorial/product decision; **blocked** names an unavailable verification prerequisite. “Unprepared” means actionable work remains outside this publication batch.
 
-The user merged the completed PRs; this agent has not merged PRs or deployed to production. Current main is `c09904a`. Publication uses forward merges when bringing dependencies into prepared branches; shared history is preserved. GitHub authentication, including workflow scope, is restored; the earlier workflow-push authorization blocker is cleared.
+At the 2026-10-06 snapshot, the user had merged the completed PRs; the agent had not merged PRs or deployed to production. Snapshot main was `c09904a`. Publication uses forward merges when bringing dependencies into prepared branches; shared history is preserved. GitHub authentication, including workflow scope, is restored; the earlier workflow-push authorization blocker is cleared.
+
+**2026-10-08 merge update:** All 25 ready implementation PRs from the remaining batch are merged in dependency order, with their hosted code checks passing. This documentation PR records the outcome. [#60](https://github.com/MGRAFF2006/museum-rodenberg/pull/60) remains open until an export of actual deployed data passes the QR identity preflight; its code is being integrated with the merged save/deletion contracts. The latest observed main [schema deployment](https://github.com/MGRAFF2006/museum-rodenberg/actions/runs/37756296413) failed with `deployment connection failed`, after lint/type checks, tests and build passed. Production deployment remains unverified.
 
 ## Findings and opportunities
 
 | ID | Finding / opportunity | Status | Published coverage and remaining work |
 | --- | --- | --- | --- |
-| B01 | Unauthenticated Convex writes | actionable | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Prepared; await review and merge. |
-| B02 | Development API authorization bypass | actionable | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Prepared; await review and merge. |
-| B03 | Unbounded login attempts | actionable | [#9](https://github.com/MGRAFF2006/museum-rodenberg/pull/9), [#51](https://github.com/MGRAFF2006/museum-rodenberg/pull/51); Prepared; await review and merge. |
+| B01 | Unauthenticated Convex writes | resolved in repository | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Merged on 2026-10-08; complete mapped code fix is in the repository. |
+| B02 | Development API authorization bypass | resolved in repository | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Merged on 2026-10-08; complete mapped code fix is in the repository. |
+| B03 | Unbounded login attempts | resolved in repository | [#9](https://github.com/MGRAFF2006/museum-rodenberg/pull/9), [#51](https://github.com/MGRAFF2006/museum-rodenberg/pull/51); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | B04 | Active documents served on the application origin | resolved in repository | [#6](https://github.com/MGRAFF2006/museum-rodenberg/pull/6), [#10](https://github.com/MGRAFF2006/museum-rodenberg/pull/10), [#55](https://github.com/MGRAFF2006/museum-rodenberg/pull/55); New uploads: allowlist/signature checks; merged #6 isolates legacy media paths; deployed-volume verification remains. Header recognition is not complete decoding. |
-| B05 | Asset picker missing bearer token | actionable | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Prepared; await review and merge. |
-| B06 | Broken upload-image alias | actionable | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Prepared; await review and merge. |
+| B05 | Asset picker missing bearer token | resolved in repository | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Merged on 2026-10-08; complete mapped code fix is in the repository. |
+| B06 | Broken upload-image alias | resolved in repository | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | B07 | Upload filename collisions overwrite bytes | resolved in repository | [#10](https://github.com/MGRAFF2006/museum-rodenberg/pull/10); Merged; code fix is in the repository. |
 | B08 | Asset IDs collide across extensions | resolved in repository | [#10](https://github.com/MGRAFF2006/museum-rodenberg/pull/10); Merged; code fix is in the repository. |
 | B09 | Upload write completion and error cleanup | actionable | [#10](https://github.com/MGRAFF2006/museum-rodenberg/pull/10), [#21](https://github.com/MGRAFF2006/museum-rodenberg/pull/21); Upload implementation merged; controlled adapter errors remain in open #21. |
@@ -22,11 +24,11 @@ The user merged the completed PRs; this agent has not merged PRs or deployed to 
 | B12 | File and metadata deletion cannot be retried | actionable | [#47](https://github.com/MGRAFF2006/museum-rodenberg/pull/47); Server retry covered; client registration-failure/metadata cleanup dimension remains actionable. |
 | B13 | Referenced media can be deleted | actionable | Unprepared: authoritative reference protection must precede filesystem deletion; no client-only race-prone guard. |
 | B14 | Directories validate as media files | resolved in repository | [#47](https://github.com/MGRAFF2006/museum-rodenberg/pull/47); Merged; code fix is in the repository. |
-| B15 | Optional fields cannot be cleared | actionable | [#27](https://github.com/MGRAFF2006/museum-rodenberg/pull/27); Prepared; await review and merge. |
-| B16 | Omitted translations remain stored | actionable | [#27](https://github.com/MGRAFF2006/museum-rodenberg/pull/27), [#58](https://github.com/MGRAFF2006/museum-rodenberg/pull/58); Prepared; await review and merge. |
-| B17 | Artifact moves leave stale memberships | actionable | [#8](https://github.com/MGRAFF2006/museum-rodenberg/pull/8); Prepared; await review and merge. |
-| B18 | Deleting featured item loses replacement | actionable | [#12](https://github.com/MGRAFF2006/museum-rodenberg/pull/12); Prepared; await review and merge. |
-| B19 | Featured flag and setting diverge | actionable | [#12](https://github.com/MGRAFF2006/museum-rodenberg/pull/12); Prepared; await review and merge. |
+| B15 | Optional fields cannot be cleared | resolved in repository | [#27](https://github.com/MGRAFF2006/museum-rodenberg/pull/27); Merged on 2026-10-08; complete mapped code fix is in the repository. |
+| B16 | Omitted translations remain stored | resolved in repository | [#27](https://github.com/MGRAFF2006/museum-rodenberg/pull/27), [#58](https://github.com/MGRAFF2006/museum-rodenberg/pull/58); Merged on 2026-10-08; complete mapped code fix is in the repository. |
+| B17 | Artifact moves leave stale memberships | resolved in repository | [#8](https://github.com/MGRAFF2006/museum-rodenberg/pull/8); Merged on 2026-10-08; complete mapped code fix is in the repository. |
+| B18 | Deleting featured item loses replacement | resolved in repository | [#12](https://github.com/MGRAFF2006/museum-rodenberg/pull/12); Merged on 2026-10-08; complete mapped code fix is in the repository. |
+| B19 | Featured flag and setting diverge | resolved in repository | [#12](https://github.com/MGRAFF2006/museum-rodenberg/pull/12); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | B20 | Duplicate QR codes resolve inconsistently | actionable | [#60](https://github.com/MGRAFF2006/museum-rodenberg/pull/60); Approved globally unique nonempty QR codes; seed preflight checked 18 records. Current deployed-data export must still be audited before rollout; no automatic rewrite/backfill. |
 | B21 | Concurrent editors overwrite changes | actionable | [#42](https://github.com/MGRAFF2006/museum-rodenberg/pull/42), [#62](https://github.com/MGRAFF2006/museum-rodenberg/pull/62); Strict captured revision + document ID; versioned deletion B21-D01 is covered by #62. |
 | B22 | Listing queries scan unrelated translation/media rows | resolved in repository | [#41](https://github.com/MGRAFF2006/museum-rodenberg/pull/41); Merged; code fix is in the repository. |
@@ -40,7 +42,7 @@ The user merged the completed PRs; this agent has not merged PRs or deployed to 
 | B30 | HTML entry point is cached | resolved in repository | [#6](https://github.com/MGRAFF2006/museum-rodenberg/pull/6); Merged; code fix is in the repository. |
 | B31 | Mutable upload URLs keep stale cached bytes | resolved in repository | [#10](https://github.com/MGRAFF2006/museum-rodenberg/pull/10); Merged; code fix is in the repository. |
 | B32 | Expired session does not reauthenticate editor | actionable | [#3](https://github.com/MGRAFF2006/museum-rodenberg/pull/3); Partial: invalid tokens are cleared; reactive editor reauthentication remains unprepared. |
-| B33 | Advertised migration action is a stub | actionable | [#53](https://github.com/MGRAFF2006/museum-rodenberg/pull/53); Prepared; await review and merge. |
+| B33 | Advertised migration action is a stub | resolved in repository | [#53](https://github.com/MGRAFF2006/museum-rodenberg/pull/53); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | A01 | Editor misses asynchronously loaded records | resolved in repository | [#4](https://github.com/MGRAFF2006/museum-rodenberg/pull/4); Merged; code fix is in the repository. |
 | A02 | New editor attribute defaults are incomplete | resolved in repository | [#4](https://github.com/MGRAFF2006/museum-rodenberg/pull/4); Covered by merged #4; duplicate defaults branch deliberately not published. |
 | A03 | New blank media rows cannot be edited | resolved in repository | [#35](https://github.com/MGRAFF2006/museum-rodenberg/pull/35), [#52](https://github.com/MGRAFF2006/museum-rodenberg/pull/52); Merged; code fix is in the repository. |
@@ -59,7 +61,7 @@ The user merged the completed PRs; this agent has not merged PRs or deployed to 
 | T01 | Translation freshness shared across languages | actionable | Unprepared: per-language freshness rather than one field hash shared by all destinations. |
 | T02 | Translation hashes are not persisted | actionable | Unprepared: agree persisted hash representation with T01 before editing schema/writers. |
 | T03 | Generator marks failed translations current | actionable | Unprepared: advance generator freshness only after successful translation. |
-| T04 | Generator translates Markdown destinations | actionable | [#61](https://github.com/MGRAFF2006/museum-rodenberg/pull/61); Prepared; await review and merge. |
+| T04 | Generator translates Markdown destinations | resolved in repository | [#61](https://github.com/MGRAFF2006/museum-rodenberg/pull/61); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | T05 | Translation generator updates seeds rather than live content | unsupported as a runtime defect | Generator intentionally edits seed JSON; #53 clarifies seed versus runtime data. Live admin bulk translation is A07/F27; no silent reseeding. |
 | V01 | Public detailed content is unavailable | resolved in repository | [#5](https://github.com/MGRAFF2006/museum-rodenberg/pull/5); Merged; code fix is in the repository. |
 | V02 | Custom media protocols are stripped | resolved in repository | [#28](https://github.com/MGRAFF2006/museum-rodenberg/pull/28); Merged; code fix is in the repository. |
@@ -73,10 +75,10 @@ The user merged the completed PRs; this agent has not merged PRs or deployed to 
 | V10 | Cards ignore disabled attributes | actionable | Unprepared; recheck code and existing PRs before implementation. |
 | V11 | Sponsor is never rendered | actionable | Unprepared; recheck code and existing PRs before implementation. |
 | V12 | Loading content is reported missing | actionable | Unprepared; recheck code and existing PRs before implementation. |
-| V13 | Search updates duplicate browser history | actionable | [#30](https://github.com/MGRAFF2006/museum-rodenberg/pull/30); Prepared; await review and merge. |
-| V14 | Search query whitespace is not trimmed | actionable | [#30](https://github.com/MGRAFF2006/museum-rodenberg/pull/30); Prepared; await review and merge. |
+| V13 | Search updates duplicate browser history | resolved in repository | [#30](https://github.com/MGRAFF2006/museum-rodenberg/pull/30); Merged on 2026-10-08; complete mapped code fix is in the repository. |
+| V14 | Search query whitespace is not trimmed | resolved in repository | [#30](https://github.com/MGRAFF2006/museum-rodenberg/pull/30); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | V15 | Speech error prevents retry | resolved in repository | [#45](https://github.com/MGRAFF2006/museum-rodenberg/pull/45); Merged; code fix is in the repository. |
-| V16 | Audio playback rejection is unhandled | actionable | [#48](https://github.com/MGRAFF2006/museum-rodenberg/pull/48); Prepared; await review and merge. |
+| V16 | Audio playback rejection is unhandled | resolved in repository | [#48](https://github.com/MGRAFF2006/museum-rodenberg/pull/48); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | V17 | StrictMode resets accessibility preferences | resolved in repository | [#20](https://github.com/MGRAFF2006/museum-rodenberg/pull/20); Merged; code fix is in the repository. |
 | V18 | Storage exceptions can crash the app | resolved in repository | [#20](https://github.com/MGRAFF2006/museum-rodenberg/pull/20); Merged; code fix is in the repository. |
 | V19 | Stored speech preferences are unvalidated | resolved in repository | [#20](https://github.com/MGRAFF2006/museum-rodenberg/pull/20); Merged; code fix is in the repository. |
@@ -92,13 +94,13 @@ The user merged the completed PRs; this agent has not merged PRs or deployed to 
 | V29 | Mobile menu lacks scrolling | actionable | Unprepared; recheck code and existing PRs before implementation. |
 | V30 | Links have no visible focus indicator | actionable | Unprepared; recheck code and existing PRs before implementation. |
 | V31 | Selected controls have insufficient contrast | actionable | Unprepared; recheck code and existing PRs before implementation. |
-| V32 | Markdown URLs containing parentheses are truncated | actionable | [#61](https://github.com/MGRAFF2006/museum-rodenberg/pull/61); Prepared; await review and merge. |
+| V32 | Markdown URLs containing parentheses are truncated | resolved in repository | [#61](https://github.com/MGRAFF2006/museum-rodenberg/pull/61); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | V33 | Media extension detection ignores query and fragment | resolved in repository | [#28](https://github.com/MGRAFF2006/museum-rodenberg/pull/28); Merged; code fix is in the repository. |
 | V34 | Video sources always advertise MP4 | resolved in repository | [#23](https://github.com/MGRAFF2006/museum-rodenberg/pull/23); Merged; code fix is in the repository. |
 | V35 | Hash test does not assert its stated contract | actionable | Unprepared; recheck code and existing PRs before implementation. |
 | V36 | Duplicate prop contracts drift | actionable | Unprepared; recheck code and existing PRs before implementation. |
 | V37 | TranslationWarning conditionally calls a hook | resolved in repository | [#31](https://github.com/MGRAFF2006/museum-rodenberg/pull/31); Merged; code fix is in the repository. |
-| O01 | Root typecheck checks no source files | actionable | [#14](https://github.com/MGRAFF2006/museum-rodenberg/pull/14); Prepared; await review and merge. |
+| O01 | Root typecheck checks no source files | resolved in repository | [#14](https://github.com/MGRAFF2006/museum-rodenberg/pull/14); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | O02 | Backup reports success despite failed exports | actionable | [#11](https://github.com/MGRAFF2006/museum-rodenberg/pull/11); Ready after the real isolated recovery drill; await review and merge. |
 | O03 | Backup restore instructions accept an incompatible format | actionable | [#11](https://github.com/MGRAFF2006/museum-rodenberg/pull/11); Ready after the real isolated recovery drill; await review and merge. |
 | O04 | Backups omit uploaded media bytes | actionable | [#11](https://github.com/MGRAFF2006/museum-rodenberg/pull/11); Ready after the real isolated recovery drill; await review and merge. |
@@ -110,14 +112,14 @@ The user merged the completed PRs; this agent has not merged PRs or deployed to 
 | O10 | Supported Node version conflicts with dependencies | resolved in repository | [#24](https://github.com/MGRAFF2006/museum-rodenberg/pull/24); Merged; code fix is in the repository. |
 | O11 | Locked Vite version has a conditional security advisory | resolved in repository | [#25](https://github.com/MGRAFF2006/museum-rodenberg/pull/25); Patched identified Vite advisory; remaining dependency audit entries are not claimed resolved. |
 | O12 | Support services bind all network interfaces | resolved in repository | [#19](https://github.com/MGRAFF2006/museum-rodenberg/pull/19); Merged; code fix is in the repository. |
-| O13 | CI schema deployment is not gated on credentials | actionable | [#32](https://github.com/MGRAFF2006/museum-rodenberg/pull/32); Prepared; await review and merge. |
+| O13 | CI schema deployment is not gated on credentials | resolved in repository | [#32](https://github.com/MGRAFF2006/museum-rodenberg/pull/32); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | O14 | License documentation conflicts with GPL file | resolved in repository | [#40](https://github.com/MGRAFF2006/museum-rodenberg/pull/40); Merged; code fix is in the repository. |
 | O15 | Development supervisor loses child failure status | resolved in repository | [#57](https://github.com/MGRAFF2006/museum-rodenberg/pull/57); Merged; code fix is in the repository. |
-| O16 | CI lint job never invokes lint | actionable | [#34](https://github.com/MGRAFF2006/museum-rodenberg/pull/34); Prepared; await review and merge. |
+| O16 | CI lint job never invokes lint | resolved in repository | [#34](https://github.com/MGRAFF2006/museum-rodenberg/pull/34); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | O17 | Backup chooses inconsistent environment precedence | actionable | [#11](https://github.com/MGRAFF2006/museum-rodenberg/pull/11); Ready after the real isolated recovery drill; await review and merge. |
-| O18 | Concurrent CI schema pushes can roll back code | actionable | [#32](https://github.com/MGRAFF2006/museum-rodenberg/pull/32); Prepared; await review and merge. |
+| O18 | Concurrent CI schema pushes can roll back code | resolved in repository | [#32](https://github.com/MGRAFF2006/museum-rodenberg/pull/32); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | O19 | Installed ESLint rule crashes | actionable | [#26](https://github.com/MGRAFF2006/museum-rodenberg/pull/26); Known from existing #1; compatible rule loader restored without disabling rules. |
-| O20 | Fresh setup omits content seeding | actionable | [#53](https://github.com/MGRAFF2006/museum-rodenberg/pull/53); Prepared; await review and merge. |
+| O20 | Fresh setup omits content seeding | resolved in repository | [#53](https://github.com/MGRAFF2006/museum-rodenberg/pull/53); Merged on 2026-10-08; complete mapped code fix is in the repository. |
 | O21 | Compose accepts a published default admin password | resolved in repository | [#19](https://github.com/MGRAFF2006/museum-rodenberg/pull/19); Merged; code fix is in the repository. |
 | N01 | Curated short visit routes | requiring a decision (deferred by user) | User deferred until a curator supplies route content, audience and duration. |
 | N02 | Printable object label sheets | actionable | Clear optional candidate: print existing object QR labels; unprepared in this publication batch. |
