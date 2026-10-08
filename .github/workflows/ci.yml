@@ -17,7 +17,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run typecheck
 
   test:
     name: Test
@@ -55,15 +56,46 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    concurrency:
+      group: convex-production-schema
+      cancel-in-progress: false
+      queue: max
     steps:
+      - name: Check deployment credentials
+        id: deployment
+        env:
+          CONVEX_PROD_URL: ${{ secrets.CONVEX_PROD_URL }}
+          CONVEX_PROD_ADMIN_KEY: ${{ secrets.CONVEX_PROD_ADMIN_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${CONVEX_PROD_URL:-}" && -n "${CONVEX_PROD_ADMIN_KEY:-}" ]]; then
+            printf 'enabled=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'enabled=false\n' >> "$GITHUB_OUTPUT"
+            echo "Skipping schema deployment: production credentials are not configured."
+          fi
       - uses: actions/checkout@v4
+        if: steps.deployment.outputs.enabled == 'true'
       - uses: actions/setup-node@v4
+        if: steps.deployment.outputs.enabled == 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        if: steps.deployment.outputs.enabled == 'true'
       - name: Push schema to Sevalla Convex backend
+        if: steps.deployment.outputs.enabled == 'true'
         env:
           CONVEX_PROD_URL: ${{ secrets.CONVEX_PROD_URL }}
           CONVEX_PROD_ADMIN_KEY: ${{ secrets.CONVEX_PROD_ADMIN_KEY }}
-        run: bash scripts/push-convex.sh --prod
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
+          if [[ "$latest_sha" != "$GITHUB_SHA" ]]; then
+            echo "Skipping outdated schema deployment: main has moved."
+            exit 0
+          fi
+          bash scripts/push-convex.sh --prod

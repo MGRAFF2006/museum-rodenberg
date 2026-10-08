@@ -14,8 +14,32 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 export function createAdminApi(rootDir, env) {
   const router = express();
   const sessions = new Map();
+  const loginAttempts = new Map();
   const backendUrl = env.CONVEX_BACKEND_URL || env.CONVEX_SELF_HOSTED_URL;
   const client = backendUrl ? new ConvexHttpClient(backendUrl) : null;
+  // Socket address is deliberate: untrusted X-Forwarded-For must not bypass limits.
+  // Reverse proxies share a bucket until a trusted proxy policy is configured.
+  router.use('/login', (req, res, next) => {
+    const now = Date.now();
+    for (const [address, attempt] of loginAttempts) {
+      if (now >= attempt.until) loginAttempts.delete(address);
+    }
+    const address = req.socket.remoteAddress || 'unknown';
+    let attempt = loginAttempts.get(address);
+    if (!attempt && loginAttempts.size >= 1000) {
+      return res.status(503).json({ error: 'Login temporarily unavailable' });
+    }
+    if (!attempt) {
+      attempt = { count: 0, until: now + 15 * 60 * 1000 };
+      loginAttempts.set(address, attempt);
+    }
+    if (attempt.count >= 10) {
+      res.set('Retry-After', String(Math.ceil((attempt.until - now) / 1000)));
+      return res.status(429).json({ error: 'Too many login attempts. Try again later.' });
+    }
+    attempt.count++;
+    next();
+  });
   router.use(express.json({ limit: '10mb' }));
 
   router.post('/login', (req, res) => {
@@ -25,6 +49,7 @@ export function createAdminApi(rootDir, env) {
     for (const [token, expiry] of sessions) {
       if (Date.now() >= expiry) sessions.delete(token);
     }
+    loginAttempts.delete(req.socket.remoteAddress || 'unknown');
     const token = crypto.randomBytes(32).toString('hex');
     sessions.set(token, Date.now() + SESSION_TTL_MS);
     res.json({ token });
@@ -72,7 +97,10 @@ export function createAdminApi(rootDir, env) {
 
   router.post(['/upload-media', '/upload-image'], async (req, res) => {
     try { res.json(await uploadMedia(rootDir, req.headers, req)); }
-    catch { res.status(500).json({ error: 'Failed to upload media' }); }
+    catch (error) {
+      const status = [400, 413, 415].includes(error.status) ? error.status : 500;
+      res.status(status).json({ error: status === 500 ? 'Failed to upload media' : error.message });
+    }
   });
   router.post('/translate', async (req, res) => {
     try {
@@ -92,8 +120,9 @@ export function createAdminApi(rootDir, env) {
     const result = deleteImage(rootDir, req.query.path);
     res.status(result.status).json(result.body);
   });
-  router.use((_err, _req, res, _next) => {
-    res.status(500).json({ error: 'Admin API request failed' });
+  router.use((err, _req, res, _next) => {
+    const status = [400, 413].includes(err.status) ? err.status : 500;
+    res.status(status).json({ error: status === 413 ? 'Request body too large' : status === 400 ? 'Invalid request body' : 'Admin API request failed' });
   });
   return router;
 }

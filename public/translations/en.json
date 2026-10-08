@@ -131,5 +131,9 @@
   "mediaLabel": "Media",
   "qrCameraUnavailable": "The camera could not start or stop. Close the scanner and try again.",
   "contentChangedReload": "This content was changed or deleted. Your unsaved edits are kept here. Return to the overview and reopen the item to load its latest version.",
-  "qrCodeAlreadyAssigned": "This QR code is already assigned to another artifact or exhibition. Choose another QR code."
+  "qrCodeAlreadyAssigned": "This QR code is already assigned to another artifact or exhibition. Choose another QR code.",
+  "audioPlaybackError": "Audio could not be played. Please try again.",
+  "playAudio": "Play audio",
+  "pauseAudio": "Pause audio",
+  "onePerLine": "One item per line"
 }

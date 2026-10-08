@@ -100,5 +100,9 @@
   "logout": "Wyloguj",
   "qrCameraUnavailable": "Nie można uruchomić lub zatrzymać kamery. Zamknij skaner i spróbuj ponownie.",
   "contentChangedReload": "Ta treść została zmieniona lub usunięta. Niezapisane zmiany pozostają tutaj. Wróć do przeglądu i otwórz element ponownie, aby wczytać najnowszą wersję.",
-  "qrCodeAlreadyAssigned": "Ten kod QR jest już przypisany do innego obiektu lub wystawy. Wybierz inny kod QR."
+  "qrCodeAlreadyAssigned": "Ten kod QR jest już przypisany do innego obiektu lub wystawy. Wybierz inny kod QR.",
+  "audioPlaybackError": "Nie udało się odtworzyć dźwięku. Spróbuj ponownie.",
+  "playAudio": "Odtwórz dźwięk",
+  "pauseAudio": "Wstrzymaj dźwięk",
+  "onePerLine": "Jeden element w wierszu"
 }

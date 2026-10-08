@@ -47,6 +47,10 @@ const mockArtifacts: Artifact[] = [
 ];
 
 describe('useSearch', () => {
+  it('trims surrounding whitespace while matching', () => {
+    const { result } = renderHook(() => useSearch('  Coberg  ', mockExhibitions, mockArtifacts));
+    expect(result.current.artifacts.map(item => item.id)).toEqual(['art1']);
+  });
   it('returns empty results for empty query', () => {
     const { result } = renderHook(() => useSearch('', mockExhibitions, mockArtifacts));
     expect(result.current.exhibitions).toEqual([]);
