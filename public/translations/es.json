@@ -97,5 +97,8 @@
   "altText": "Texto alternativo",
   "name": "Nombre",
   "logout": "Cerrar sesión",
-  "qrCameraUnavailable": "No se pudo iniciar o detener la cámara. Cierre el escáner e inténtelo de nuevo."
+  "qrCameraUnavailable": "No se pudo iniciar o detener la cámara. Cierre el escáner e inténtelo de nuevo.",
+  "audioPlaybackError": "No se pudo reproducir el audio. Inténtelo de nuevo.",
+  "playAudio": "Reproducir audio",
+  "pauseAudio": "Pausar audio"
 }
