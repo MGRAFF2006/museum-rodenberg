@@ -6,10 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-typecheck:
     name: Lint & Type Check
-    runs-on: ubuntu-latest
+    runs-on: boat
+    timeout-minutes: 20
+    concurrency:
+      group: ci-${{ github.workflow }}-lint-and-typecheck-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,7 +29,11 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: boat
+    timeout-minutes: 20
+    concurrency:
+      group: ci-${{ github.workflow }}-test-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,7 +46,11 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: boat
+    timeout-minutes: 20
+    concurrency:
+      group: ci-${{ github.workflow }}-build-${{ github.ref }}
+      cancel-in-progress: true
     needs: [lint-and-typecheck, test]
     steps:
       - uses: actions/checkout@v4
