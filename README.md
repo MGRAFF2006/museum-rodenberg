@@ -61,7 +61,7 @@ npm run test:node
 npm run build
 ```
 
-The existing GitHub Actions workflow runs type checking, tests, and the production build. A push to `main` also publishes the Convex schema when the production secrets are configured.
+GitHub Actions runs linting, type checking, tests, and the production build on Boat. CI does not deploy the application or publish the Convex schema. Sevalla deployment is retired; deployment commands must target the intended environment explicitly.
 
 `npm test` runs the visitor/application Vitest suites. `npm run test:node` also
 runs native Node suites under `scripts/` and `server/`, including nested test
