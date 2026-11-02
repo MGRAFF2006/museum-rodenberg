@@ -6,96 +6,82 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  lint-and-typecheck:
-    name: Lint & Type Check
-    runs-on: ubuntu-latest
+  check:
+    name: Lint, Test & Build
+    runs-on: boat
+    # Serial budget preserves the previous three 20-minute job caps.
+    timeout-minutes: 60
+    concurrency:
+      group: ci-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+        id: checkout
       - uses: actions/setup-node@v4
+        id: node
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        id: install
+
+      # Attempt every check after installation, even if another check fails.
+      # Use outcomes (before continue-on-error), never the softened conclusions.
       - run: npm run lint
+        id: lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
       - run: npm run typecheck
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+        id: typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
       - run: npm test -- --run
+        id: vitest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
       - run: npm run test:node
+        id: native
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
 
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, test]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
       - run: npm run build
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.lint.outcome == 'success' && steps.typecheck.outcome == 'success' && steps.vitest.outcome == 'success' && steps.native.outcome == 'success' }}
       - uses: actions/upload-artifact@v4
+        id: artifact
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         with:
           name: dist
           path: dist/
           retention-days: 7
 
-  push-convex-schema:
-    name: Push Convex Schema to Sevalla
-    runs-on: ubuntu-latest
-    needs: [build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-    concurrency:
-      group: convex-production-schema
-      cancel-in-progress: false
-      queue: max
-    steps:
-      - name: Check deployment credentials
-        id: deployment
+      - name: Require every setup, check, build and artifact result
+        id: gate
+        if: ${{ always() }}
         env:
-          CONVEX_PROD_URL: ${{ secrets.CONVEX_PROD_URL }}
-          CONVEX_PROD_ADMIN_KEY: ${{ secrets.CONVEX_PROD_ADMIN_KEY }}
+          CHECKOUT_RESULT: ${{ steps.checkout.outcome }}
+          NODE_RESULT: ${{ steps.node.outcome }}
+          INSTALL_RESULT: ${{ steps.install.outcome }}
+          LINT_RESULT: ${{ steps.lint.outcome }}
+          TYPECHECK_RESULT: ${{ steps.typecheck.outcome }}
+          VITEST_RESULT: ${{ steps.vitest.outcome }}
+          NATIVE_RESULT: ${{ steps.native.outcome }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          ARTIFACT_RESULT: ${{ steps.artifact.outcome }}
+        shell: bash
         run: |
           set -euo pipefail
-          if [[ -n "${CONVEX_PROD_URL:-}" && -n "${CONVEX_PROD_ADMIN_KEY:-}" ]]; then
-            printf 'enabled=true\n' >> "$GITHUB_OUTPUT"
-          else
-            printf 'enabled=false\n' >> "$GITHUB_OUTPUT"
-            echo "Skipping schema deployment: production credentials are not configured."
-          fi
-      - uses: actions/checkout@v4
-        if: steps.deployment.outputs.enabled == 'true'
-      - uses: actions/setup-node@v4
-        if: steps.deployment.outputs.enabled == 'true'
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-        if: steps.deployment.outputs.enabled == 'true'
-      - name: Push schema to Sevalla Convex backend
-        if: steps.deployment.outputs.enabled == 'true'
-        env:
-          CONVEX_PROD_URL: ${{ secrets.CONVEX_PROD_URL }}
-          CONVEX_PROD_ADMIN_KEY: ${{ secrets.CONVEX_PROD_ADMIN_KEY }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          latest_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
-          if [[ "$latest_sha" != "$GITHUB_SHA" ]]; then
-            echo "Skipping outdated schema deployment: main has moved."
-            exit 0
-          fi
-          bash scripts/push-convex.sh --prod
+          failed=0
+          for check in CHECKOUT NODE INSTALL LINT TYPECHECK VITEST NATIVE BUILD ARTIFACT; do
+            result_var="${check}_RESULT"
+            result="${!result_var:-missing}"
+            printf '%s: %s\n' "$check" "$result"
+            if [[ "$result" != success ]]; then
+              failed=1
+            fi
+          done
+          exit "$failed"
