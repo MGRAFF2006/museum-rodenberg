@@ -61,7 +61,15 @@ npm run test:node
 npm run build
 ```
 
-GitHub Actions runs linting, type checking, tests, and the production build on Boat. CI does not deploy the application or publish the Convex schema. Sevalla deployment is retired; deployment commands must target the intended environment explicitly.
+GitHub Actions runs linting, type checking, tests, and the production build on Boat.
+Each event runs the full gate in one Boat job with one Node 22 setup and dependency
+install. Lint, type checking, Vitest, and the full native Node suite run independently
+after setup; the build requires all four to succeed. The final gate rejects failed,
+skipped, or missing required steps, including setup and the `dist` artifact upload
+(`dist/`, retained for 7 days). The 60-minute serial timeout combines the former
+three 20-minute caps; it is not a measured duration.
+
+CI does not deploy the application or publish the Convex schema. Sevalla deployment is retired; deployment commands must target the intended environment explicitly.
 
 `npm test` runs the visitor/application Vitest suites. `npm run test:node` also
 runs native Node suites under `scripts/` and `server/`, including nested test

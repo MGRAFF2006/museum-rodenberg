@@ -10,58 +10,78 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-typecheck:
-    name: Lint & Type Check
+  check:
+    name: Lint, Test & Build
     runs-on: boat
-    timeout-minutes: 20
+    # Serial budget preserves the previous three 20-minute job caps.
+    timeout-minutes: 60
     concurrency:
-      group: ci-${{ github.workflow }}-lint-and-typecheck-${{ github.ref }}
+      group: ci-${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+        id: checkout
       - uses: actions/setup-node@v4
+        id: node
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        id: install
+
+      # Attempt every check after installation, even if another check fails.
+      # Use outcomes (before continue-on-error), never the softened conclusions.
       - run: npm run lint
+        id: lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
       - run: npm run typecheck
-
-  test:
-    name: Test
-    runs-on: boat
-    timeout-minutes: 20
-    concurrency:
-      group: ci-${{ github.workflow }}-test-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+        id: typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
       - run: npm test -- --run
+        id: vitest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
       - run: npm run test:node
+        id: native
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
 
-  build:
-    name: Build
-    runs-on: boat
-    timeout-minutes: 20
-    concurrency:
-      group: ci-${{ github.workflow }}-build-${{ github.ref }}
-      cancel-in-progress: true
-    needs: [lint-and-typecheck, test]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
       - run: npm run build
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.lint.outcome == 'success' && steps.typecheck.outcome == 'success' && steps.vitest.outcome == 'success' && steps.native.outcome == 'success' }}
       - uses: actions/upload-artifact@v4
+        id: artifact
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         with:
           name: dist
           path: dist/
           retention-days: 7
+
+      - name: Require every setup, check, build and artifact result
+        id: gate
+        if: ${{ always() }}
+        env:
+          CHECKOUT_RESULT: ${{ steps.checkout.outcome }}
+          NODE_RESULT: ${{ steps.node.outcome }}
+          INSTALL_RESULT: ${{ steps.install.outcome }}
+          LINT_RESULT: ${{ steps.lint.outcome }}
+          TYPECHECK_RESULT: ${{ steps.typecheck.outcome }}
+          VITEST_RESULT: ${{ steps.vitest.outcome }}
+          NATIVE_RESULT: ${{ steps.native.outcome }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          ARTIFACT_RESULT: ${{ steps.artifact.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          for check in CHECKOUT NODE INSTALL LINT TYPECHECK VITEST NATIVE BUILD ARTIFACT; do
+            result_var="${check}_RESULT"
+            result="${!result_var:-missing}"
+            printf '%s: %s\n' "$check" "$result"
+            if [[ "$result" != success ]]; then
+              failed=1
+            fi
+          done
+          exit "$failed"
