@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -38,8 +38,9 @@ async function fixture(t, env = {}) {
   };
   t.after(async () => {
     if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    // Failed supervision must not leave even a TERM-ignoring fixture behind.
     for (const { pid } of await records()) {
-      try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
     await rm(directory, { recursive: true, force: true });
   });
@@ -116,3 +117,32 @@ test('watcher failure during startup still produces a failed supervisor session'
   assert.equal(result.code, 7);
   assertStopped(await run.records());
 });
+
+for (const stopped of [false, true]) {
+  test(`watcher failure bounds cleanup when its peer ${stopped ? 'is stopped' : 'ignores TERM'}`, async (t) => {
+    const run = await fixture(t);
+    execFileSync('mkfifo', [path.join(run.directory, 'peer-started')]);
+    await writeFile(path.join(run.directory, 'node_modules/.bin/convex'),
+      `#!/bin/sh\ncase " $* " in *" --once "*) exit 0 ;; esac\nread -r peer_pid < peer-started\n${stopped ? 'kill -STOP "$peer_pid"\n' : ''}exit 7\n`, { mode: 0o755 });
+    // The watcher fails only after its peer has installed a TERM-ignoring handler.
+    // The FIFO orders startup without a timing delay or changing the supervisor.
+    await writeFile(path.join(run.directory, 'node_modules/.bin/vite'), `#!/usr/bin/env node
+  import { appendFileSync, writeFileSync } from 'node:fs';
+  const record = (event) => appendFileSync(process.env.FIXTURE_LOG,
+    JSON.stringify({ name: 'vite', pid: process.pid, event }) + '\\n');
+  process.on('SIGTERM', () => record('ignored'));
+  record('started');
+  writeFileSync('peer-started', process.pid + '\\n');
+  setInterval(() => {}, 1000);
+  `, { mode: 0o755 });
+    const result = await run.start().finished;
+    assert.equal(result.code, 7);
+    assert.equal(result.signal, null);
+    assert.match(result.output, /All processes stopped/);
+    assert.equal(result.output.split('Shutting down...').length - 1, 1);
+    const records = await run.records();
+    assert.equal(records.filter((record) => record.event === 'started').length, 1);
+    if (!stopped) assert.ok(records.some((record) => record.event === 'ignored'));
+    assertStopped(records);
+  });
+}

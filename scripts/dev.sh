@@ -50,7 +50,29 @@ cleanup() {
   for pid in "${PIDS[@]}"; do
     kill "$pid" 2>/dev/null || true
   done
-  wait 2>/dev/null || true
+  # Give TERM handlers a bounded grace period, including during service startup.
+  local deadline=$((SECONDS + 2))
+  local running=()
+  while true; do
+    running=()
+    # Inspect current child jobs so escalation excludes completed or untracked PIDs.
+    for pid in $(jobs -pr; jobs -ps); do
+      case " ${PIDS[*]} " in
+        *" $pid "*) running+=("$pid") ;;
+      esac
+    done
+    if [ "${#running[@]}" -eq 0 ]; then
+      break
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      kill -KILL "${running[@]}" 2>/dev/null || true
+      break
+    fi
+    sleep 0.1
+  done
+  for pid in "${PIDS[@]}"; do
+    wait "$pid" 2>/dev/null || true
+  done
   echo -e "${GREEN}All processes stopped.${NC}"
   return "$status"
 }
