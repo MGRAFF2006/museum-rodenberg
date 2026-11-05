@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { api } from '../../../convex/_generated/api';
-import { ContentConflictError, useProtectedMutation } from '../useProtectedMutation';
+import { ContentConflictError, ContentQRCodeError, useProtectedMutation } from '../useProtectedMutation';
 import { getToken, setToken } from '../../utils/auth';
 
 afterEach(() => { sessionStorage.clear(); vi.unstubAllGlobals(); });
@@ -23,8 +23,20 @@ it('sends only the browser session to Express and clears rejected sessions', asy
 
 it('identifies stale writes without treating them as expired sessions', async () => {
   setToken('browser-session');
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 409 })));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'STALE_CONTENT' }), { status: 409 })));
   const { result } = renderHook(() => useProtectedMutation(api.artifacts.save));
   await expect(result.current({ slug: 'fixture', qrCode: '', image: '', translations: [] })).rejects.toBeInstanceOf(ContentConflictError);
+  expect(getToken()).toBe('browser-session');
+});
+
+it('distinguishes QR conflicts from stale drafts and hides response details', async () => {
+  setToken('browser-session');
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'QR_CONFLICT', error: 'fixture-private-detail' }), { status: 409 }));
+  vi.stubGlobal('fetch', fetch);
+  const { result } = renderHook(() => useProtectedMutation(api.artifacts.save));
+  const args = { slug: 'fixture', qrCode: 'duplicate', image: '', translations: [] };
+  await expect(result.current(args)).rejects.toBeInstanceOf(ContentQRCodeError);
+  fetch.mockResolvedValueOnce(new Response('{}', { status: 409 }));
+  await expect(result.current(args)).rejects.toThrow('Failed to write content');
   expect(getToken()).toBe('browser-session');
 });

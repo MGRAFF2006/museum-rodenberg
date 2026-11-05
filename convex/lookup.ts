@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 export const findByQRCode = query({
   args: { qrCode: v.string() },
   handler: async (ctx, args) => {
+    if (!args.qrCode.trim()) return null;
     // Try exhibitions first
     const exhibition = await ctx.db
       .query("exhibitions")
