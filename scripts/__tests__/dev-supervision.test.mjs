@@ -39,7 +39,7 @@ async function fixture(t, env = {}) {
   t.after(async () => {
     if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
     for (const { pid } of await records()) {
-      try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
     await rm(directory, { recursive: true, force: true });
   });
@@ -114,5 +114,18 @@ test('watcher failure during startup still produces a failed supervisor session'
     '#!/bin/sh\ncase " $* " in *" --once "*) exit 0 ;; *) exit 7 ;; esac\n', { mode: 0o755 });
   const result = await run.start().finished;
   assert.equal(result.code, 7);
+  assertStopped(await run.records());
+});
+
+test('cleanup bounds shutdown when a required service ignores SIGTERM', async (t) => {
+  const run = await fixture(t);
+  await writeFile(path.join(run.directory, 'node_modules/.bin/vite'), service.replace(
+    "process.on('SIGTERM', () => { record('stopped'); process.exit(0); });",
+    "process.on('SIGTERM', () => { record('stopped'); });"));
+  await writeFile(path.join(run.directory, 'node_modules/.bin/convex'),
+    '#!/bin/sh\ncase " $* " in *" --once "*) exit 0 ;; esac\nwhile ! grep -q vite "$FIXTURE_LOG" 2>/dev/null; do sleep 0.01; done\nsleep 0.1\nexit 7\n', { mode: 0o755 });
+  const result = await run.start().finished;
+  assert.equal(result.code, 7);
+  assert.ok((await run.records()).some((record) => record.name === 'vite' && record.event === 'stopped'));
   assertStopped(await run.records());
 });
