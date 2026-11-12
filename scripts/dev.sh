@@ -44,11 +44,31 @@ done
 PIDS=()
 cleanup() {
   local status=$?
+  local attempt running
   trap - EXIT
   trap '' INT TERM
   echo -e "\n${YELLOW}Shutting down...${NC}"
   for pid in "${PIDS[@]}"; do
     kill "$pid" 2>/dev/null || true
+  done
+  # A service can ignore TERM during startup or shutdown. Bound the grace
+  # period so cleanup cannot leave the development session waiting forever.
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    running=false
+    for pid in "${PIDS[@]}"; do
+      if kill -0 "$pid" 2>/dev/null; then
+        running=true
+      fi
+    done
+    if [ "$running" = false ]; then
+      break
+    fi
+    sleep 0.1
+  done
+  for pid in "${PIDS[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
   done
   wait 2>/dev/null || true
   echo -e "${GREEN}All processes stopped.${NC}"
