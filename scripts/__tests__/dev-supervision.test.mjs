@@ -7,19 +7,25 @@ import { test } from 'node:test';
 
 const script = await readFile(new URL('../dev.sh', import.meta.url), 'utf8');
 const service = `#!/usr/bin/env node
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 const name = path.basename(process.argv[1]);
 if (process.argv.includes('--once')) process.exit(Number(process.env.FIXTURE_ONCE_STATUS || 0));
 const record = (event) => appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({ name, pid: process.pid, event }) + '\\n');
-record('started');
 process.on('SIGTERM', () => {
   if (process.env['FIXTURE_' + name.toUpperCase() + '_IGNORE_TERM']) { record('ignored'); return; }
   record('stopped'); process.exit(0);
 });
+record('started');
 setInterval(() => {}, 1000);
 const code = process.env['FIXTURE_' + name.toUpperCase() + '_STATUS'];
-if (code !== undefined) setTimeout(() => { record('exited'); process.exit(Number(code)); }, 50);
+// Wait for the peer's signal handler to be ready rather than racing a timer.
+if (code !== undefined) setInterval(() => {
+  const records = readFileSync(process.env.FIXTURE_LOG, 'utf8').trim().split('\\n').map(JSON.parse);
+  if (records.some((record) => record.name !== name && record.event === 'started')) {
+    record('exited'); process.exit(Number(code));
+  }
+}, 10);
 `;
 
 async function fixture(t, env = {}) {
