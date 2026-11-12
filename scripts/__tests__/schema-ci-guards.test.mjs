@@ -33,7 +33,7 @@ test('CI retains one active Node 22 Boat job and the full native regression gate
   assert.equal(job.steps.filter((step) => step.uses?.startsWith('actions/checkout@')).length, 1);
   assert.equal(job.steps.filter((step) => step.uses?.startsWith('actions/setup-node@')).length, 1);
   const node = stepById('node');
-  assert.equal(node.uses, 'actions/setup-node@v4');
+  assert.equal(node.uses, 'actions/setup-node@v6');
   assert.equal(node.with['node-version'], 22);
   assert.equal(node.with.cache, 'npm');
   assert.equal(job.steps.filter((step) => step.run === 'npm ci').length, 1);
@@ -63,7 +63,7 @@ test('build requires actual success of every prerequisite and retains the dist a
   assert.equal(build.if, "${{ !cancelled() && steps.install.outcome == 'success' && steps.lint.outcome == 'success' && steps.typecheck.outcome == 'success' && steps.vitest.outcome == 'success' && steps.native.outcome == 'success' }}");
   assert.equal(build['continue-on-error'], undefined);
   const artifact = stepById('artifact');
-  assert.equal(artifact.uses, 'actions/upload-artifact@v4');
+  assert.equal(artifact.uses, 'actions/upload-artifact@v6');
   assert.equal(artifact.if, "${{ !cancelled() && steps.build.outcome == 'success' }}");
   assert.equal(artifact['continue-on-error'], undefined);
   assert.deepEqual(artifact.with, { name: 'dist', path: 'dist/', 'retention-days': 7 });
