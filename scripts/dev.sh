@@ -50,7 +50,23 @@ cleanup() {
   for pid in "${PIDS[@]}"; do
     kill "$pid" 2>/dev/null || true
   done
-  wait 2>/dev/null || true
+  # A service can ignore SIGTERM (including during startup). Give it a
+  # bounded grace period before forcing only our tracked children to exit.
+  local attempt running
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    running=false
+    for pid in "${PIDS[@]}"; do
+      if kill -0 "$pid" 2>/dev/null; then running=true; fi
+    done
+    if [ "$running" = false ]; then break; fi
+    sleep 0.1
+  done
+  for pid in "${PIDS[@]}"; do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+  for pid in "${PIDS[@]}"; do
+    wait "$pid" 2>/dev/null || true
+  done
   echo -e "${GREEN}All processes stopped.${NC}"
   return "$status"
 }

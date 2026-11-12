@@ -13,7 +13,10 @@ const name = path.basename(process.argv[1]);
 if (process.argv.includes('--once')) process.exit(Number(process.env.FIXTURE_ONCE_STATUS || 0));
 const record = (event) => appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({ name, pid: process.pid, event }) + '\\n');
 record('started');
-process.on('SIGTERM', () => { record('stopped'); process.exit(0); });
+process.on('SIGTERM', () => {
+  if (process.env['FIXTURE_' + name.toUpperCase() + '_IGNORE_TERM']) { record('ignored'); return; }
+  record('stopped'); process.exit(0);
+});
 setInterval(() => {}, 1000);
 const code = process.env['FIXTURE_' + name.toUpperCase() + '_STATUS'];
 if (code !== undefined) setTimeout(() => { record('exited'); process.exit(Number(code)); }, 50);
@@ -37,9 +40,9 @@ async function fixture(t, env = {}) {
     catch (error) { if (error.code === 'ENOENT') return []; throw error; }
   };
   t.after(async () => {
-    if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     for (const { pid } of await records()) {
-      try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
     await rm(directory, { recursive: true, force: true });
   });
@@ -115,4 +118,14 @@ test('watcher failure during startup still produces a failed supervisor session'
   const result = await run.start().finished;
   assert.equal(result.code, 7);
   assertStopped(await run.records());
+});
+
+test('cleanup forcibly stops a peer that ignores SIGTERM and preserves the failure', async (t) => {
+  const run = await fixture(t, { FIXTURE_CONVEX_STATUS: '7', FIXTURE_VITE_IGNORE_TERM: '1' });
+  const result = await run.start().finished;
+  assert.equal(result.code, 7);
+  const records = await run.records();
+  assert.ok(records.some((record) => record.name === 'vite' && record.event === 'ignored'));
+  assertStopped(records);
+  assert.equal(result.output.split('Shutting down...').length - 1, 1);
 });
