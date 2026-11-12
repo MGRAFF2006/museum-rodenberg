@@ -7,16 +7,25 @@ import { test } from 'node:test';
 
 const script = await readFile(new URL('../dev.sh', import.meta.url), 'utf8');
 const service = `#!/usr/bin/env node
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 const name = path.basename(process.argv[1]);
 if (process.argv.includes('--once')) process.exit(Number(process.env.FIXTURE_ONCE_STATUS || 0));
 const record = (event) => appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({ name, pid: process.pid, event }) + '\\n');
+process.on('SIGTERM', () => {
+  if (process.env['FIXTURE_' + name.toUpperCase() + '_IGNORE_TERM']) { record('ignored'); return; }
+  record('stopped'); process.exit(0);
+});
 record('started');
-process.on('SIGTERM', () => { record('stopped'); process.exit(0); });
 setInterval(() => {}, 1000);
 const code = process.env['FIXTURE_' + name.toUpperCase() + '_STATUS'];
-if (code !== undefined) setTimeout(() => { record('exited'); process.exit(Number(code)); }, 50);
+// Wait for the peer's signal handler to be ready rather than racing a timer.
+if (code !== undefined) setInterval(() => {
+  const records = readFileSync(process.env.FIXTURE_LOG, 'utf8').trim().split('\\n').map(JSON.parse);
+  if (records.some((record) => record.name !== name && record.event === 'started')) {
+    record('exited'); process.exit(Number(code));
+  }
+}, 10);
 `;
 
 async function fixture(t, env = {}) {
@@ -37,9 +46,9 @@ async function fixture(t, env = {}) {
     catch (error) { if (error.code === 'ENOENT') return []; throw error; }
   };
   t.after(async () => {
-    if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     for (const { pid } of await records()) {
-      try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
     await rm(directory, { recursive: true, force: true });
   });
@@ -115,4 +124,14 @@ test('watcher failure during startup still produces a failed supervisor session'
   const result = await run.start().finished;
   assert.equal(result.code, 7);
   assertStopped(await run.records());
+});
+
+test('cleanup forcibly stops a peer that ignores SIGTERM and preserves the failure', async (t) => {
+  const run = await fixture(t, { FIXTURE_CONVEX_STATUS: '7', FIXTURE_VITE_IGNORE_TERM: '1' });
+  const result = await run.start().finished;
+  assert.equal(result.code, 7);
+  const records = await run.records();
+  assert.ok(records.some((record) => record.name === 'vite' && record.event === 'ignored'));
+  assertStopped(records);
+  assert.equal(result.output.split('Shutting down...').length - 1, 1);
 });
