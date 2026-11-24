@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
@@ -120,4 +120,105 @@ it.each([
   expect(container.querySelector('button')).toBeNull();
   expect(container.querySelector('p div, p img')).toBeNull();
   expect(errors.mock.calls.filter((call) => String(call[0]).includes('validateDOMNesting'))).toEqual([]);
+});
+
+// Content models from the HTML standard: these elements accept phrasing content
+// only, and links and buttons must not contain interactive content.
+const PHRASING_ONLY = 'p, h1, h2, h3, h4, h5, h6, em, strong, del, span, sup, button';
+const FLOW = 'div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, section, blockquote, table, audio, video';
+const INTERACTIVE = 'a[href], button, input, select, textarea, audio[controls], video[controls]';
+
+function invalidNesting(root: Element): string[] {
+  const found: string[] = [];
+  for (const outer of root.querySelectorAll(PHRASING_ONLY)) {
+    for (const inner of outer.querySelectorAll(FLOW)) found.push(`${outer.tagName} > ${inner.tagName}`);
+  }
+  for (const outer of root.querySelectorAll('a, button')) {
+    for (const inner of outer.querySelectorAll(INTERACTIVE)) found.push(`${outer.tagName} > ${inner.tagName}`);
+  }
+  return found;
+}
+
+/** Element structure and text, ignoring React's text separators and attribute serialization. */
+function outline(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+  if (node.nodeType !== Node.ELEMENT_NODE) return '';
+  return `<${node.nodeName}>${[...node.childNodes].map(outline).join('')}</${node.nodeName}>`;
+}
+
+/** Render like SSR plus a browser: parse server HTML, compare with the client tree, then hydrate it. */
+async function expectConsistentBrowserTree(content: string): Promise<HTMLElement> {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const view = <MarkdownRenderer content={content} />;
+  const container = document.createElement('div');
+  container.innerHTML = renderToString(view);
+  const parsedServerTree = outline(container);
+  const { container: client, unmount } = render(view);
+  expect(parsedServerTree).toBe(outline(client));
+  unmount();
+  expect(invalidNesting(container)).toEqual([]);
+  document.body.append(container);
+  const recover = vi.fn();
+  let root: ReturnType<typeof hydrateRoot> | undefined;
+  await act(async () => { root = hydrateRoot(container, view, { onRecoverableError: recover }); });
+  expect(recover).not.toHaveBeenCalled();
+  expect(errors.mock.calls.filter((call) => /validateDOMNesting|hydrat|cannot (be|contain)/i.test(String(call[0])))).toEqual([]);
+  onTestFinished(() => { act(() => root?.unmount()); container.remove(); });
+  return container;
+}
+
+it.each([
+  ['a tight list item', '- *Before ![Picture](/one.jpg) after*\n- Plain ![Guide](/guide.mp3) item'],
+  ['a table cell', '| Object |\n| --- |\n| *Before ![Picture](/one.jpg) after* |'],
+])('keeps media out of emphasis in %s', async (_case, content) => {
+  const container = await expectConsistentBrowserTree(content);
+  const cell = container.querySelector('li, td')!;
+  expect([...cell.childNodes].map((node) => node.nodeName)).toEqual(['EM', 'DIV', 'EM']);
+  expect(cell.textContent).toMatch(/^Before Picture after$/);
+});
+
+it('places media after the heading text and keeps the heading', async () => {
+  const container = await expectConsistentBrowserTree('## Title ![Audio guide](/guide.mp3)\n\n### *Room ![Map](/map.jpg)*\n\n## ![Banner](/banner.jpg)');
+  const headings = container.querySelectorAll('h2, h3');
+  expect([...headings].map((heading) => `${heading.tagName} ${heading.textContent?.trim()}`)).toEqual(['H2 Title', 'H3 Room']);
+  expect(headings[0].nextElementSibling?.querySelector('audio')).not.toBeNull();
+  expect(headings[1].nextElementSibling?.querySelector('img')).toHaveAttribute('alt', 'Map');
+  // An image-only heading leaves the image without an empty heading.
+  expect(container.querySelector('img[alt="Banner"]')?.closest('h1, h2, h3, h4, h5, h6')).toBeNull();
+});
+
+it('keeps a heading link labelled and moves its media after the heading', async () => {
+  const container = await expectConsistentBrowserTree('## [Plan ![Floor](/floor.jpg)](https://example.com/plan)');
+  const links = container.querySelectorAll('a');
+  expect(links).toHaveLength(1);
+  expect(links[0].closest('h2')).not.toBeNull();
+  expect(links[0]).toHaveTextContent('Plan Floor');
+  expect(container.querySelector('h2')?.nextElementSibling?.querySelector('img')).toHaveAttribute('alt', 'Floor');
+});
+
+it.each([
+  ['audio', 'Intro [Listen ![Guide](/guide.mp3) now](https://example.com) outro.', 'Listen Guide now', 'audio'],
+  ['video', '[![Clip](/clip.webm)](https://example.com)', 'Clip', 'video'],
+  // Without alt text the link would have no accessible name, so it shows its destination.
+  ['unlabelled audio', '[![](/guide.mp3)](https://example.com)', 'https://example.com', 'audio'],
+])('keeps %s player controls outside the one link that labels them', async (_type, content, label, player) => {
+  const container = await expectConsistentBrowserTree(content);
+  const links = container.querySelectorAll('a');
+  expect(links).toHaveLength(1);
+  expect(links[0]).toHaveAttribute('href', 'https://example.com');
+  expect(links[0]).toHaveTextContent(label);
+  const media = container.querySelector(player)!;
+  expect(media.closest('a')).toBeNull();
+  // The player follows its link, so content keeps its reading order.
+  expect(links[0].compareDocumentPosition(media) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it('places a footnote reference after the link that contained it', async () => {
+  const container = await expectConsistentBrowserTree('See [the record[^1]](https://example.com) here.\n\n[^1]: Archive note.');
+  const link = container.querySelector('a[href="https://example.com"]')!;
+  expect(link).toHaveTextContent(/^the record$/);
+  expect(link.querySelector('a, sup')).toBeNull();
+  expect(link.nextElementSibling?.tagName).toBe('SUP');
+  expect(link.nextElementSibling?.querySelector('a')).toHaveAttribute('href', '#user-content-fn-1');
+  expect(link.closest('p')).toHaveTextContent(/^See the record1 here\.$/);
 });
