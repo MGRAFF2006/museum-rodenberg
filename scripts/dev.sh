@@ -42,31 +42,36 @@ done
 
 # Track background PIDs for cleanup
 PIDS=()
+# Bash reaps exited children asynchronously, after which a saved PID may
+# belong to an unrelated process. Only signal services that Bash still
+# reports as running or stopped jobs of this shell.
+live_services() {
+  local job pid
+  for job in $(jobs -pr) $(jobs -ps); do
+    for pid in "${PIDS[@]}"; do
+      if [ "$job" = "$pid" ]; then echo "$pid"; fi
+    done
+  done
+}
 cleanup() {
   local status=$?
+  local attempt pid
   trap - EXIT
   trap '' INT TERM
   echo -e "\n${YELLOW}Shutting down...${NC}"
-  for pid in "${PIDS[@]}"; do
+  for pid in $(live_services); do
     kill "$pid" 2>/dev/null || true
   done
   # A service can ignore SIGTERM (including during startup). Give it a
-  # bounded grace period before forcing only our tracked children to exit.
-  local attempt running
+  # bounded grace period before forcing the remaining services to exit.
   for ((attempt = 0; attempt < 20; attempt++)); do
-    running=false
-    for pid in "${PIDS[@]}"; do
-      if kill -0 "$pid" 2>/dev/null; then running=true; fi
-    done
-    if [ "$running" = false ]; then break; fi
+    if [ -z "$(live_services)" ]; then break; fi
     sleep 0.1
   done
-  for pid in "${PIDS[@]}"; do
+  for pid in $(live_services); do
     kill -KILL "$pid" 2>/dev/null || true
   done
-  for pid in "${PIDS[@]}"; do
-    wait "$pid" 2>/dev/null || true
-  done
+  wait 2>/dev/null || true
   echo -e "${GREEN}All processes stopped.${NC}"
   return "$status"
 }

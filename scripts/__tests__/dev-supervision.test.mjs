@@ -46,15 +46,18 @@ async function fixture(t, env = {}) {
     catch (error) { if (error.code === 'ENOENT') return []; throw error; }
   };
   t.after(async () => {
-    if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-    for (const { pid } of await records()) {
-      try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    // Without job control, the services share the supervisor's process group.
+    // Killing the group reaches only surviving fixture processes; a group ID
+    // cannot be reassigned while any member is alive, unlike replaying logged PIDs.
+    if (child) {
+      try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
     await rm(directory, { recursive: true, force: true });
   });
-  function start() {
-    child = spawn('bash', ['dev.sh', '--no-docker'], {
+  function start({ trace = false } = {}) {
+    child = spawn('bash', [...(trace ? ['-x'] : []), 'dev.sh', '--no-docker'], {
       cwd: directory,
+      detached: true,
       env: { ...process.env, ...env, FIXTURE_LOG: log, PATH: `${directory}/fake-bin:${process.env.PATH}` },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -134,4 +137,19 @@ test('cleanup forcibly stops a peer that ignores SIGTERM and preserves the failu
   assert.ok(records.some((record) => record.name === 'vite' && record.event === 'ignored'));
   assertStopped(records);
   assert.equal(result.output.split('Shutting down...').length - 1, 1);
+});
+
+test('cleanup never signals a service PID that Bash has already reaped', async (t) => {
+  const run = await fixture(t, { FIXTURE_CONVEX_STATUS: '7' });
+  const result = await run.start({ trace: true }).finished;
+  assert.equal(result.code, 7);
+  const records = await run.records();
+  const exited = records.find((record) => record.name === 'convex' && record.event === 'exited');
+  assert.ok(exited, 'convex fixture did not exit on its own');
+  // After `wait -n` reaps the exited watcher its PID may be reused, so cleanup
+  // must not send it TERM, KILL or liveness probes.
+  const signalled = new RegExp(`^\\++ kill (?:-\\S+ )?${exited.pid}$`, 'm');
+  assert.doesNotMatch(result.output, signalled);
+  assert.ok(records.some((record) => record.name === 'vite' && record.event === 'stopped'));
+  assertStopped(records);
 });
