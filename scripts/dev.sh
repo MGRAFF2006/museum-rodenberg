@@ -190,16 +190,17 @@ echo -e "${GREEN}Schema pushed.${NC}"
 # ── 4. Start Convex dev watcher (watches for schema changes) ────
 echo -e "${CYAN}Starting Convex dev watcher...${NC}"
 # Once a service runs, its status decides the session: a closed output pipe
-# must not replace it. Writes may fail from here on, including Bash's own
-# report of a service killed by a signal. A trap action (unlike an ignored
-# signal) is reset for the services, so they keep the default SIGPIPE action.
-trap ':' PIPE
-./node_modules/.bin/convex dev --typecheck=disable &
+# must not replace it. Ignore SIGPIPE (a trap action would be traced under
+# `bash -x` and raise SIGPIPE again), so writes may fail from here on,
+# including Bash's own report of a service killed by a signal. Each service
+# restores the default SIGPIPE action before it starts.
+trap '' PIPE
+( trap - PIPE; exec ./node_modules/.bin/convex dev --typecheck=disable ) &
 PIDS+=($!)
 
 # ── 5. Start Vite dev server ────────────────────────────────────
 echo -e "${CYAN}Starting Vite dev server...${NC}" || true
-./node_modules/.bin/vite &
+( trap - PIPE; exec ./node_modules/.bin/vite ) &
 PIDS+=($!)
 
 # ── Ready ────────────────────────────────────────────────────────

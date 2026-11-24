@@ -65,7 +65,8 @@ async function fixture(t, env = {}) {
   });
   function start({ trace = false, mergeOutput = false, stdout = 'pipe' } = {}) {
     // mergeOutput sends stderr into the stdout pipe, as `2>&1` would.
-    const args = mergeOutput ? ['-c', 'exec bash "$0" --no-docker 2>&1', 'dev.sh'] : [...(trace ? ['-x'] : []), 'dev.sh', '--no-docker'];
+    const bash = trace ? 'bash -x' : 'bash';
+    const args = mergeOutput ? ['-c', `exec ${bash} "$0" --no-docker 2>&1`, 'dev.sh'] : [...(trace ? ['-x'] : []), 'dev.sh', '--no-docker'];
     child = spawn('bash', args, {
       cwd: directory,
       detached: true,
@@ -228,11 +229,16 @@ async function startReleasable(t, env, { script: source, ...options } = {}) {
   return { run, child, finished, release: () => writeFile(path.join(run.directory, 'release'), '') };
 }
 
-for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '7' }, 7], [{ FIXTURE_CONVEX_SIGNAL: 'SIGKILL' }, 137]]) {
-  test(`a closed output pipe keeps service status ${code}`, async (t) => {
+// `bash -x` writes a trace line for every command to the same closed stderr.
+const closedOutputCases = [false, true].flatMap((trace) => [
+  [{ FIXTURE_CONVEX_STATUS: '7' }, 7, trace], [{ FIXTURE_CONVEX_SIGNAL: 'SIGKILL' }, 137, trace],
+]);
+
+for (const [env, code, trace] of closedOutputCases) {
+  test(`a closed output pipe keeps service status ${code}${trace ? ' under bash -x' : ''}`, async (t) => {
     // Close the pipe shared by stdout and stderr: Bash writes its report of a
     // service killed by a signal to stderr.
-    const { run, child, finished, release } = await startReleasable(t, env, { mergeOutput: true });
+    const { run, child, finished, release } = await startReleasable(t, env, { mergeOutput: true, trace });
     child.stdout.destroy();
     await release();
     const result = await finished;
@@ -241,15 +247,15 @@ for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '7' }, 7], [{ FIXTURE_CONVE
   });
 }
 
-for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '7' }, 7], [{ FIXTURE_CONVEX_SIGNAL: 'SIGKILL' }, 137]]) {
-  test(`output closed before the ready banner keeps service status ${code}`, async (t) => {
+for (const [env, code, trace] of closedOutputCases) {
+  test(`output closed before the ready banner keeps service status ${code}${trace ? ' under bash -x' : ''}`, async (t) => {
     const run = await fixture(t, { ...env, FIXTURE_RELEASE: 'release' });
     // Hold the supervisor before its ready banner until the watcher has ended.
     const ready = '# ── Ready';
     assert.ok(script.includes(ready));
     await writeFile(path.join(run.directory, 'dev.sh'),
       script.replace(ready, () => `until [ -e banner ]; do sleep 0.01; done\n${ready}`));
-    const { child, finished } = run.start({ mergeOutput: true });
+    const { child, finished } = run.start({ mergeOutput: true, trace });
     for (let attempts = 0; ; attempts++) {
       if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
       assert.ok(attempts < 100, 'Services did not start');
@@ -270,10 +276,12 @@ for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '7' }, 7], [{ FIXTURE_CONVE
   });
 }
 
-for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '0', FIXTURE_VITE_STATUS: '9' }, 9], [{ FIXTURE_CONVEX_STATUS: '7', FIXTURE_VITE_STATUS: '0' }, 7]]) {
-  test(`services ending in the same poll report failure ${code}, not the success`, async (t) => {
+for (const [convex, vite, code] of [['0', '9', 9], ['7', '0', 7], ['7', '9', 7]]) {
+  test(`convex ${convex} and vite ${vite} ending in the same poll report ${code}`, async (t) => {
+    const env = { FIXTURE_CONVEX_STATUS: convex, FIXTURE_VITE_STATUS: vite };
     // Let the supervisor poll only once both services have ended, so it
-    // collects the success and the failure in the same poll.
+    // collects both statuses in the same poll: a success never masks a
+    // failure, and between failures the first in launch order wins.
     const poll = 'while [ -z "$status" ]; do';
     assert.ok(script.includes(poll));
     const source = script.replace(poll, () => `${poll}\n  while [ -n "$(jobs -pr)" ]; do sleep 0.01; done`);
