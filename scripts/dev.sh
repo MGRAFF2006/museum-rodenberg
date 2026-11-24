@@ -226,7 +226,11 @@ PIDS+=($!)
 # first failure in launch order wins, so a success never masks a failure.
 status=""
 while [ -z "$status" ]; do
-  running=$'\n'"$(jobs -pr)"$'\n'"$(jobs -ps)"$'\n'
+  # One command substitution per word: Bash 5.2 fails to run a signal trap
+  # that arrives during a substitution followed by another in the same word.
+  live_jobs=$(jobs -pr)
+  stopped_jobs=$(jobs -ps)
+  running=$'\n'"$live_jobs"$'\n'"$stopped_jobs"$'\n'
   for pid in "${PIDS[@]}"; do
     if [[ $running != *$'\n'"$pid"$'\n'* ]]; then
       service_status=0

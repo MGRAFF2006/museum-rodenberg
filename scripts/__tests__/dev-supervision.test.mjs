@@ -125,6 +125,34 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
   });
 }
 
+for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+  test(`${signal} during the job-table poll returns ${code}`, async (t) => {
+    const run = await fixture(t);
+    // Hold the poll's first job-table substitution open until the signal has
+    // been sent, so the trap runs while it is being expanded.
+    const poll = script.indexOf('while [ -z "$status" ]; do');
+    const substitution = script.indexOf('$(jobs -pr)', poll);
+    assert.ok(poll >= 0 && substitution > poll);
+    const held = '$(jobs -pr; touch held; until [ -e go ]; do sleep 0.01; done)';
+    await writeFile(path.join(run.directory, 'dev.sh'),
+      script.slice(0, substitution) + held + script.slice(substitution + '$(jobs -pr)'.length));
+    const { child, finished } = run.start();
+    for (let attempts = 0; ; attempts++) {
+      try { await readFile(path.join(run.directory, 'held')); break; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      assert.ok(attempts < 500, 'Supervisor did not reach the poll');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    child.kill(signal);
+    // Let Bash take the signal before the substitution finishes.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await writeFile(path.join(run.directory, 'go'), '');
+    const result = await finished;
+    assert.equal(result.code, code, result.output);
+    assertStopped(await run.records());
+  });
+}
+
 test('initial schema command failure is preserved and starts neither service', async (t) => {
   const run = await fixture(t, { FIXTURE_ONCE_STATUS: '12' });
   const result = await run.start().finished;
