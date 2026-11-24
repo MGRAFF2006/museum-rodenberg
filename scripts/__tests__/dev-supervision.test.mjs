@@ -7,7 +7,7 @@ import { test } from 'node:test';
 
 const script = await readFile(new URL('../dev.sh', import.meta.url), 'utf8');
 const service = `#!/usr/bin/env node
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 const name = path.basename(process.argv[1]);
 if (process.argv.includes('--once')) process.exit(Number(process.env.FIXTURE_ONCE_STATUS || 0));
@@ -25,6 +25,7 @@ const signal = process.env['FIXTURE_' + name.toUpperCase() + '_SIGNAL'];
 // Wait for the peer's signal handler to be ready rather than racing a timer.
 if (code !== undefined || signal) setInterval(() => {
   const records = readFileSync(process.env.FIXTURE_LOG, 'utf8').trim().split('\\n').map(JSON.parse);
+  if (process.env.FIXTURE_RELEASE && !existsSync(process.env.FIXTURE_RELEASE)) return;
   if (records.some((record) => record.name !== name && record.event === 'started')) {
     record('exited');
     if (signal) process.kill(process.pid, signal);
@@ -201,4 +202,35 @@ test('a service killed by a signal before the supervisor waits still ends the se
   const records = await run.records();
   assert.ok(records.some((record) => record.name === 'vite' && record.event === 'stopped'));
   assertStopped(records);
+});
+
+// Services exit only after the test creates `release` in the fixture directory.
+async function startReleasable(t, env) {
+  const run = await fixture(t, { ...env, FIXTURE_RELEASE: 'release' });
+  const { child, finished } = run.start();
+  for (let attempts = 0; ; attempts++) {
+    if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
+    assert.ok(attempts < 100, 'Services did not start');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return { run, child, finished, release: () => writeFile(path.join(run.directory, 'release'), '') };
+}
+
+for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '7' }, 7], [{ FIXTURE_CONVEX_SIGNAL: 'SIGKILL' }, 137]]) {
+  test(`a closed output pipe keeps service status ${code}`, async (t) => {
+    const { run, child, finished, release } = await startReleasable(t, env);
+    child.stdout.destroy();
+    await release();
+    const result = await finished;
+    assert.equal(result.code, code);
+    assertStopped(await run.records());
+  });
+}
+
+test('services ending in the same poll report the failure, not the later success', async (t) => {
+  const { run, finished, release } = await startReleasable(t, { FIXTURE_VITE_STATUS: '9', FIXTURE_CONVEX_STATUS: '0' });
+  await release();
+  const result = await finished;
+  assert.equal(result.code, 9);
+  assertStopped(await run.records());
 });

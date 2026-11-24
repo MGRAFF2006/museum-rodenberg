@@ -202,20 +202,22 @@ echo ""
 # Wait for any service to exit. Poll the job table instead of `wait -n`: Bash
 # reports and forgets a job killed by a signal before `wait -n` starts, and
 # Bash 5.2 then waits for its peer. `wait PID` still returns the saved status.
-exited_pid=""
-while [ -z "$exited_pid" ]; do
+# Services that end within the same poll report their first failure status.
+status=""
+while [ -z "$status" ]; do
   running=$'\n'"$(jobs -pr)"$'\n'"$(jobs -ps)"$'\n'
   for pid in "${PIDS[@]}"; do
     if [[ $running != *$'\n'"$pid"$'\n'* ]]; then
-      exited_pid=$pid
-      break
+      service_status=0
+      wait "$pid" || service_status=$?
+      if [ -z "$status" ] || [ "$status" -eq 0 ]; then status=$service_status; fi
     fi
   done
-  if [ -z "$exited_pid" ]; then sleep 0.2; fi
+  if [ -z "$status" ]; then sleep 0.2; fi
 done
-status=0
-wait "$exited_pid" || status=$?
-echo -e "${RED}A required development service exited; stopping its peer.${NC}"
+# The status is decided; a closed output pipe must not replace it.
+trap '' PIPE
+echo -e "${RED}A required development service exited; stopping its peer.${NC}" || true
 # A required long-running service exiting successfully still ends the dev session.
 if [ "$status" -eq 0 ]; then
   status=1
