@@ -18,6 +18,8 @@ process.on('SIGTERM', () => {
 });
 record('started');
 setInterval(() => {}, 1000);
+// Strays from a failed test end themselves; teardown never signals saved PIDs.
+setTimeout(() => process.exit(99), 20000).unref();
 const code = process.env['FIXTURE_' + name.toUpperCase() + '_STATUS'];
 // Wait for the peer's signal handler to be ready rather than racing a timer.
 if (code !== undefined) setInterval(() => {
@@ -47,9 +49,10 @@ async function fixture(t, env = {}) {
   };
   t.after(async () => {
     // Without job control, the services share the supervisor's process group.
-    // Killing the group reaches only surviving fixture processes; a group ID
-    // cannot be reassigned while any member is alive, unlike replaying logged PIDs.
-    if (child) {
+    // Signal that group only while its leader is still running, so the group
+    // ID cannot have been reused. Services left after the supervisor exits
+    // fail assertStopped and end themselves after 20 seconds.
+    if (child && child.exitCode === null && child.signalCode === null) {
       try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
     await rm(directory, { recursive: true, force: true });
@@ -146,10 +149,23 @@ test('cleanup never signals a service PID that Bash has already reaped', async (
   const records = await run.records();
   const exited = records.find((record) => record.name === 'convex' && record.event === 'exited');
   assert.ok(exited, 'convex fixture did not exit on its own');
-  // After `wait -n` reaps the exited watcher its PID may be reused, so cleanup
-  // must not send it TERM, KILL or liveness probes.
-  const signalled = new RegExp(`^\\++ kill (?:-\\S+ )?${exited.pid}$`, 'm');
-  assert.doesNotMatch(result.output, signalled);
+  // After `wait -n` reaps the exited watcher its PID may be reused. Cleanup
+  // must signal Bash job specs, which Bash checks for liveness, never a PID.
+  assert.doesNotMatch(result.output, new RegExp(`^\\++ kill .*\\b${exited.pid}\\b`, 'm'));
+  assert.doesNotMatch(result.output, /^\++ kill (?:-\S+ )?\d+$/m);
+  assert.match(result.output, /^\++ kill -TERM %\d+$/m);
   assert.ok(records.some((record) => record.name === 'vite' && record.event === 'stopped'));
   assertStopped(records);
+});
+
+test('a shutdown signal before a started service is recorded still stops it', async (t) => {
+  const run = await fixture(t);
+  // Deliver SIGTERM in the window between forking the watcher and saving its
+  // PID: the exit trap runs before `PIDS+=($!)`.
+  assert.ok(script.includes('PIDS+=($!)'));
+  await writeFile(path.join(run.directory, 'dev.sh'), script.replace('PIDS+=($!)', () => 'kill -TERM $$\nPIDS+=($!)'));
+  const result = await run.start().finished;
+  assert.equal(result.code, 143, result.output);
+  assert.equal(result.output.split('Shutting down...').length - 1, 1);
+  assertStopped(await run.records());
 });

@@ -40,37 +40,46 @@ for arg in "$@"; do
   esac
 done
 
-# Track background PIDs for cleanup
+# Track background PIDs for `wait -n`
 PIDS=()
-# Bash reaps exited children asynchronously, after which a saved PID may
-# belong to an unrelated process. Only signal services that Bash still
-# reports as running or stopped jobs of this shell.
-live_services() {
-  local job pid
-  for job in $(jobs -pr) $(jobs -ps); do
-    for pid in "${PIDS[@]}"; do
-      if [ "$job" = "$pid" ]; then echo "$pid"; fi
-    done
+# Every background job of this script is a development service. Cleanup finds
+# them in Bash's job table rather than PIDS, so a service forked just before a
+# signal arrives (before its PID is recorded) is still stopped.
+LIVE_JOBS=()
+find_live_jobs() {
+  local line
+  LIVE_JOBS=()
+  # Read `jobs` through direct command substitutions: those report this
+  # shell's job table, unlike `jobs` inside a pipeline subshell.
+  while IFS= read -r line; do
+    if [[ $line =~ ^\[([0-9]+)\] ]]; then LIVE_JOBS+=("%${BASH_REMATCH[1]}"); fi
+  done <<< "$(jobs -r)"$'\n'"$(jobs -s)"
+}
+# Signal job specs, never saved PIDs: Bash checks each job process is still
+# alive while SIGCHLD is blocked, so a reaped (and possibly reused) PID is
+# never signalled.
+signal_live_jobs() {
+  local job
+  find_live_jobs
+  for job in "${LIVE_JOBS[@]}"; do
+    kill "-$1" "$job" 2>/dev/null || true
   done
 }
 cleanup() {
   local status=$?
-  local attempt pid
+  local attempt
   trap - EXIT
   trap '' INT TERM
   echo -e "\n${YELLOW}Shutting down...${NC}"
-  for pid in $(live_services); do
-    kill "$pid" 2>/dev/null || true
-  done
+  signal_live_jobs TERM
   # A service can ignore SIGTERM (including during startup). Give it a
   # bounded grace period before forcing the remaining services to exit.
   for ((attempt = 0; attempt < 20; attempt++)); do
-    if [ -z "$(live_services)" ]; then break; fi
+    find_live_jobs
+    if [ "${#LIVE_JOBS[@]}" -eq 0 ]; then break; fi
     sleep 0.1
   done
-  for pid in $(live_services); do
-    kill -KILL "$pid" 2>/dev/null || true
-  done
+  signal_live_jobs KILL
   wait 2>/dev/null || true
   echo -e "${GREEN}All processes stopped.${NC}"
   return "$status"
