@@ -109,3 +109,15 @@ it('keeps gallery link buttons inline in their sentence', () => {
   fireEvent.click(paragraphs[0].querySelector('button')!);
   expect(onMediaClick).toHaveBeenCalledWith('image', '/gallery.jpg', expect.any(String));
 });
+
+it.each([
+  ['an unsafe destination', 'image:file:/gallery.jpg'],
+  ['an empty destination', 'image:'],
+])('lifts media out of a gallery link with %s that the URL filter rejects', (_case, href) => {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const content = `Before [View ![Flag](/flag.jpg) here](${href}) after`;
+  const { container } = render(<MarkdownRenderer content={content} />);
+  expect(container.querySelector('button')).toBeNull();
+  expect(container.querySelector('p div, p img')).toBeNull();
+  expect(errors.mock.calls.filter((call) => String(call[0]).includes('validateDOMNesting'))).toEqual([]);
+});

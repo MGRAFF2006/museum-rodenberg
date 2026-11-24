@@ -1,4 +1,18 @@
 import type { Element, ElementContent, Root } from 'hast';
+import { defaultUrlTransform } from 'react-markdown';
+
+export function mediaUrlTransform(url: string, key: string): string {
+  const media = /^(audio|video|image):(.+)$/i.exec(url);
+  if (!media || key !== 'href') return defaultUrlTransform(url);
+  // Custom wrappers do not bypass react-markdown's safety check for their
+  // underlying URL (including nested javascript:, data: and custom schemes).
+  return defaultUrlTransform(media[2]) ? url : '';
+}
+
+/** Links the renderer turns into inline gallery buttons: an accepted image:/video:/audio: href. */
+function isGalleryLink(href: unknown): boolean {
+  return typeof href === 'string' && /^(audio|video|image):/i.test(href) && mediaUrlTransform(href, 'href') !== '';
+}
 
 // `inner` records the split contents of a link lifted out of a paragraph, so
 // formatting around the link can still be applied to its text.
@@ -25,8 +39,9 @@ function wrap(element: Element, part: Part): Part {
 function splitMedia(node: ElementContent): Part[] {
   if (node.type !== 'element') return [{ media: false, nodes: [node] }];
   if (node.tagName === 'img') return [{ media: true, nodes: [node] }];
-  // Gallery links (image:/video:/audio:) render as inline buttons; keep them in place.
-  if (node.tagName === 'a' && /^(audio|video|image):/i.test(String(node.properties?.href ?? ''))) {
+  // Accepted gallery links render as inline buttons; keep them in place. A
+  // rejected one renders as an ordinary link, so its media is lifted as usual.
+  if (node.tagName === 'a' && isGalleryLink(node.properties?.href)) {
     return [{ media: false, nodes: [node] }];
   }
   const parts: Part[] = [];

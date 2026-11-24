@@ -1,17 +1,9 @@
 import React from 'react';
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AudioPlayer } from './AudioPlayer';
 import { getMediaType } from '../utils/markdownUtils';
-import { markdownMediaBlocks } from '../utils/markdownMediaBlocks';
-
-function mediaUrlTransform(url: string, key: string): string {
-  const media = /^(audio|video|image):(.+)$/i.exec(url);
-  if (!media || key !== 'href') return defaultUrlTransform(url);
-  // Custom wrappers do not bypass react-markdown's safety check for their
-  // underlying URL (including nested javascript:, data: and custom schemes).
-  return defaultUrlTransform(media[2]) ? url : '';
-}
+import { markdownMediaBlocks, mediaUrlTransform } from '../utils/markdownMediaBlocks';
 
 interface MarkdownRendererProps {
   content: string;
