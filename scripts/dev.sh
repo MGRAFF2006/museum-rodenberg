@@ -76,12 +76,15 @@ wait_for_live_jobs() {
   find_live_jobs
   [ "${#LIVE_JOBS[@]}" -eq 0 ]
 }
+# Set before exiting to explain why the session ended.
+EXIT_REASON=""
 cleanup() {
-  local status=$?
+  local status=$? stopped=true
   trap - EXIT
   # Output may be a closed pipe: stopping services must not depend on it.
   trap '' INT TERM PIPE
-  echo -e "\n${YELLOW}Shutting down...${NC}" || true
+  # Stop the services before writing anything: a write to a full output pipe
+  # blocks until its reader drains it, and must not delay shutdown.
   signal_live_jobs TERM
   # A service can ignore SIGTERM (including during startup). Give it a
   # bounded grace period before forcing the remaining services to exit.
@@ -89,12 +92,17 @@ cleanup() {
     signal_live_jobs KILL
     # A process in uninterruptible I/O can outlive SIGKILL; report it rather
     # than waiting without a deadline.
-    if ! wait_for_live_jobs; then
-      echo -e "${RED}Services still running after SIGKILL: $(jobs -pr) $(jobs -ps)${NC}" >&2 || true
-      return "$status"
-    fi
+    wait_for_live_jobs || stopped=false
   fi
-  echo -e "${GREEN}All processes stopped.${NC}" || true
+  {
+    echo -e "\n${YELLOW}Shutting down...${NC}"
+    if [ -n "$EXIT_REASON" ]; then echo -e "${RED}${EXIT_REASON}${NC}"; fi
+    if [ "$stopped" = true ]; then
+      echo -e "${GREEN}All processes stopped.${NC}"
+    else
+      echo -e "${RED}Services still running after SIGKILL: $(jobs -pr) $(jobs -ps)${NC}" >&2
+    fi
+  } || true
   return "$status"
 }
 trap cleanup EXIT
@@ -199,10 +207,16 @@ echo -e "${GREEN}═════════════════════
 echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"
 echo ""
 
+# From here on, a closed output pipe must not replace a service's status:
+# Bash reports a service killed by a signal on stderr while collecting it.
+# The services were started earlier and keep the default SIGPIPE action.
+trap '' PIPE
+
 # Wait for any service to exit. Poll the job table instead of `wait -n`: Bash
 # reports and forgets a job killed by a signal before `wait -n` starts, and
 # Bash 5.2 then waits for its peer. `wait PID` still returns the saved status.
-# Services that end within the same poll report their first failure status.
+# Polling cannot order services that end within the same interval; then the
+# first failure in launch order wins, so a success never masks a failure.
 status=""
 while [ -z "$status" ]; do
   running=$'\n'"$(jobs -pr)"$'\n'"$(jobs -ps)"$'\n'
@@ -215,9 +229,7 @@ while [ -z "$status" ]; do
   done
   if [ -z "$status" ]; then sleep 0.2; fi
 done
-# The status is decided; a closed output pipe must not replace it.
-trap '' PIPE
-echo -e "${RED}A required development service exited; stopping its peer.${NC}" || true
+EXIT_REASON="A required development service exited; stopped its peer."
 # A required long-running service exiting successfully still ends the dev session.
 if [ "$status" -eq 0 ]; then
   status=1
