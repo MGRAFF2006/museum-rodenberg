@@ -19,9 +19,9 @@ jobs:
       group: ci-${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         id: checkout
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         id: node
         with:
           node-version: 22
@@ -51,7 +51,7 @@ jobs:
       - run: npm run build
         id: build
         if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.lint.outcome == 'success' && steps.typecheck.outcome == 'success' && steps.vitest.outcome == 'success' && steps.native.outcome == 'success' }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         id: artifact
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         with:
