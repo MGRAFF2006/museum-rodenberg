@@ -84,7 +84,10 @@ cleanup() {
   # Output may be a closed pipe: stopping services must not depend on it.
   trap '' INT TERM PIPE
   # Stop the services before writing anything: a write to a full output pipe
-  # blocks until its reader drains it, and must not delay shutdown.
+  # blocks until its reader drains it. Shutdown is bounded while the output is
+  # drained or closed; a reader that stops draining can also block earlier
+  # writes (the startup banner, Bash's report of a killed service), just as it
+  # blocks the services writing to the same output.
   signal_live_jobs TERM
   # A service can ignore SIGTERM (including during startup). Give it a
   # bounded grace period before forcing the remaining services to exit.

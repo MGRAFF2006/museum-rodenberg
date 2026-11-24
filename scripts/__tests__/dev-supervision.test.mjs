@@ -213,8 +213,9 @@ test('a service killed by a signal before the supervisor waits still ends the se
 });
 
 // Services exit only after the test creates `release` in the fixture directory.
-async function startReleasable(t, env, options) {
+async function startReleasable(t, env, { script: source, ...options } = {}) {
   const run = await fixture(t, { ...env, FIXTURE_RELEASE: 'release' });
+  if (source) await writeFile(path.join(run.directory, 'dev.sh'), source);
   const { child, finished } = run.start(options);
   for (let attempts = 0; ; attempts++) {
     if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
@@ -237,15 +238,22 @@ for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '7' }, 7], [{ FIXTURE_CONVE
   });
 }
 
-test('services ending in the same poll report the failure, not the later success', async (t) => {
-  const { run, finished, release } = await startReleasable(t, { FIXTURE_VITE_STATUS: '9', FIXTURE_CONVEX_STATUS: '0' });
-  await release();
-  const result = await finished;
-  assert.equal(result.code, 9);
-  assertStopped(await run.records());
-});
+for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '0', FIXTURE_VITE_STATUS: '9' }, 9], [{ FIXTURE_CONVEX_STATUS: '7', FIXTURE_VITE_STATUS: '0' }, 7]]) {
+  test(`services ending in the same poll report failure ${code}, not the success`, async (t) => {
+    // Let the supervisor poll only once both services have ended, so it
+    // collects the success and the failure in the same poll.
+    const poll = 'while [ -z "$status" ]; do';
+    assert.ok(script.includes(poll));
+    const source = script.replace(poll, () => `${poll}\n  while [ -n "$(jobs -pr)" ]; do sleep 0.01; done`);
+    const { run, finished, release } = await startReleasable(t, env, { script: source });
+    await release();
+    const result = await finished;
+    assert.equal(result.code, code);
+    assertStopped(await run.records());
+  });
+}
 
-test('a full output pipe does not keep services running after a shutdown signal', async (t) => {
+test('cleanup stops services before writing to a full output pipe', async (t) => {
   const run = await fixture(t);
   // Node's stdio pipes are socket pairs; use a FIFO so the test controls a
   // real pipe's reader and can fill it.
@@ -276,7 +284,7 @@ test('a full output pipe does not keep services running after a shutdown signal'
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   // Stop reading and fill the pipe: the supervisor's next write now blocks
-  // until the reader drains it.
+  // until the reader drains it, so cleanup must signal the services first.
   const filler = openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK);
   try {
     for (;;) {
