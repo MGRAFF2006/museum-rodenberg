@@ -21,11 +21,14 @@ setInterval(() => {}, 1000);
 // Strays from a failed test end themselves; teardown never signals saved PIDs.
 setTimeout(() => process.exit(99), 20000).unref();
 const code = process.env['FIXTURE_' + name.toUpperCase() + '_STATUS'];
+const signal = process.env['FIXTURE_' + name.toUpperCase() + '_SIGNAL'];
 // Wait for the peer's signal handler to be ready rather than racing a timer.
-if (code !== undefined) setInterval(() => {
+if (code !== undefined || signal) setInterval(() => {
   const records = readFileSync(process.env.FIXTURE_LOG, 'utf8').trim().split('\\n').map(JSON.parse);
   if (records.some((record) => record.name !== name && record.event === 'started')) {
-    record('exited'); process.exit(Number(code));
+    record('exited');
+    if (signal) process.kill(process.pid, signal);
+    else process.exit(Number(code));
   }
 }, 10);
 `;
@@ -168,4 +171,34 @@ test('a shutdown signal before a started service is recorded still stops it', as
   assert.equal(result.code, 143, result.output);
   assert.equal(result.output.split('Shutting down...').length - 1, 1);
   assertStopped(await run.records());
+});
+
+test('cleanup stops services and keeps the status when output is a closed pipe', async (t) => {
+  const run = await fixture(t);
+  const { child, finished } = run.start();
+  for (let attempts = 0; ; attempts++) {
+    if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
+    assert.ok(attempts < 100, 'Services did not start');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  child.stdout.destroy();
+  child.kill('SIGTERM');
+  const result = await finished;
+  assert.equal(result.code, 143);
+  const records = await run.records();
+  assert.equal(records.filter((record) => record.event === 'stopped').length, 2);
+  assertStopped(records);
+});
+
+test('a service killed by a signal before the supervisor waits still ends the session', async (t) => {
+  const run = await fixture(t, { FIXTURE_CONVEX_SIGNAL: 'SIGKILL' });
+  // Let the watcher die before the supervisor starts waiting for services.
+  const banner = 'echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"';
+  assert.ok(script.includes(banner));
+  await writeFile(path.join(run.directory, 'dev.sh'), script.replace(banner, () => `${banner}\nsleep 0.5`));
+  const result = await run.start().finished;
+  assert.equal(result.code, 137);
+  const records = await run.records();
+  assert.ok(records.some((record) => record.name === 'vite' && record.event === 'stopped'));
+  assertStopped(records);
 });

@@ -65,28 +65,43 @@ signal_live_jobs() {
     kill "-$1" "$job" 2>/dev/null || true
   done
 }
+# Wait up to about two seconds for every service job to end.
+wait_for_live_jobs() {
+  local attempt
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    find_live_jobs
+    if [ "${#LIVE_JOBS[@]}" -eq 0 ]; then return 0; fi
+    sleep 0.1
+  done
+  find_live_jobs
+  [ "${#LIVE_JOBS[@]}" -eq 0 ]
+}
 cleanup() {
   local status=$?
-  local attempt
   trap - EXIT
-  trap '' INT TERM
-  echo -e "\n${YELLOW}Shutting down...${NC}"
+  # Output may be a closed pipe: stopping services must not depend on it.
+  trap '' INT TERM PIPE
+  echo -e "\n${YELLOW}Shutting down...${NC}" || true
   signal_live_jobs TERM
   # A service can ignore SIGTERM (including during startup). Give it a
   # bounded grace period before forcing the remaining services to exit.
-  for ((attempt = 0; attempt < 20; attempt++)); do
-    find_live_jobs
-    if [ "${#LIVE_JOBS[@]}" -eq 0 ]; then break; fi
-    sleep 0.1
-  done
-  signal_live_jobs KILL
-  wait 2>/dev/null || true
-  echo -e "${GREEN}All processes stopped.${NC}"
+  if ! wait_for_live_jobs; then
+    signal_live_jobs KILL
+    # A process in uninterruptible I/O can outlive SIGKILL; report it rather
+    # than waiting without a deadline.
+    if ! wait_for_live_jobs; then
+      echo -e "${RED}Services still running after SIGKILL: $(jobs -pr) $(jobs -ps)${NC}" >&2 || true
+      return "$status"
+    fi
+  fi
+  echo -e "${GREEN}All processes stopped.${NC}" || true
   return "$status"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+# A closed output pipe would otherwise kill Bash without running cleanup.
+trap 'exit 141' PIPE
 
 # ── 1. Docker services ───────────────────────────────────────────
 if [ "$SKIP_DOCKER" = false ]; then
@@ -184,9 +199,22 @@ echo -e "${GREEN}═════════════════════
 echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"
 echo ""
 
-# Wait for any background process to exit
+# Wait for any service to exit. Poll the job table instead of `wait -n`: Bash
+# reports and forgets a job killed by a signal before `wait -n` starts, and
+# Bash 5.2 then waits for its peer. `wait PID` still returns the saved status.
+exited_pid=""
+while [ -z "$exited_pid" ]; do
+  running=$'\n'"$(jobs -pr)"$'\n'"$(jobs -ps)"$'\n'
+  for pid in "${PIDS[@]}"; do
+    if [[ $running != *$'\n'"$pid"$'\n'* ]]; then
+      exited_pid=$pid
+      break
+    fi
+  done
+  if [ -z "$exited_pid" ]; then sleep 0.2; fi
+done
 status=0
-wait -n "${PIDS[@]}" || status=$?
+wait "$exited_pid" || status=$?
 echo -e "${RED}A required development service exited; stopping its peer.${NC}"
 # A required long-running service exiting successfully still ends the dev session.
 if [ "$status" -eq 0 ]; then
