@@ -224,3 +224,23 @@ it('places a footnote reference after the link that contained it', async () => {
   expect(link.nextElementSibling?.querySelector('a')).toHaveAttribute('href', '#user-content-fn-1');
   expect(link.closest('p')).toHaveTextContent(/^See the record1 here\.$/);
 });
+
+it('keeps words apart where media leave a heading or a link label', async () => {
+  const container = await expectConsistentBrowserTree('## [See![Floor](/floor.jpg)now](/plan)\n\n### Room![Map](/map.jpg)two');
+  expect(container.querySelector('h2 a')?.textContent).toBe('See Floor now');
+  expect(container.querySelector('h3')?.textContent).toBe('Room two');
+});
+
+it('drops a heading left with only a line break', async () => {
+  const container = await expectConsistentBrowserTree('![A](/a.jpg)  \n![B](/b.jpg)\n---');
+  expect(container.querySelector('h1, h2, h3, h4, h5, h6')).toBeNull();
+  expect([...container.querySelectorAll('img')].map((img) => img.alt)).toEqual(['A', 'B']);
+});
+
+it('keeps media order when an unlabelled link with a rejected destination is dropped', async () => {
+  const container = await expectConsistentBrowserTree('[![](/guide.mp3) ![](/cover.jpg)](image:file:/gallery.jpg)');
+  expect(container.querySelector('a, button.inline-flex')).toBeNull();
+  const audio = container.querySelector('audio')!;
+  const image = container.querySelector('img[src="/cover.jpg"]')!;
+  expect(audio.compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});

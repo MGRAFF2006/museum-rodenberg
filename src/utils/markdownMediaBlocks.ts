@@ -82,18 +82,38 @@ function holdsLink(node: Element): boolean {
     || (node.tagName === 'sup' && node.children.some((child) => child.type === 'element' && child.tagName === 'a'));
 }
 
+/** The text at the start or end of a node, counting an image's alt text. */
+function edgeText(node: ElementContent | undefined, end: boolean): string {
+  if (node?.type === 'text') return node.value;
+  if (node?.type !== 'element') return '';
+  if (node.tagName === 'img') return typeof node.properties?.alt === 'string' ? node.properties.alt : '';
+  return edgeText(node.children[end ? node.children.length - 1 : 0], end);
+}
+
+/**
+ * Text standing in for a media block removed from running text. The block
+ * separated the words around it, e.g. `See![Floor](/floor.jpg)now`, so keep
+ * a space wherever the neighbouring text would otherwise run together.
+ */
+function standIn(text: string, before: ElementContent | undefined, after: ElementContent | undefined): ElementContent[] {
+  const wordBefore = /\S$/.test(edgeText(before, true));
+  const wordAfter = /^\S/.test(edgeText(after, false));
+  if (!text) return wordBefore && wordAfter ? [{ type: 'text', value: ' ' }] : [];
+  return [{ type: 'text', value: (wordBefore ? ' ' : '') + text + (wordAfter ? ' ' : '') }];
+}
+
 /**
  * Remove what a link must not contain: nested links, interactive players and,
  * inside headings, any media block. Media leave their alt text behind so the
  * link keeps its full label. Removed nodes are collected in `moved`.
  */
 function detachFromLink(nodes: ElementContent[], inHeading: boolean, moved: ElementContent[]): ElementContent[] {
-  return nodes.flatMap((node): ElementContent[] => {
+  return nodes.flatMap((node, index): ElementContent[] => {
     if (node.type !== 'element') return [node];
     if (node.tagName === 'img' && (inHeading || isPlayer(node))) {
       moved.push(node);
       const alt = node.properties?.alt;
-      return typeof alt === 'string' && alt ? [{ type: 'text', value: alt }] : [];
+      return standIn(typeof alt === 'string' ? alt : '', nodes[index - 1], nodes[index + 1]);
     }
     if (holdsLink(node)) {
       moved.push(node);
@@ -127,9 +147,10 @@ function separateLink(link: Element, inHeading: boolean): ElementContent[] | und
   if (!moved.length) return undefined;
   if (!hasLabel(children)) {
     // Without label text the link would have no accessible name; show its
-    // destination after any unlabelled images that stay linked.
+    // destination after any unlabelled images that stay linked. Without a
+    // usable destination, drop the link and keep its content in order.
     const href = mediaUrlTransform(String(link.properties?.href ?? ''), 'href');
-    if (!href) return [...imagesIn(children), ...moved];
+    if (!href) return link.children;
     children = [...imagesIn(children), { type: 'text', value: href }];
   }
   return [{ ...link, children }, ...moved];
@@ -148,14 +169,21 @@ function splitParagraph(paragraph: Element): ElementContent[] | undefined {
   });
 }
 
+function lastNode(part: Part | undefined): ElementContent | undefined {
+  return part?.nodes[part.nodes.length - 1];
+}
+
 /** Headings hold phrasing content only, so media follow the heading text. */
 function liftFromHeading(heading: Element): ElementContent[] | undefined {
   const parts = heading.children.flatMap(splitMedia);
   if (!parts.some((part) => part.media)) return undefined;
-  const text = parts.filter((part) => !part.media).flatMap((part) => part.nodes);
+  const text = parts.flatMap((part, index) => (
+    part.media ? standIn('', lastNode(parts[index - 1]), parts[index + 1]?.nodes[0]) : part.nodes
+  ));
   const media = parts.filter((part) => part.media).flatMap((part) => part.nodes);
-  // Leave out a heading that would be empty rather than render it without a name.
-  return text.every(isBlank) ? media : [{ ...heading, children: text }, ...media];
+  // Leave out a heading that would have no name rather than render it empty
+  // or with only a line break.
+  return hasLabel(text) ? [{ ...heading, children: text }, ...media] : media;
 }
 
 /** List items and table cells may contain media blocks, but not inside emphasis. */
