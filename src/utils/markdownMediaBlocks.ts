@@ -1,6 +1,11 @@
 import type { Element, ElementContent, Root } from 'hast';
 
-type Part = { media: boolean; nodes: ElementContent[] };
+// `inner` records the split contents of a link lifted out of a paragraph, so
+// formatting around the link can still be applied to its text.
+type Part = { media: boolean; nodes: ElementContent[]; inner?: Part[] };
+
+// Formatting that renders nothing visible when it wraps only whitespace.
+const FORMATTING = new Set(['em', 'strong', 'del', 'span']);
 
 function append(parts: Part[], part: Part) {
   const previous = parts[parts.length - 1];
@@ -8,9 +13,22 @@ function append(parts: Part[], part: Part) {
   else parts.push(part);
 }
 
+/** Apply an inline element such as emphasis to a fragment, keeping media outside it. */
+function wrap(element: Element, part: Part): Part {
+  if (!part.media) return { media: false, nodes: [{ ...element, children: part.nodes }] };
+  if (!part.inner) return part;
+  const inner = part.inner.map((innerPart) => wrap(element, innerPart));
+  const link = part.nodes[0] as Element;
+  return { media: true, inner, nodes: [{ ...link, children: inner.flatMap((innerPart) => innerPart.nodes) }] };
+}
+
 function splitMedia(node: ElementContent): Part[] {
   if (node.type !== 'element') return [{ media: false, nodes: [node] }];
   if (node.tagName === 'img') return [{ media: true, nodes: [node] }];
+  // Gallery links (image:/video:/audio:) render as inline buttons; keep them in place.
+  if (node.tagName === 'a' && /^(audio|video|image):/i.test(String(node.properties?.href ?? ''))) {
+    return [{ media: false, nodes: [node] }];
+  }
   const parts: Part[] = [];
   for (const child of node.children) {
     for (const part of splitMedia(child)) append(parts, part);
@@ -19,20 +37,17 @@ function splitMedia(node: ElementContent): Part[] {
   // Links may contain flow content. Lift the whole link out of the paragraph so
   // its complete label stays one link and one keyboard focus stop.
   if (node.tagName === 'a') {
-    return [{ media: true, nodes: [{ ...node, children: parts.flatMap((part) => part.nodes) }] }];
+    return [{ media: true, inner: parts, nodes: [{ ...node, children: parts.flatMap((part) => part.nodes) }] }];
   }
   // Emphasis and other phrasing elements must stay around text only.
-  return parts.map((part) => ({
-    media: part.media,
-    nodes: part.media ? part.nodes : [{ ...node, children: part.nodes }],
-  }));
+  return parts.map((part) => wrap(node, part));
 }
 
-/** True when a fragment would render as an empty paragraph, e.g. `<em> </em>`. */
+/** True for whitespace, or formatting around only whitespace, e.g. `<em> </em>`. */
 function isBlank(node: ElementContent): boolean {
   if (node.type === 'text') return !node.value.trim();
-  if (node.type !== 'element') return node.type === 'comment';
-  return node.tagName !== 'img' && node.children.every(isBlank);
+  if (node.type === 'comment') return true;
+  return node.type === 'element' && FORMATTING.has(node.tagName) && node.children.every(isBlank);
 }
 
 /** Custom image renderers produce block players/captions, so lift them out of p. */

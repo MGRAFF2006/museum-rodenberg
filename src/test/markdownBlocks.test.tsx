@@ -78,3 +78,34 @@ it('adds no empty paragraph between media that share one formatting span', () =>
   const textParagraphs = [...container.querySelectorAll('p')].filter((p) => !p.closest('.my-6'));
   expect(textParagraphs).toEqual([]);
 });
+
+it('keeps task markers, hard breaks and icon-only gallery buttons next to media', () => {
+  const onMediaClick = vi.fn();
+  const { container } = render(<MarkdownRenderer
+    content={'- [x] ![Flag](/flag.jpg)\n\n- [ ] Next\n\n![One](/one.jpg)\\\n![Two](/two.jpg)\n\n![Flag](/flag.jpg) [](audio:/guide.mp3) ![Stamp](/stamp.jpg)'}
+    onMediaClick={onMediaClick}
+  />);
+  const boxes = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+  expect([...boxes].map((box) => box.checked)).toEqual([true, false]);
+  expect(container.querySelector('br')).not.toBeNull();
+  fireEvent.click(container.querySelector('button')!);
+  expect(onMediaClick).toHaveBeenCalledWith('audio', '/guide.mp3', '');
+});
+
+it('keeps emphasis around a lifted media link on its text', () => {
+  const { container } = render(<MarkdownRenderer content="**[See ![Flag](/flag.jpg) here](https://example.com)**" />);
+  const links = container.querySelectorAll('a');
+  expect(links).toHaveLength(1);
+  expect([...links[0].querySelectorAll('strong')].map((strong) => strong.textContent?.trim())).toEqual(['See', 'here']);
+  expect(container.querySelector('strong div, strong img')).toBeNull();
+});
+
+it('keeps gallery link buttons inline in their sentence', () => {
+  const onMediaClick = vi.fn();
+  const { container } = render(<MarkdownRenderer content="Before [View ![Flag](/flag.jpg) here](image:/gallery.jpg) after" onMediaClick={onMediaClick} />);
+  const paragraphs = container.querySelectorAll('p');
+  expect(paragraphs).toHaveLength(1);
+  expect(paragraphs[0].querySelector('button')).not.toBeNull();
+  fireEvent.click(paragraphs[0].querySelector('button')!);
+  expect(onMediaClick).toHaveBeenCalledWith('image', '/gallery.jpg', expect.any(String));
+});
