@@ -193,14 +193,15 @@ echo -e "${CYAN}Starting Convex dev watcher...${NC}"
 # must not replace it. Ignore SIGPIPE (a trap action would be traced under
 # `bash -x` and raise SIGPIPE again), so writes may fail from here on,
 # including Bash's own report of a service killed by a signal. Each service
-# restores the default SIGPIPE action before it starts.
+# restores the default SIGPIPE action just before it starts, after turning
+# off `bash -x` tracing so no trace write can hit a closed pipe in between.
 trap '' PIPE
-( trap - PIPE; exec ./node_modules/.bin/convex dev --typecheck=disable ) &
+( set +x; trap - PIPE; exec ./node_modules/.bin/convex dev --typecheck=disable ) &
 PIDS+=($!)
 
 # ── 5. Start Vite dev server ────────────────────────────────────
 echo -e "${CYAN}Starting Vite dev server...${NC}" || true
-( trap - PIPE; exec ./node_modules/.bin/vite ) &
+( set +x; trap - PIPE; exec ./node_modules/.bin/vite ) &
 PIDS+=($!)
 
 # ── Ready ────────────────────────────────────────────────────────

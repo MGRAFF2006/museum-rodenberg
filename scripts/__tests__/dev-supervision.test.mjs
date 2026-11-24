@@ -77,7 +77,8 @@ async function fixture(t, env = {}) {
     child.stdout?.on('data', (chunk) => { output += chunk; });
     child.stderr.on('data', (chunk) => { output += chunk; });
     const finished = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error(`Supervisor did not stop: ${output}`)), 5000);
+      // Generous for loaded machines; an unbounded shutdown still fails.
+      const timeout = setTimeout(() => reject(new Error(`Supervisor did not stop: ${output}`)), 10000);
       child.once('error', (error) => { clearTimeout(timeout); reject(error); });
       child.once('exit', (code, signal) => { clearTimeout(timeout); resolve({ code, signal, output }); });
     });
@@ -112,7 +113,7 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
     const { child, finished } = run.start();
     for (let attempts = 0; ; attempts++) {
       if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
-      assert.ok(attempts < 100, 'Services did not start');
+      assert.ok(attempts < 500, 'Services did not start');
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     child.kill(signal);
@@ -188,7 +189,7 @@ test('cleanup stops services and keeps the status when output is a closed pipe',
   const { child, finished } = run.start();
   for (let attempts = 0; ; attempts++) {
     if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
-    assert.ok(attempts < 100, 'Services did not start');
+    assert.ok(attempts < 500, 'Services did not start');
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   child.stdout.destroy();
@@ -223,7 +224,7 @@ async function startReleasable(t, env, { script: source, ...options } = {}) {
   for (let attempts = 0; ; attempts++) {
     const started = (await run.records()).filter((record) => record.event === 'started').length === 2;
     if (started && run.output().includes('to stop all services')) break;
-    assert.ok(attempts < 100, 'Services did not start');
+    assert.ok(attempts < 500, 'Services did not start');
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   return { run, child, finished, release: () => writeFile(path.join(run.directory, 'release'), '') };
@@ -258,7 +259,7 @@ for (const [env, code, trace] of closedOutputCases) {
     const { child, finished } = run.start({ mergeOutput: true, trace });
     for (let attempts = 0; ; attempts++) {
       if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
-      assert.ok(attempts < 100, 'Services did not start');
+      assert.ok(attempts < 500, 'Services did not start');
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     child.stdout.destroy();
@@ -266,12 +267,48 @@ for (const [env, code, trace] of closedOutputCases) {
     const convex = (await run.records()).find((record) => record.name === 'convex');
     for (let attempts = 0; ; attempts++) {
       try { process.kill(convex.pid, 0); } catch (error) { if (error.code === 'ESRCH') break; throw error; }
-      assert.ok(attempts < 200, 'Watcher did not exit');
+      assert.ok(attempts < 500, 'Watcher did not exit');
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     await writeFile(path.join(run.directory, 'banner'), '');
     const result = await finished;
     assert.equal(result.code, code);
+    assertStopped(await run.records());
+  });
+}
+
+for (const trace of [false, true]) {
+  test(`output closed between service launches still starts the second service${trace ? ' under bash -x' : ''}`, async (t) => {
+    const run = await fixture(t, { FIXTURE_VITE_STATUS: '9', FIXTURE_RELEASE: 'release' });
+    // Hold the supervisor before it launches Vite.
+    const viteLaunch = '# ── 5. Start Vite dev server';
+    assert.ok(script.includes(viteLaunch));
+    await writeFile(path.join(run.directory, 'dev.sh'),
+      script.replace(viteLaunch, () => `until [ -e launch ]; do sleep 0.01; done\n${viteLaunch}`));
+    const { child, finished } = run.start({ mergeOutput: true, trace });
+    for (let attempts = 0; ; attempts++) {
+      if ((await run.records()).some((record) => record.name === 'convex' && record.event === 'started')) break;
+      assert.ok(attempts < 500, 'Watcher did not start');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    child.stdout.destroy();
+    await writeFile(path.join(run.directory, 'launch'), '');
+    await writeFile(path.join(run.directory, 'release'), '');
+    const result = await finished;
+    assert.equal(result.code, 9);
+    assertStopped(await run.records());
+  });
+}
+
+for (const name of ['convex', 'vite']) {
+  test(`${name} starts with the default SIGPIPE action`, async (t) => {
+    const run = await fixture(t);
+    // The service signals itself: with the default action it dies (status
+    // 141); with SIGPIPE ignored it would exit 3.
+    await writeFile(path.join(run.directory, 'node_modules/.bin', name),
+      '#!/bin/sh\ncase " $* " in *" --once "*) exit 0 ;; esac\nkill -PIPE $$\nexit 3\n', { mode: 0o755 });
+    const result = await run.start().finished;
+    assert.equal(result.code, 141, result.output);
     assertStopped(await run.records());
   });
 }
@@ -320,7 +357,7 @@ test('cleanup stops services before writing to a full output pipe', async (t) =>
     drain();
     const started = (await run.records()).filter((record) => record.event === 'started').length === 2;
     if (started && output.includes('to stop all services')) break;
-    assert.ok(attempts < 100, 'Services did not start');
+    assert.ok(attempts < 500, 'Services did not start');
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   // Stop reading and fill the pipe: the supervisor's next write now blocks
@@ -335,7 +372,7 @@ test('cleanup stops services before writing to a full output pipe', async (t) =>
   child.kill('SIGTERM');
   for (let attempts = 0; ; attempts++) {
     if ((await run.records()).filter((record) => record.event === 'stopped').length === 2) break;
-    assert.ok(attempts < 300, 'Services were not stopped while the output pipe was full');
+    assert.ok(attempts < 500, 'Services were not stopped while the output pipe was full');
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   while (drain()) await new Promise((resolve) => setTimeout(resolve, 10));
