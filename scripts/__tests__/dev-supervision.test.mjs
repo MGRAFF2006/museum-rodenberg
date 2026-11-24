@@ -80,7 +80,9 @@ async function fixture(t, env = {}) {
       // Generous for loaded machines; an unbounded shutdown still fails.
       const timeout = setTimeout(() => reject(new Error(`Supervisor did not stop: ${output}`)), 10000);
       child.once('error', (error) => { clearTimeout(timeout); reject(error); });
-      child.once('exit', (code, signal) => { clearTimeout(timeout); resolve({ code, signal, output }); });
+      // `close` follows `exit` once stdout and stderr have drained, so the
+      // output snapshot includes everything the supervisor wrote.
+      child.once('close', (code, signal) => { clearTimeout(timeout); resolve({ code, signal, output }); });
     });
     return { child, finished };
   }
