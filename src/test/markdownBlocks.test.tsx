@@ -60,3 +60,21 @@ it('hydrates captioned media without DOM nesting or recovery errors', async () =
     container.remove();
   }
 });
+
+it('keeps a link around text and media as one link with its complete label', () => {
+  const { container } = render(<MarkdownRenderer content="Intro [See the ![coat of arms](/arms.jpg) on display](https://example.com) outro." />);
+  const links = container.querySelectorAll('a');
+  expect(links).toHaveLength(1);
+  expect(links[0]).toHaveAttribute('href', 'https://example.com');
+  expect(links[0].textContent).toMatch(/^See the .* on display$/);
+  expect(links[0].querySelector('img')).toHaveAttribute('alt', 'coat of arms');
+  expect(container.querySelector('p a, p div')).toBeNull();
+});
+
+it('adds no empty paragraph between media that share one formatting span', () => {
+  const { container } = render(<MarkdownRenderer content="*![One](/one.jpg) ![Two](/two.jpg)*" />);
+  expect(container.querySelectorAll('img')).toHaveLength(2);
+  // Only the media captions may render paragraphs; no blank text paragraph between them.
+  const textParagraphs = [...container.querySelectorAll('p')].filter((p) => !p.closest('.my-6'));
+  expect(textParagraphs).toEqual([]);
+});

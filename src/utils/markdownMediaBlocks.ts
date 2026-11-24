@@ -16,11 +16,23 @@ function splitMedia(node: ElementContent): Part[] {
     for (const part of splitMedia(child)) append(parts, part);
   }
   if (!parts.some((part) => part.media)) return [{ media: false, nodes: [node] }];
+  // Links may contain flow content. Lift the whole link out of the paragraph so
+  // its complete label stays one link and one keyboard focus stop.
+  if (node.tagName === 'a') {
+    return [{ media: true, nodes: [{ ...node, children: parts.flatMap((part) => part.nodes) }] }];
+  }
+  // Emphasis and other phrasing elements must stay around text only.
   return parts.map((part) => ({
     media: part.media,
-    // Links may contain flow content; emphasis must stay around text only.
-    nodes: part.media && node.tagName !== 'a' ? part.nodes : [{ ...node, children: part.nodes }],
+    nodes: part.media ? part.nodes : [{ ...node, children: part.nodes }],
   }));
+}
+
+/** True when a fragment would render as an empty paragraph, e.g. `<em> </em>`. */
+function isBlank(node: ElementContent): boolean {
+  if (node.type === 'text') return !node.value.trim();
+  if (node.type !== 'element') return node.type === 'comment';
+  return node.tagName !== 'img' && node.children.every(isBlank);
 }
 
 /** Custom image renderers produce block players/captions, so lift them out of p. */
@@ -39,7 +51,7 @@ export function markdownMediaBlocks() {
         if (!parts.some((part) => part.media)) continue;
         const replacement = parts.flatMap((part) => {
           if (part.media) return part.nodes;
-          if (part.nodes.every((node) => node.type === 'text' && !node.value.trim())) return [];
+          if (part.nodes.every(isBlank)) return [];
           return [{ ...child, children: part.nodes }];
         });
         parent.children.splice(index, 1, ...replacement);
