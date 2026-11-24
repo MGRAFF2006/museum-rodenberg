@@ -189,31 +189,33 @@ echo -e "${GREEN}Schema pushed.${NC}"
 
 # ── 4. Start Convex dev watcher (watches for schema changes) ────
 echo -e "${CYAN}Starting Convex dev watcher...${NC}"
+# Once a service runs, its status decides the session: a closed output pipe
+# must not replace it. Writes may fail from here on, including Bash's own
+# report of a service killed by a signal. A trap action (unlike an ignored
+# signal) is reset for the services, so they keep the default SIGPIPE action.
+trap ':' PIPE
 ./node_modules/.bin/convex dev --typecheck=disable &
 PIDS+=($!)
 
 # ── 5. Start Vite dev server ────────────────────────────────────
-echo -e "${CYAN}Starting Vite dev server...${NC}"
+echo -e "${CYAN}Starting Vite dev server...${NC}" || true
 ./node_modules/.bin/vite &
 PIDS+=($!)
 
 # ── Ready ────────────────────────────────────────────────────────
-echo ""
-echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  Museum Rodenberg – Development Environment${NC}"
-echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
-echo -e "  App:             ${CYAN}http://localhost:5173${NC}"
-echo -e "  Convex backend:  ${CYAN}http://localhost:3210${NC}"
-[ "$START_DASHBOARD" = true ] && echo -e "  Convex dashboard: ${CYAN}http://localhost:6791${NC}"
-[ "$START_TRANSLATE" = true ] && echo -e "  LibreTranslate:   ${CYAN}http://localhost:5000${NC}"
-echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
-echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"
-echo ""
-
-# From here on, a closed output pipe must not replace a service's status:
-# Bash reports a service killed by a signal on stderr while collecting it.
-# The services were started earlier and keep the default SIGPIPE action.
-trap '' PIPE
+{
+  echo ""
+  echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
+  echo -e "${GREEN}  Museum Rodenberg – Development Environment${NC}"
+  echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
+  echo -e "  App:             ${CYAN}http://localhost:5173${NC}"
+  echo -e "  Convex backend:  ${CYAN}http://localhost:3210${NC}"
+  [ "$START_DASHBOARD" = true ] && echo -e "  Convex dashboard: ${CYAN}http://localhost:6791${NC}"
+  [ "$START_TRANSLATE" = true ] && echo -e "  LibreTranslate:   ${CYAN}http://localhost:5000${NC}"
+  echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
+  echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"
+  echo ""
+} || true
 
 # Wait for any service to exit. Poll the job table instead of `wait -n`: Bash
 # reports and forgets a job killed by a signal before `wait -n` starts, and

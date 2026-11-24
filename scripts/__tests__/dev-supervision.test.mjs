@@ -82,7 +82,7 @@ async function fixture(t, env = {}) {
     });
     return { child, finished };
   }
-  return { directory, records, start };
+  return { directory, records, start, output: () => output };
 }
 
 function assertStopped(records) {
@@ -201,10 +201,11 @@ test('cleanup stops services and keeps the status when output is a closed pipe',
 
 test('a service killed by a signal before the supervisor waits still ends the session', async (t) => {
   const run = await fixture(t, { FIXTURE_CONVEX_SIGNAL: 'SIGKILL' });
-  // Let the watcher die before the supervisor starts waiting for services.
-  const banner = 'echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"';
-  assert.ok(script.includes(banner));
-  await writeFile(path.join(run.directory, 'dev.sh'), script.replace(banner, () => `${banner}\nsleep 0.5`));
+  // Start waiting for services only after the watcher has died.
+  const waiter = '# Wait for any service to exit.';
+  assert.ok(script.includes(waiter));
+  const watcherRunning = `[[ $'\\n'"$(jobs -pr)"$'\\n' == *$'\\n'"\${PIDS[0]}"$'\\n'* ]]`;
+  await writeFile(path.join(run.directory, 'dev.sh'), script.replace(waiter, () => `while ${watcherRunning}; do sleep 0.01; done\n${waiter}`));
   const result = await run.start().finished;
   assert.equal(result.code, 137);
   const records = await run.records();
@@ -213,12 +214,14 @@ test('a service killed by a signal before the supervisor waits still ends the se
 });
 
 // Services exit only after the test creates `release` in the fixture directory.
+// Returns once both services run and the supervisor printed its ready banner.
 async function startReleasable(t, env, { script: source, ...options } = {}) {
   const run = await fixture(t, { ...env, FIXTURE_RELEASE: 'release' });
   if (source) await writeFile(path.join(run.directory, 'dev.sh'), source);
   const { child, finished } = run.start(options);
   for (let attempts = 0; ; attempts++) {
-    if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
+    const started = (await run.records()).filter((record) => record.event === 'started').length === 2;
+    if (started && run.output().includes('to stop all services')) break;
     assert.ok(attempts < 100, 'Services did not start');
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -232,6 +235,35 @@ for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '7' }, 7], [{ FIXTURE_CONVE
     const { run, child, finished, release } = await startReleasable(t, env, { mergeOutput: true });
     child.stdout.destroy();
     await release();
+    const result = await finished;
+    assert.equal(result.code, code);
+    assertStopped(await run.records());
+  });
+}
+
+for (const [env, code] of [[{ FIXTURE_CONVEX_STATUS: '7' }, 7], [{ FIXTURE_CONVEX_SIGNAL: 'SIGKILL' }, 137]]) {
+  test(`output closed before the ready banner keeps service status ${code}`, async (t) => {
+    const run = await fixture(t, { ...env, FIXTURE_RELEASE: 'release' });
+    // Hold the supervisor before its ready banner until the watcher has ended.
+    const ready = '# ── Ready';
+    assert.ok(script.includes(ready));
+    await writeFile(path.join(run.directory, 'dev.sh'),
+      script.replace(ready, () => `until [ -e banner ]; do sleep 0.01; done\n${ready}`));
+    const { child, finished } = run.start({ mergeOutput: true });
+    for (let attempts = 0; ; attempts++) {
+      if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
+      assert.ok(attempts < 100, 'Services did not start');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    child.stdout.destroy();
+    await writeFile(path.join(run.directory, 'release'), '');
+    const convex = (await run.records()).find((record) => record.name === 'convex');
+    for (let attempts = 0; ; attempts++) {
+      try { process.kill(convex.pid, 0); } catch (error) { if (error.code === 'ESRCH') break; throw error; }
+      assert.ok(attempts < 200, 'Watcher did not exit');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await writeFile(path.join(run.directory, 'banner'), '');
     const result = await finished;
     assert.equal(result.code, code);
     assertStopped(await run.records());
