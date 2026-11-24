@@ -201,6 +201,8 @@ it.each([
   ['video', '[![Clip](/clip.webm)](https://example.com)', 'Clip', 'video'],
   // Without alt text the link would have no accessible name, so it shows its destination.
   ['unlabelled audio', '[![](/guide.mp3)](https://example.com)', 'https://example.com', 'audio'],
+  ['audio beside an unlabelled image', '[![](/cover.jpg) ![](/guide.mp3)](https://example.com)', 'https://example.com', 'audio'],
+  ['players split by a hard break', '[![](/guide.mp3)  \n![](/clip.webm)](https://example.com)', 'https://example.com', 'video'],
 ])('keeps %s player controls outside the one link that labels them', async (_type, content, label, player) => {
   const container = await expectConsistentBrowserTree(content);
   const links = container.querySelectorAll('a');

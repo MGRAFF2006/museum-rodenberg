@@ -103,16 +103,34 @@ function detachFromLink(nodes: ElementContent[], inHeading: boolean, moved: Elem
   });
 }
 
+/** Whether nodes give a link an accessible name: visible text or an image's alt text. */
+function hasLabel(nodes: ElementContent[]): boolean {
+  return nodes.some((node) => {
+    if (node.type === 'text') return node.value.trim() !== '';
+    if (node.type !== 'element') return false;
+    if (node.tagName === 'img') return typeof node.properties?.alt === 'string' && node.properties.alt.trim() !== '';
+    return hasLabel(node.children);
+  });
+}
+
+function imagesIn(nodes: ElementContent[]): ElementContent[] {
+  return nodes.flatMap((node) => {
+    if (node.type !== 'element') return [];
+    return node.tagName === 'img' ? [node] : imagesIn(node.children);
+  });
+}
+
 /** Keep one link with its label and place the detached content right after it. */
 function separateLink(link: Element, inHeading: boolean): ElementContent[] | undefined {
   const moved: ElementContent[] = [];
   let children = detachFromLink(link.children, inHeading, moved);
   if (!moved.length) return undefined;
-  if (children.every(isBlank)) {
-    // A link without any label text would have no accessible name; show its destination.
+  if (!hasLabel(children)) {
+    // Without label text the link would have no accessible name; show its
+    // destination after any unlabelled images that stay linked.
     const href = mediaUrlTransform(String(link.properties?.href ?? ''), 'href');
-    if (!href) return moved;
-    children = [{ type: 'text', value: href }];
+    if (!href) return [...imagesIn(children), ...moved];
+    children = [...imagesIn(children), { type: 'text', value: href }];
   }
   return [{ ...link, children }, ...moved];
 }
