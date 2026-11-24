@@ -98,9 +98,10 @@
   "name": "Nombre",
   "logout": "Cerrar sesión",
   "qrCameraUnavailable": "No se pudo iniciar o detener la cámara. Cierre el escáner e inténtelo de nuevo.",
+  "contentChangedReload": "Este contenido fue modificado o eliminado. Sus cambios sin guardar se conservan aquí. Vuelva a la vista general y abra el elemento de nuevo para cargar su versión más reciente.",
+  "qrCodeAlreadyAssigned": "Este código QR ya está asignado a otro objeto o exposición. Elige otro código QR.",
   "audioPlaybackError": "No se pudo reproducir el audio. Inténtelo de nuevo.",
   "playAudio": "Reproducir audio",
   "pauseAudio": "Pausar audio",
-  "contentChangedReload": "Este contenido fue modificado o eliminado. Sus cambios sin guardar se conservan aquí. Vuelva a la vista general y abra el elemento de nuevo para cargar su versión más reciente.",
   "onePerLine": "Un elemento por línea"
 }

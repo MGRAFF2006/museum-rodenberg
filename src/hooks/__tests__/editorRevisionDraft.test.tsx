@@ -37,7 +37,7 @@ it.each([['artifact', ArtifactEditor], ['exhibition', ExhibitionEditor]] as cons
     fireEvent.change(screen.getByDisplayValue('Initial title'), { target: { value: 'Unsaved curator draft' } });
     mocks.query.mockReturnValue(fixture(5));
     rerender(<Editor id="object" onBack={onBack} />);
-    mocks.fetch.mockResolvedValue(new Response('{}', { status: 409 }));
+    mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ code: 'STALE_CONTENT' }), { status: 409 }));
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'save' })); });
     const request = JSON.parse(mocks.fetch.mock.calls[0][1].body);
     expect(request.operation).toBe(`${type}s:save`);
@@ -63,6 +63,22 @@ it('submits no expected revision for a new draft', async () => {
   expect(JSON.parse(mocks.fetch.mock.calls[0][1].body).args).not.toHaveProperty('expectedRevision');
   expect(JSON.parse(mocks.fetch.mock.calls[0][1].body).args).not.toHaveProperty('expectedDocumentId');
 });
+
+it.each([['artifact', ArtifactEditor], ['exhibition', ExhibitionEditor]] as const)(
+  'preserves the %s draft and identifies a QR conflict without requesting a stale reload', async (_type, Editor) => {
+    const onBack = vi.fn();
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    render(<Editor id="object" onBack={onBack} />);
+    fireEvent.change(screen.getByDisplayValue('Initial title'), { target: { value: 'Unsaved QR draft' } });
+    mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ code: 'QR_CONFLICT' }), { status: 409 }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'save' })); });
+    expect(screen.getByDisplayValue('Unsaved QR draft')).toBeInTheDocument();
+    expect(screen.getByText('qrCodeAlreadyAssigned')).toBeInTheDocument();
+    expect(screen.queryByText('contentChangedReload')).not.toBeInTheDocument();
+    expect(alert).toHaveBeenCalledWith('qrCodeAlreadyAssigned');
+    expect(onBack).not.toHaveBeenCalled();
+  },
+);
 
 
 it.each([['artifact', ArtifactEditor], ['exhibition', ExhibitionEditor]] as const)(

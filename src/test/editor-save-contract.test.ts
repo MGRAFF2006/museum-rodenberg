@@ -100,10 +100,10 @@ describe.each(['artifact', 'exhibition'] as const)('%s editor save contract', ki
 
   it('creates once and permits ordinary updates without persisting operation flags', async () => {
     const { rows, table, save } = fixture(kind);
-    await save({ slug: 'created', createOnly: true, replaceTranslations: true, expectedRevision: undefined, expectedDocumentId: undefined });
+    await save({ slug: 'created', qrCode: 'CREATED', createOnly: true, replaceTranslations: true, expectedRevision: undefined, expectedDocumentId: undefined });
     await expect(save({ slug: 'created', createOnly: true })).rejects.toThrow('already exists');
     const created = rows[table].find(row => row.slug === 'created')!;
-    await save({ slug: 'created', image: 'edited', expectedRevision: 0, expectedDocumentId: created._id });
+    await save({ slug: 'created', qrCode: 'CREATED', image: 'edited', expectedRevision: 0, expectedDocumentId: created._id });
     expect(rows[table].find(row => row.slug === 'created')?.image).toBe('edited');
     expect(JSON.stringify(rows)).not.toContain('createOnly');
     expect(JSON.stringify(rows)).not.toContain('replaceTranslations');

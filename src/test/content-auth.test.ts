@@ -76,7 +76,7 @@ describe('Convex content authorization', () => {
     const ctx = { db: { query: () => chain, insert, patch, delete: del } };
     for (const write of writes) {
       const handler = (write as unknown as { _handler: (ctx: unknown, args: unknown) => Promise<unknown> })._handler;
-      await handler(ctx, { serverSecret: credential, slug: 'fixture', assetId: 'fixture', expectedRevision: 0, expectedDocumentId: row._id,
+      await handler(ctx, { serverSecret: credential, slug: 'fixture', assetId: 'fixture', qrCode: 'FIXTURE', expectedRevision: 0, expectedDocumentId: row._id,
         translations: [{ language: 'de', title: 'Fixture', description: '' }], isFeatured: true });
     }
     expect(patch).toHaveBeenCalled();
@@ -123,6 +123,10 @@ for (const mode of ['express', 'vite'] as const) {
     const stale = await request('/content-write', body, token);
     expect(stale.status).toBe(409);
     expect(await stale.json()).toEqual({ code: 'STALE_CONTENT', error: 'Content changed. Reopen it before saving.' });
+    mutation.mockRejectedValueOnce(new ConvexError({ code: 'QR_CONFLICT', sensitiveDetail: credential }));
+    const duplicateQR = await request('/content-write', body, token);
+    expect(duplicateQR.status).toBe(409);
+    expect(await duplicateQR.json()).toEqual({ code: 'QR_CONFLICT', error: 'QR code is already assigned to another item.' });
     await request('/logout', {}, token);
     expect((await request('/content-write', body, token)).status).toBe(401);
     const loggedIn = await (await request('/login', { password: 'fixture-password' })).json();
