@@ -149,20 +149,29 @@ function hasLabel(nodes: ElementContent[]): boolean {
   });
 }
 
+/**
+ * Marks a link whose label is its destination URL, generated below. A long
+ * URL is one unbreakable word, so the renderer lets such labels wrap anywhere.
+ */
+export const URL_LABEL_PROPERTY = 'dataUrlLabel';
+
 /** Keep one link with its label and place the detached content right after it. */
 function separateLink(link: Element, inHeading: boolean): ElementContent[] | undefined {
   const moved: ElementContent[] = [];
-  let children = detachFromLink(link.children, inHeading, moved);
+  const children = detachFromLink(link.children, inHeading, moved);
   if (!moved.length) return undefined;
-  if (!hasLabel(children)) {
-    // Without label text the link would have no accessible name; show its
-    // destination after what stays linked. Without a usable destination,
-    // drop the link and keep its content in order.
-    const href = mediaUrlTransform(String(link.properties?.href ?? ''), 'href');
-    if (!href) return link.children;
-    children = [...children, { type: 'text', value: href }];
-  }
-  return [{ ...link, children }, ...moved];
+  if (hasLabel(children)) return [{ ...link, children }, ...moved];
+  // Without label text the link would have no accessible name; show its
+  // destination after what stays linked. Without a usable destination,
+  // drop the link and keep its content in order.
+  const href = mediaUrlTransform(String(link.properties?.href ?? ''), 'href');
+  if (!href) return link.children;
+  const labelled: Element = {
+    ...link,
+    properties: { ...link.properties, [URL_LABEL_PROPERTY]: true },
+    children: [...children, { type: 'text', value: href }],
+  };
+  return [labelled, ...moved];
 }
 
 function splitParagraph(paragraph: Element): ElementContent[] | undefined {

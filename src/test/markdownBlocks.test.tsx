@@ -272,3 +272,14 @@ it('keeps media order when an unlabelled link with a rejected destination is dro
   const image = container.querySelector('img[src="/cover.jpg"]')!;
   expect(audio.compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
+
+// jsdom has no layout, so check the class that asks for wrapping: a generated
+// URL label is one long word and must wrap anywhere, even in a table cell,
+// while authored links keep their normal word wrapping.
+it('lets only a generated URL label wrap anywhere', () => {
+  const { container } = render(<MarkdownRenderer content={'| Hörstation |\n| --- |\n| [![](/guide.mp3)](https://example.com/item/FE6MTRDUHSRLODV6ZKXITLKMQKC3QEMR) |\n\n[Stadtarchiv Rodenberg](/rodenberg)'} />);
+  const [generated, authored] = container.querySelectorAll('a');
+  expect(generated).toHaveTextContent('https://example.com/item/FE6MTRDUHSRLODV6ZKXITLKMQKC3QEMR');
+  expect(generated).toHaveClass('overflow-wrap-anywhere');
+  expect(authored).not.toHaveClass('overflow-wrap-anywhere');
+});
