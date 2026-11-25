@@ -40,23 +40,79 @@ for arg in "$@"; do
   esac
 done
 
-# Track background PIDs for cleanup
+# Track background PIDs for `wait -n`
 PIDS=()
-cleanup() {
-  local status=$?
-  trap - EXIT
-  trap '' INT TERM
-  echo -e "\n${YELLOW}Shutting down...${NC}"
-  for pid in "${PIDS[@]}"; do
-    kill "$pid" 2>/dev/null || true
+# Every background job of this script is a development service. Cleanup finds
+# them in Bash's job table rather than PIDS, so a service forked just before a
+# signal arrives (before its PID is recorded) is still stopped.
+LIVE_JOBS=()
+find_live_jobs() {
+  local line
+  LIVE_JOBS=()
+  # Read `jobs` through direct command substitutions: those report this
+  # shell's job table, unlike `jobs` inside a pipeline subshell.
+  while IFS= read -r line; do
+    if [[ $line =~ ^\[([0-9]+)\] ]]; then LIVE_JOBS+=("%${BASH_REMATCH[1]}"); fi
+  done <<< "$(jobs -r)"$'\n'"$(jobs -s)"
+}
+# Signal job specs, never saved PIDs: Bash checks each job process is still
+# alive while SIGCHLD is blocked, so a reaped (and possibly reused) PID is
+# never signalled.
+signal_live_jobs() {
+  local job
+  find_live_jobs
+  for job in "${LIVE_JOBS[@]}"; do
+    kill "-$1" "$job" 2>/dev/null || true
   done
-  wait 2>/dev/null || true
-  echo -e "${GREEN}All processes stopped.${NC}"
+}
+# Wait up to about two seconds for every service job to end.
+wait_for_live_jobs() {
+  local attempt
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    find_live_jobs
+    if [ "${#LIVE_JOBS[@]}" -eq 0 ]; then return 0; fi
+    sleep 0.1
+  done
+  find_live_jobs
+  [ "${#LIVE_JOBS[@]}" -eq 0 ]
+}
+# Set before exiting to explain why the session ended.
+EXIT_REASON=""
+cleanup() {
+  local status=$? stopped=true
+  trap - EXIT
+  # Output may be a closed pipe: stopping services must not depend on it.
+  trap '' INT TERM PIPE
+  # Stop the services before writing anything: a write to a full output pipe
+  # blocks until its reader drains it. Shutdown is bounded while the output is
+  # drained or closed; a reader that stops draining can also block earlier
+  # writes (the startup banner, Bash's report of a killed service), just as it
+  # blocks the services writing to the same output.
+  signal_live_jobs TERM
+  # A service can ignore SIGTERM (including during startup). Give it a
+  # bounded grace period before forcing the remaining services to exit.
+  if ! wait_for_live_jobs; then
+    signal_live_jobs KILL
+    # A process in uninterruptible I/O can outlive SIGKILL; report it rather
+    # than waiting without a deadline.
+    wait_for_live_jobs || stopped=false
+  fi
+  {
+    echo -e "\n${YELLOW}Shutting down...${NC}"
+    if [ -n "$EXIT_REASON" ]; then echo -e "${RED}${EXIT_REASON}${NC}"; fi
+    if [ "$stopped" = true ]; then
+      echo -e "${GREEN}All processes stopped.${NC}"
+    else
+      echo -e "${RED}Services still running after SIGKILL: $(jobs -pr) $(jobs -ps)${NC}" >&2
+    fi
+  } || true
   return "$status"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+# A closed output pipe would otherwise kill Bash without running cleanup.
+trap 'exit 141' PIPE
 
 # ── 1. Docker services ───────────────────────────────────────────
 if [ "$SKIP_DOCKER" = false ]; then
@@ -77,21 +133,24 @@ if [ "$SKIP_DOCKER" = false ]; then
     exit 1
   fi
 
-  # Build the list of services to start (convex-backend has no profile, always starts)
-  SERVICES="convex-backend"
-  [ "$START_DASHBOARD" = true ] && SERVICES="$SERVICES --profile dashboard"
-  [ "$START_TRANSLATE" = true ] && SERVICES="$SERVICES --profile translate"
+  # Services to start and the Compose profiles they need (convex-backend has
+  # no profile and always starts). Arrays, not command substitutions: Bash 5.2
+  # fails to run a signal trap during a substitution followed by another one
+  # in the same command.
+  PROFILES=()
+  SERVICES=(convex-backend)
+  if [ "$START_DASHBOARD" = true ]; then
+    PROFILES+=(--profile dashboard)
+    SERVICES+=(convex-dashboard)
+  fi
+  if [ "$START_TRANSLATE" = true ]; then
+    PROFILES+=(--profile translate)
+    SERVICES+=(libretranslate)
+  fi
 
   # Start Docker services
   echo -e "${CYAN}Starting Docker services...${NC}"
-  if [ "$START_DASHBOARD" = true ] || [ "$START_TRANSLATE" = true ]; then
-    PROFILES=""
-    [ "$START_DASHBOARD" = true ] && PROFILES="$PROFILES --profile dashboard"
-    [ "$START_TRANSLATE" = true ] && PROFILES="$PROFILES --profile translate"
-    $DC $PROFILES up -d convex-backend $([ "$START_DASHBOARD" = true ] && echo "convex-dashboard") $([ "$START_TRANSLATE" = true ] && echo "libretranslate")
-  else
-    $DC up -d convex-backend
-  fi
+  $DC "${PROFILES[@]}" up -d "${SERVICES[@]}"
 
   # Wait for Convex backend health
   echo -e "${CYAN}Waiting for Convex backend to be healthy...${NC}"
@@ -133,31 +192,58 @@ echo -e "${GREEN}Schema pushed.${NC}"
 
 # ── 4. Start Convex dev watcher (watches for schema changes) ────
 echo -e "${CYAN}Starting Convex dev watcher...${NC}"
-./node_modules/.bin/convex dev --typecheck=disable &
+# Once a service runs, its status decides the session: a closed output pipe
+# must not replace it. Ignore SIGPIPE (a trap action would be traced under
+# `bash -x` and raise SIGPIPE again), so writes may fail from here on,
+# including Bash's own report of a service killed by a signal. Each service
+# restores the default SIGPIPE action just before it starts, after turning
+# off `bash -x` tracing so no trace write can hit a closed pipe in between.
+trap '' PIPE
+( set +x; trap - PIPE; exec ./node_modules/.bin/convex dev --typecheck=disable ) &
 PIDS+=($!)
 
 # ── 5. Start Vite dev server ────────────────────────────────────
-echo -e "${CYAN}Starting Vite dev server...${NC}"
-./node_modules/.bin/vite &
+echo -e "${CYAN}Starting Vite dev server...${NC}" || true
+( set +x; trap - PIPE; exec ./node_modules/.bin/vite ) &
 PIDS+=($!)
 
 # ── Ready ────────────────────────────────────────────────────────
-echo ""
-echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  Museum Rodenberg – Development Environment${NC}"
-echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
-echo -e "  App:             ${CYAN}http://localhost:5173${NC}"
-echo -e "  Convex backend:  ${CYAN}http://localhost:3210${NC}"
-[ "$START_DASHBOARD" = true ] && echo -e "  Convex dashboard: ${CYAN}http://localhost:6791${NC}"
-[ "$START_TRANSLATE" = true ] && echo -e "  LibreTranslate:   ${CYAN}http://localhost:5000${NC}"
-echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
-echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"
-echo ""
+{
+  echo ""
+  echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
+  echo -e "${GREEN}  Museum Rodenberg – Development Environment${NC}"
+  echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
+  echo -e "  App:             ${CYAN}http://localhost:5173${NC}"
+  echo -e "  Convex backend:  ${CYAN}http://localhost:3210${NC}"
+  [ "$START_DASHBOARD" = true ] && echo -e "  Convex dashboard: ${CYAN}http://localhost:6791${NC}"
+  [ "$START_TRANSLATE" = true ] && echo -e "  LibreTranslate:   ${CYAN}http://localhost:5000${NC}"
+  echo -e "${GREEN}════════════════════════════════════════════════════${NC}"
+  echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop all services"
+  echo ""
+} || true
 
-# Wait for any background process to exit
-status=0
-wait -n "${PIDS[@]}" || status=$?
-echo -e "${RED}A required development service exited; stopping its peer.${NC}"
+# Wait for any service to exit. Poll the job table instead of `wait -n`: Bash
+# reports and forgets a job killed by a signal before `wait -n` starts, and
+# Bash 5.2 then waits for its peer. `wait PID` still returns the saved status.
+# Polling cannot order services that end within the same interval; then the
+# first failure in launch order wins, so a success never masks a failure.
+status=""
+while [ -z "$status" ]; do
+  # One command substitution per word: Bash 5.2 fails to run a signal trap
+  # that arrives during a substitution followed by another in the same word.
+  live_jobs=$(jobs -pr)
+  stopped_jobs=$(jobs -ps)
+  running=$'\n'"$live_jobs"$'\n'"$stopped_jobs"$'\n'
+  for pid in "${PIDS[@]}"; do
+    if [[ $running != *$'\n'"$pid"$'\n'* ]]; then
+      service_status=0
+      wait "$pid" || service_status=$?
+      if [ -z "$status" ] || [ "$status" -eq 0 ]; then status=$service_status; fi
+    fi
+  done
+  if [ -z "$status" ]; then sleep 0.2; fi
+done
+EXIT_REASON="A required development service exited; stopped its peer."
 # A required long-running service exiting successfully still ends the dev session.
 if [ "$status" -eq 0 ]; then
   status=1

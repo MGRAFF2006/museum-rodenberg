@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { closeSync, constants, openSync, readSync, writeSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,16 +8,31 @@ import { test } from 'node:test';
 
 const script = await readFile(new URL('../dev.sh', import.meta.url), 'utf8');
 const service = `#!/usr/bin/env node
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 const name = path.basename(process.argv[1]);
 if (process.argv.includes('--once')) process.exit(Number(process.env.FIXTURE_ONCE_STATUS || 0));
 const record = (event) => appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({ name, pid: process.pid, event }) + '\\n');
+process.on('SIGTERM', () => {
+  if (process.env['FIXTURE_' + name.toUpperCase() + '_IGNORE_TERM']) { record('ignored'); return; }
+  record('stopped'); process.exit(0);
+});
 record('started');
-process.on('SIGTERM', () => { record('stopped'); process.exit(0); });
 setInterval(() => {}, 1000);
+// Strays from a failed test end themselves; teardown never signals saved PIDs.
+setTimeout(() => process.exit(99), 20000).unref();
 const code = process.env['FIXTURE_' + name.toUpperCase() + '_STATUS'];
-if (code !== undefined) setTimeout(() => { record('exited'); process.exit(Number(code)); }, 50);
+const signal = process.env['FIXTURE_' + name.toUpperCase() + '_SIGNAL'];
+// Wait for the peer's signal handler to be ready rather than racing a timer.
+if (code !== undefined || signal) setInterval(() => {
+  const records = readFileSync(process.env.FIXTURE_LOG, 'utf8').trim().split('\\n').map(JSON.parse);
+  if (process.env.FIXTURE_RELEASE && !existsSync(process.env.FIXTURE_RELEASE)) return;
+  if (records.some((record) => record.name !== name && record.event === 'started')) {
+    record('exited');
+    if (signal) process.kill(process.pid, signal);
+    else process.exit(Number(code));
+  }
+}, 10);
 `;
 
 async function fixture(t, env = {}) {
@@ -32,34 +48,43 @@ async function fixture(t, env = {}) {
   }
   const log = path.join(directory, 'children.jsonl');
   let child;
+  let output = '';
   const records = async () => {
     try { return (await readFile(log, 'utf8')).trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)); }
     catch (error) { if (error.code === 'ENOENT') return []; throw error; }
   };
   t.after(async () => {
-    if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
-    for (const { pid } of await records()) {
-      try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    // Without job control, the services share the supervisor's process group.
+    // Signal that group only while its leader is still running, so the group
+    // ID cannot have been reused. Services left after the supervisor exits
+    // fail assertStopped and end themselves after 20 seconds.
+    if (child && child.exitCode === null && child.signalCode === null) {
+      try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
     await rm(directory, { recursive: true, force: true });
   });
-  function start() {
-    child = spawn('bash', ['dev.sh', '--no-docker'], {
+  function start({ trace = false, mergeOutput = false, stdout = 'pipe', args: scriptArgs = ['--no-docker'] } = {}) {
+    // mergeOutput sends stderr into the stdout pipe, as `2>&1` would.
+    const bash = trace ? 'bash -x' : 'bash';
+    const args = mergeOutput ? ['-c', `exec ${bash} "$0" "$@" 2>&1`, 'dev.sh', ...scriptArgs] : [...(trace ? ['-x'] : []), 'dev.sh', ...scriptArgs];
+    child = spawn('bash', args, {
       cwd: directory,
+      detached: true,
       env: { ...process.env, ...env, FIXTURE_LOG: log, PATH: `${directory}/fake-bin:${process.env.PATH}` },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', stdout, 'pipe'],
     });
-    let output = '';
-    child.stdout.on('data', (chunk) => { output += chunk; });
+    output = '';
+    child.stdout?.on('data', (chunk) => { output += chunk; });
     child.stderr.on('data', (chunk) => { output += chunk; });
     const finished = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error(`Supervisor did not stop: ${output}`)), 5000);
+      // Generous for loaded machines; an unbounded shutdown still fails.
+      const timeout = setTimeout(() => reject(new Error(`Supervisor did not stop: ${output}`)), 10000);
       child.once('error', (error) => { clearTimeout(timeout); reject(error); });
       child.once('exit', (code, signal) => { clearTimeout(timeout); resolve({ code, signal, output }); });
     });
     return { child, finished };
   }
-  return { directory, records, start };
+  return { directory, records, start, output: () => output };
 }
 
 function assertStopped(records) {
@@ -88,7 +113,7 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
     const { child, finished } = run.start();
     for (let attempts = 0; ; attempts++) {
       if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
-      assert.ok(attempts < 100, 'Services did not start');
+      assert.ok(attempts < 500, 'Services did not start');
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     child.kill(signal);
@@ -96,6 +121,60 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
     assert.equal(result.code, code);
     assert.equal(result.output.split('Shutting down...').length - 1, 1);
     assert.equal((await run.records()).filter((record) => record.event === 'stopped').length, 2);
+    assertStopped(await run.records());
+  });
+}
+
+for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+  test(`${signal} during the job-table poll returns ${code}`, async (t) => {
+    const run = await fixture(t);
+    // Hold the poll's first job-table substitution open until the signal has
+    // been sent, so the trap runs while it is being expanded.
+    const poll = script.indexOf('while [ -z "$status" ]; do');
+    const substitution = script.indexOf('$(jobs -pr)', poll);
+    assert.ok(poll >= 0 && substitution > poll);
+    const held = '$(jobs -pr; touch held; until [ -e go ]; do sleep 0.01; done)';
+    await writeFile(path.join(run.directory, 'dev.sh'),
+      script.slice(0, substitution) + held + script.slice(substitution + '$(jobs -pr)'.length));
+    const { child, finished } = run.start();
+    for (let attempts = 0; ; attempts++) {
+      try { await readFile(path.join(run.directory, 'held')); break; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      assert.ok(attempts < 500, 'Supervisor did not reach the poll');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    child.kill(signal);
+    // Let Bash take the signal before the substitution finishes.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await writeFile(path.join(run.directory, 'go'), '');
+    const result = await finished;
+    assert.equal(result.code, code, result.output);
+    assertStopped(await run.records());
+  });
+}
+
+for (const [flags, compose] of [
+  [[], 'compose up -d convex-backend'],
+  [['--all'], 'compose --profile dashboard --profile translate up -d convex-backend convex-dashboard libretranslate'],
+]) {
+  test(`Docker startup with ${flags.join(' ') || 'no flags'} starts the expected Compose services`, async (t) => {
+    const run = await fixture(t);
+    const calls = path.join(run.directory, 'docker-calls');
+    // A fake Docker that accepts every command and records each call.
+    await writeFile(path.join(run.directory, 'fake-bin/docker'),
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nexit 0\n`, { mode: 0o755 });
+    const { child, finished } = run.start({ args: flags });
+    for (let attempts = 0; ; attempts++) {
+      if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
+      assert.ok(attempts < 500, 'Services did not start');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    child.kill('SIGTERM');
+    const result = await finished;
+    assert.equal(result.code, 143, result.output);
+    const recorded = (await readFile(calls, 'utf8')).trim().split('\n');
+    assert.equal(recorded.filter((call) => call.includes(' up ')).length, 1);
+    assert.ok(recorded.includes(compose), recorded.join('; '));
     assertStopped(await run.records());
   });
 }
@@ -114,5 +193,245 @@ test('watcher failure during startup still produces a failed supervisor session'
     '#!/bin/sh\ncase " $* " in *" --once "*) exit 0 ;; *) exit 7 ;; esac\n', { mode: 0o755 });
   const result = await run.start().finished;
   assert.equal(result.code, 7);
+  assertStopped(await run.records());
+});
+
+test('cleanup forcibly stops a peer that ignores SIGTERM and preserves the failure', async (t) => {
+  const run = await fixture(t, { FIXTURE_CONVEX_STATUS: '7', FIXTURE_VITE_IGNORE_TERM: '1' });
+  const result = await run.start().finished;
+  assert.equal(result.code, 7);
+  const records = await run.records();
+  assert.ok(records.some((record) => record.name === 'vite' && record.event === 'ignored'));
+  assertStopped(records);
+  assert.equal(result.output.split('Shutting down...').length - 1, 1);
+});
+
+test('cleanup never signals a service PID that Bash has already reaped', async (t) => {
+  const run = await fixture(t, { FIXTURE_CONVEX_STATUS: '7' });
+  const result = await run.start({ trace: true }).finished;
+  assert.equal(result.code, 7);
+  const records = await run.records();
+  const exited = records.find((record) => record.name === 'convex' && record.event === 'exited');
+  assert.ok(exited, 'convex fixture did not exit on its own');
+  // After `wait -n` reaps the exited watcher its PID may be reused. Cleanup
+  // must signal Bash job specs, which Bash checks for liveness, never a PID.
+  assert.doesNotMatch(result.output, new RegExp(`^\\++ kill .*\\b${exited.pid}\\b`, 'm'));
+  assert.doesNotMatch(result.output, /^\++ kill (?:-\S+ )?\d+$/m);
+  assert.match(result.output, /^\++ kill -TERM %\d+$/m);
+  assert.ok(records.some((record) => record.name === 'vite' && record.event === 'stopped'));
+  assertStopped(records);
+});
+
+test('a shutdown signal before a started service is recorded still stops it', async (t) => {
+  const run = await fixture(t);
+  // Deliver SIGTERM in the window between forking the watcher and saving its
+  // PID: the exit trap runs before `PIDS+=($!)`. Wait until the watcher is
+  // running first, so cleanup must find and stop a live, unrecorded service.
+  assert.ok(script.includes('PIDS+=($!)'));
+  const signalWhenStarted = 'until grep -q \'"started"\' "$FIXTURE_LOG" 2>/dev/null; do sleep 0.01; done\nkill -TERM $$\nPIDS+=($!)';
+  await writeFile(path.join(run.directory, 'dev.sh'), script.replace('PIDS+=($!)', () => signalWhenStarted));
+  const result = await run.start().finished;
+  assert.equal(result.code, 143, result.output);
+  assert.equal(result.output.split('Shutting down...').length - 1, 1);
+  const records = await run.records();
+  assert.ok(records.some((record) => record.name === 'convex' && record.event === 'stopped'), 'unrecorded watcher was not stopped');
+  assertStopped(records);
+});
+
+test('cleanup stops services and keeps the status when output is a closed pipe', async (t) => {
+  const run = await fixture(t);
+  const { child, finished } = run.start();
+  for (let attempts = 0; ; attempts++) {
+    if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
+    assert.ok(attempts < 500, 'Services did not start');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  child.stdout.destroy();
+  child.kill('SIGTERM');
+  const result = await finished;
+  assert.equal(result.code, 143);
+  const records = await run.records();
+  assert.equal(records.filter((record) => record.event === 'stopped').length, 2);
+  assertStopped(records);
+});
+
+test('a service killed by a signal before the supervisor waits still ends the session', async (t) => {
+  const run = await fixture(t, { FIXTURE_CONVEX_SIGNAL: 'SIGKILL' });
+  // Start waiting for services only after the watcher has died.
+  const waiter = '# Wait for any service to exit.';
+  assert.ok(script.includes(waiter));
+  const watcherRunning = `[[ $'\\n'"$(jobs -pr)"$'\\n' == *$'\\n'"\${PIDS[0]}"$'\\n'* ]]`;
+  await writeFile(path.join(run.directory, 'dev.sh'), script.replace(waiter, () => `while ${watcherRunning}; do sleep 0.01; done\n${waiter}`));
+  const result = await run.start().finished;
+  assert.equal(result.code, 137);
+  const records = await run.records();
+  assert.ok(records.some((record) => record.name === 'vite' && record.event === 'stopped'));
+  assertStopped(records);
+});
+
+// Services exit only after the test creates `release` in the fixture directory.
+// Returns once both services run and the supervisor printed its ready banner.
+async function startReleasable(t, env, { script: source, ...options } = {}) {
+  const run = await fixture(t, { ...env, FIXTURE_RELEASE: 'release' });
+  if (source) await writeFile(path.join(run.directory, 'dev.sh'), source);
+  const { child, finished } = run.start(options);
+  for (let attempts = 0; ; attempts++) {
+    const started = (await run.records()).filter((record) => record.event === 'started').length === 2;
+    if (started && run.output().includes('to stop all services')) break;
+    assert.ok(attempts < 500, 'Services did not start');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return { run, child, finished, release: () => writeFile(path.join(run.directory, 'release'), '') };
+}
+
+// `bash -x` writes a trace line for every command to the same closed stderr.
+const closedOutputCases = [false, true].flatMap((trace) => [
+  [{ FIXTURE_CONVEX_STATUS: '7' }, 7, trace], [{ FIXTURE_CONVEX_SIGNAL: 'SIGKILL' }, 137, trace],
+]);
+
+for (const [env, code, trace] of closedOutputCases) {
+  test(`a closed output pipe keeps service status ${code}${trace ? ' under bash -x' : ''}`, async (t) => {
+    // Close the pipe shared by stdout and stderr: Bash writes its report of a
+    // service killed by a signal to stderr.
+    const { run, child, finished, release } = await startReleasable(t, env, { mergeOutput: true, trace });
+    child.stdout.destroy();
+    await release();
+    const result = await finished;
+    assert.equal(result.code, code);
+    assertStopped(await run.records());
+  });
+}
+
+for (const [env, code, trace] of closedOutputCases) {
+  test(`output closed before the ready banner keeps service status ${code}${trace ? ' under bash -x' : ''}`, async (t) => {
+    const run = await fixture(t, { ...env, FIXTURE_RELEASE: 'release' });
+    // Hold the supervisor before its ready banner until the watcher has ended.
+    const ready = '# ── Ready';
+    assert.ok(script.includes(ready));
+    await writeFile(path.join(run.directory, 'dev.sh'),
+      script.replace(ready, () => `until [ -e banner ]; do sleep 0.01; done\n${ready}`));
+    const { child, finished } = run.start({ mergeOutput: true, trace });
+    for (let attempts = 0; ; attempts++) {
+      if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
+      assert.ok(attempts < 500, 'Services did not start');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    child.stdout.destroy();
+    await writeFile(path.join(run.directory, 'release'), '');
+    const convex = (await run.records()).find((record) => record.name === 'convex');
+    for (let attempts = 0; ; attempts++) {
+      try { process.kill(convex.pid, 0); } catch (error) { if (error.code === 'ESRCH') break; throw error; }
+      assert.ok(attempts < 500, 'Watcher did not exit');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await writeFile(path.join(run.directory, 'banner'), '');
+    const result = await finished;
+    assert.equal(result.code, code);
+    assertStopped(await run.records());
+  });
+}
+
+for (const trace of [false, true]) {
+  test(`output closed between service launches still starts the second service${trace ? ' under bash -x' : ''}`, async (t) => {
+    const run = await fixture(t, { FIXTURE_VITE_STATUS: '9', FIXTURE_RELEASE: 'release' });
+    // Hold the supervisor before it launches Vite.
+    const viteLaunch = '# ── 5. Start Vite dev server';
+    assert.ok(script.includes(viteLaunch));
+    await writeFile(path.join(run.directory, 'dev.sh'),
+      script.replace(viteLaunch, () => `until [ -e launch ]; do sleep 0.01; done\n${viteLaunch}`));
+    const { child, finished } = run.start({ mergeOutput: true, trace });
+    for (let attempts = 0; ; attempts++) {
+      if ((await run.records()).some((record) => record.name === 'convex' && record.event === 'started')) break;
+      assert.ok(attempts < 500, 'Watcher did not start');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    child.stdout.destroy();
+    await writeFile(path.join(run.directory, 'launch'), '');
+    await writeFile(path.join(run.directory, 'release'), '');
+    const result = await finished;
+    assert.equal(result.code, 9);
+    assertStopped(await run.records());
+  });
+}
+
+for (const name of ['convex', 'vite']) {
+  test(`${name} starts with the default SIGPIPE action`, async (t) => {
+    const run = await fixture(t);
+    // The service signals itself: with the default action it dies (status
+    // 141); with SIGPIPE ignored it would exit 3.
+    await writeFile(path.join(run.directory, 'node_modules/.bin', name),
+      '#!/bin/sh\ncase " $* " in *" --once "*) exit 0 ;; esac\nkill -PIPE $$\nexit 3\n', { mode: 0o755 });
+    const result = await run.start().finished;
+    assert.equal(result.code, 141, result.output);
+    assertStopped(await run.records());
+  });
+}
+
+for (const [convex, vite, code] of [['0', '9', 9], ['7', '0', 7], ['7', '9', 7]]) {
+  test(`convex ${convex} and vite ${vite} ending in the same poll report ${code}`, async (t) => {
+    const env = { FIXTURE_CONVEX_STATUS: convex, FIXTURE_VITE_STATUS: vite };
+    // Let the supervisor poll only once both services have ended, so it
+    // collects both statuses in the same poll: a success never masks a
+    // failure, and between failures the first in launch order wins.
+    const poll = 'while [ -z "$status" ]; do';
+    assert.ok(script.includes(poll));
+    const source = script.replace(poll, () => `${poll}\n  while [ -n "$(jobs -pr)" ]; do sleep 0.01; done`);
+    const { run, finished, release } = await startReleasable(t, env, { script: source });
+    await release();
+    const result = await finished;
+    assert.equal(result.code, code);
+    assertStopped(await run.records());
+  });
+}
+
+test('cleanup stops services before writing to a full output pipe', async (t) => {
+  const run = await fixture(t);
+  // Node's stdio pipes are socket pairs; use a FIFO so the test controls a
+  // real pipe's reader and can fill it.
+  const fifo = path.join(run.directory, 'stdout.fifo');
+  execFileSync('mkfifo', [fifo]);
+  const reader = openSync(fifo, constants.O_RDONLY | constants.O_NONBLOCK);
+  t.after(() => closeSync(reader));
+  const writer = openSync(fifo, constants.O_WRONLY);
+  const { child, finished } = run.start({ stdout: writer });
+  closeSync(writer);
+  let output = '';
+  const buffer = Buffer.alloc(65536);
+  // Read what is available; false once every writer has closed the FIFO.
+  const drain = () => {
+    for (;;) {
+      try {
+        const length = readSync(reader, buffer);
+        if (length === 0) return false;
+        output += buffer.toString('utf8', 0, length);
+      } catch (error) { if (error.code === 'EAGAIN') return true; throw error; }
+    }
+  };
+  for (let attempts = 0; ; attempts++) {
+    drain();
+    const started = (await run.records()).filter((record) => record.event === 'started').length === 2;
+    if (started && output.includes('to stop all services')) break;
+    assert.ok(attempts < 500, 'Services did not start');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  // Stop reading and fill the pipe: the supervisor's next write now blocks
+  // until the reader drains it, so cleanup must signal the services first.
+  const filler = openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK);
+  try {
+    for (;;) {
+      try { writeSync(filler, Buffer.alloc(65536)); }
+      catch (error) { if (error.code === 'EAGAIN') break; throw error; }
+    }
+  } finally { closeSync(filler); }
+  child.kill('SIGTERM');
+  for (let attempts = 0; ; attempts++) {
+    if ((await run.records()).filter((record) => record.event === 'stopped').length === 2) break;
+    assert.ok(attempts < 500, 'Services were not stopped while the output pipe was full');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  while (drain()) await new Promise((resolve) => setTimeout(resolve, 10));
+  const result = await finished;
+  assert.equal(result.code, 143);
+  assert.ok(output.includes('Shutting down...'));
   assertStopped(await run.records());
 });
