@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AudioPlayer } from './AudioPlayer';
 import { getMediaType } from '../utils/markdownUtils';
-import { markdownMediaBlocks, mediaUrlTransform } from '../utils/markdownMediaBlocks';
+import { markdownMediaBlocks, mediaUrlTransform, URL_LABEL_PROPERTY } from '../utils/markdownMediaBlocks';
 
 interface MarkdownRendererProps {
   content: string;
@@ -21,7 +21,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         rehypePlugins={[markdownMediaBlocks]}
         urlTransform={mediaUrlTransform}
         components={{
-          a: ({ href, children }) => {
+          a: ({ node, href, children }) => {
             const isMedia = href && /^(audio|video|image):/i.test(href);
             
             if (isMedia) {
@@ -47,8 +47,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               );
             }
             
+            // A generated URL label must wrap anywhere, even in a table cell.
+            const wrap = node?.properties?.[URL_LABEL_PROPERTY] ? ' overflow-wrap-anywhere' : '';
             return (
-              <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 underline">
+              <a href={href} target="_blank" rel="noopener noreferrer" className={`text-primary-600 hover:text-primary-700 underline${wrap}`}>
                 {children}
               </a>
             );

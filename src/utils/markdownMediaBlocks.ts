@@ -1,5 +1,6 @@
 import type { Element, ElementContent, Root } from 'hast';
 import { defaultUrlTransform } from 'react-markdown';
+import { getMediaType } from './markdownUtils';
 
 export function mediaUrlTransform(url: string, key: string): string {
   const media = /^(audio|video|image):(.+)$/i.exec(url);
@@ -20,6 +21,10 @@ type Part = { media: boolean; nodes: ElementContent[]; inner?: Part[] };
 
 // Formatting that renders nothing visible when it wraps only whitespace.
 const FORMATTING = new Set(['em', 'strong', 'del', 'span']);
+const HEADING = /^h[1-6]$/;
+// Tight list items and table cells hold phrasing content without a paragraph.
+const UNWRAPPED_PHRASING_CONTAINERS = new Set(['li', 'td', 'th']);
+const PHRASING = new Set(['a', ...FORMATTING]);
 
 function append(parts: Part[], part: Part) {
   const previous = parts[parts.length - 1];
@@ -65,29 +70,185 @@ function isBlank(node: ElementContent): boolean {
   return node.type === 'element' && FORMATTING.has(node.tagName) && node.children.every(isBlank);
 }
 
-/** Custom image renderers produce block players/captions, so lift them out of p. */
+/** Video and audio render with playback controls, which are interactive content. */
+function isPlayer(node: Element): boolean {
+  const src = node.properties?.src;
+  return typeof src === 'string' && getMediaType(mediaUrlTransform(src, 'src')) !== 'image';
+}
+
+/** A nested link, such as a GFM footnote reference (`sup > a`). */
+function holdsLink(node: Element): boolean {
+  return node.tagName === 'a'
+    || (node.tagName === 'sup' && node.children.some((child) => child.type === 'element' && child.tagName === 'a'));
+}
+
+/** The text at the start or end of a node, counting an image's alt text. */
+function edgeText(node: ElementContent | undefined, end: boolean): string {
+  if (node?.type === 'text') return node.value;
+  if (node?.type !== 'element') return '';
+  if (node.tagName === 'img') return typeof node.properties?.alt === 'string' ? node.properties.alt : '';
+  return edgeText(node.children[end ? node.children.length - 1 : 0], end);
+}
+
+/**
+ * Text standing in for a media block removed from running text. The block
+ * separated the words around it, e.g. `See![Floor](/floor.jpg)now`, so keep
+ * a space wherever the neighbouring text would otherwise run together.
+ * `before` is the output so far; pass no `after` when the next node is also
+ * removed, so a run of removed media gets its trailing space only once.
+ */
+function standIn(text: string, before: ElementContent | undefined, after: ElementContent | undefined): ElementContent[] {
+  const wordBefore = /\S$/.test(edgeText(before, true));
+  const wordAfter = /^\S/.test(edgeText(after, false));
+  if (!text) return wordBefore && wordAfter ? [{ type: 'text', value: ' ' }] : [];
+  return [{ type: 'text', value: (wordBefore ? ' ' : '') + text + (wordAfter ? ' ' : '') }];
+}
+
+/**
+ * Remove what a link must not contain: nested links, interactive players and,
+ * inside headings, any media block. Media leave their alt text behind so the
+ * link keeps its full label. Removed nodes are collected in `moved`.
+ * `before` is the text preceding `nodes` when they start inside formatting
+ * such as `**…**`, so spacing also works across its opening edge.
+ */
+function detachFromLink(
+  nodes: ElementContent[],
+  inHeading: boolean,
+  moved: ElementContent[],
+  before?: ElementContent,
+): ElementContent[] {
+  const leavesLink = (node: ElementContent | undefined): boolean => (
+    node?.type === 'element' && node.tagName === 'img' && (inHeading || isPlayer(node))
+  );
+  const kept: ElementContent[] = [];
+  nodes.forEach((node, index) => {
+    if (node.type !== 'element') {
+      kept.push(node);
+    } else if (leavesLink(node)) {
+      moved.push(node);
+      const alt = node.properties?.alt;
+      const next = nodes[index + 1];
+      kept.push(...standIn(typeof alt === 'string' ? alt : '', kept[kept.length - 1] ?? before, leavesLink(next) ? undefined : next));
+    } else if (holdsLink(node)) {
+      moved.push(node);
+    } else {
+      const children = detachFromLink(node.children, inHeading, moved, kept[kept.length - 1] ?? before);
+      kept.push({ ...node, children });
+    }
+  });
+  return kept;
+}
+
+/** Whether nodes give a link an accessible name: visible text or an image's alt text. */
+function hasLabel(nodes: ElementContent[]): boolean {
+  return nodes.some((node) => {
+    if (node.type === 'text') return node.value.trim() !== '';
+    if (node.type !== 'element') return false;
+    if (node.tagName === 'img') return typeof node.properties?.alt === 'string' && node.properties.alt.trim() !== '';
+    return hasLabel(node.children);
+  });
+}
+
+/**
+ * Marks a link whose label is its destination URL, generated below. A long
+ * URL is one unbreakable word, so the renderer lets such labels wrap anywhere.
+ */
+export const URL_LABEL_PROPERTY = 'dataUrlLabel';
+
+/** Keep one link with its label and place the detached content right after it. */
+function separateLink(link: Element, inHeading: boolean): ElementContent[] | undefined {
+  const moved: ElementContent[] = [];
+  const children = detachFromLink(link.children, inHeading, moved);
+  if (!moved.length) return undefined;
+  if (hasLabel(children)) return [{ ...link, children }, ...moved];
+  // Without label text the link would have no accessible name; show its
+  // destination after what stays linked. Without a usable destination,
+  // drop the link and keep its content in order.
+  const href = mediaUrlTransform(String(link.properties?.href ?? ''), 'href');
+  if (!href) return link.children;
+  const labelled: Element = {
+    ...link,
+    properties: { ...link.properties, [URL_LABEL_PROPERTY]: true },
+    children: [...children, { type: 'text', value: href }],
+  };
+  return [labelled, ...moved];
+}
+
+function splitParagraph(paragraph: Element): ElementContent[] | undefined {
+  const parts: Part[] = [];
+  for (const node of paragraph.children) {
+    for (const part of splitMedia(node)) append(parts, part);
+  }
+  if (!parts.some((part) => part.media)) return undefined;
+  return parts.flatMap((part) => {
+    if (part.media) return part.nodes;
+    if (part.nodes.every(isBlank)) return [];
+    return [{ ...paragraph, children: part.nodes }];
+  });
+}
+
+/** Headings hold phrasing content only, so media follow the heading text. */
+function liftFromHeading(heading: Element): ElementContent[] | undefined {
+  const parts = heading.children.flatMap(splitMedia);
+  if (!parts.some((part) => part.media)) return undefined;
+  const text: ElementContent[] = [];
+  parts.forEach((part, index) => {
+    if (!part.media) {
+      text.push(...part.nodes);
+      return;
+    }
+    const next = parts[index + 1];
+    text.push(...standIn('', text[text.length - 1], next && !next.media ? next.nodes[0] : undefined));
+  });
+  const media = parts.filter((part) => part.media).flatMap((part) => part.nodes);
+  if (hasLabel(text)) return [{ ...heading, children: text }, ...media];
+  // A heading without text would have no name. Render its content as a
+  // paragraph instead, in order, so line breaks and icon-only gallery
+  // buttons beside the media stay.
+  return splitParagraph({ ...heading, tagName: 'p' });
+}
+
+/** List items and table cells may contain media blocks, but not inside emphasis. */
+function splitPhrasingChildren(container: Element): ElementContent[] | undefined {
+  let changed = false;
+  const children = container.children.flatMap((node) => {
+    if (node.type !== 'element' || !PHRASING.has(node.tagName)) return [node];
+    const parts = splitMedia(node);
+    if (!parts.some((part) => part.media)) return [node];
+    changed = true;
+    return parts.flatMap((part) => part.nodes);
+  });
+  return changed ? [{ ...container, children }] : undefined;
+}
+
+function rewrite(node: Element, inHeading: boolean): ElementContent[] | undefined {
+  if (node.tagName === 'a') return isGalleryLink(node.properties?.href) ? undefined : separateLink(node, inHeading);
+  if (node.tagName === 'p') return splitParagraph(node);
+  if (HEADING.test(node.tagName)) return liftFromHeading(node);
+  if (UNWRAPPED_PHRASING_CONTAINERS.has(node.tagName)) return splitPhrasingChildren(node);
+  return undefined;
+}
+
+/**
+ * Custom image renderers produce block players and captions. Keep them out of
+ * paragraphs, headings and phrasing formatting, and keep interactive content
+ * (players, nested links) out of links, so server HTML parses into the same
+ * tree React renders.
+ */
 export function markdownMediaBlocks() {
   return function transform(tree: Root) {
-    function visit(parent: Root | Element) {
+    function visit(parent: Root | Element, inHeading: boolean) {
       for (let index = 0; index < parent.children.length; index++) {
         const child = parent.children[index];
         if (child.type !== 'element') continue;
-        visit(child);
-        if (child.tagName !== 'p') continue;
-        const parts: Part[] = [];
-        for (const node of child.children) {
-          for (const part of splitMedia(node)) append(parts, part);
-        }
-        if (!parts.some((part) => part.media)) continue;
-        const replacement = parts.flatMap((part) => {
-          if (part.media) return part.nodes;
-          if (part.nodes.every(isBlank)) return [];
-          return [{ ...child, children: part.nodes }];
-        });
+        // Children first, so links are already separated when their container splits.
+        visit(child, inHeading || HEADING.test(child.tagName));
+        const replacement = rewrite(child, inHeading);
+        if (!replacement) continue;
         parent.children.splice(index, 1, ...replacement);
         index += replacement.length - 1;
       }
     }
-    visit(tree);
+    visit(tree, false);
   };
 }
