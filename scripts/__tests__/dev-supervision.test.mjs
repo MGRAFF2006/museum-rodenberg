@@ -63,10 +63,10 @@ async function fixture(t, env = {}) {
     }
     await rm(directory, { recursive: true, force: true });
   });
-  function start({ trace = false, mergeOutput = false, stdout = 'pipe' } = {}) {
+  function start({ trace = false, mergeOutput = false, stdout = 'pipe', args: scriptArgs = ['--no-docker'] } = {}) {
     // mergeOutput sends stderr into the stdout pipe, as `2>&1` would.
     const bash = trace ? 'bash -x' : 'bash';
-    const args = mergeOutput ? ['-c', `exec ${bash} "$0" --no-docker 2>&1`, 'dev.sh'] : [...(trace ? ['-x'] : []), 'dev.sh', '--no-docker'];
+    const args = mergeOutput ? ['-c', `exec ${bash} "$0" "$@" 2>&1`, 'dev.sh', ...scriptArgs] : [...(trace ? ['-x'] : []), 'dev.sh', ...scriptArgs];
     child = spawn('bash', args, {
       cwd: directory,
       detached: true,
@@ -149,6 +149,32 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
     await writeFile(path.join(run.directory, 'go'), '');
     const result = await finished;
     assert.equal(result.code, code, result.output);
+    assertStopped(await run.records());
+  });
+}
+
+for (const [flags, compose] of [
+  [[], 'compose up -d convex-backend'],
+  [['--all'], 'compose --profile dashboard --profile translate up -d convex-backend convex-dashboard libretranslate'],
+]) {
+  test(`Docker startup with ${flags.join(' ') || 'no flags'} starts the expected Compose services`, async (t) => {
+    const run = await fixture(t);
+    const calls = path.join(run.directory, 'docker-calls');
+    // A fake Docker that accepts every command and records each call.
+    await writeFile(path.join(run.directory, 'fake-bin/docker'),
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nexit 0\n`, { mode: 0o755 });
+    const { child, finished } = run.start({ args: flags });
+    for (let attempts = 0; ; attempts++) {
+      if ((await run.records()).filter((record) => record.event === 'started').length === 2) break;
+      assert.ok(attempts < 500, 'Services did not start');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    child.kill('SIGTERM');
+    const result = await finished;
+    assert.equal(result.code, 143, result.output);
+    const recorded = (await readFile(calls, 'utf8')).trim().split('\n');
+    assert.equal(recorded.filter((call) => call.includes(' up ')).length, 1);
+    assert.ok(recorded.includes(compose), recorded.join('; '));
     assertStopped(await run.records());
   });
 }

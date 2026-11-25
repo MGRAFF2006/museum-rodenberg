@@ -133,21 +133,24 @@ if [ "$SKIP_DOCKER" = false ]; then
     exit 1
   fi
 
-  # Build the list of services to start (convex-backend has no profile, always starts)
-  SERVICES="convex-backend"
-  [ "$START_DASHBOARD" = true ] && SERVICES="$SERVICES --profile dashboard"
-  [ "$START_TRANSLATE" = true ] && SERVICES="$SERVICES --profile translate"
+  # Services to start and the Compose profiles they need (convex-backend has
+  # no profile and always starts). Arrays, not command substitutions: Bash 5.2
+  # fails to run a signal trap during a substitution followed by another one
+  # in the same command.
+  PROFILES=()
+  SERVICES=(convex-backend)
+  if [ "$START_DASHBOARD" = true ]; then
+    PROFILES+=(--profile dashboard)
+    SERVICES+=(convex-dashboard)
+  fi
+  if [ "$START_TRANSLATE" = true ]; then
+    PROFILES+=(--profile translate)
+    SERVICES+=(libretranslate)
+  fi
 
   # Start Docker services
   echo -e "${CYAN}Starting Docker services...${NC}"
-  if [ "$START_DASHBOARD" = true ] || [ "$START_TRANSLATE" = true ]; then
-    PROFILES=""
-    [ "$START_DASHBOARD" = true ] && PROFILES="$PROFILES --profile dashboard"
-    [ "$START_TRANSLATE" = true ] && PROFILES="$PROFILES --profile translate"
-    $DC $PROFILES up -d convex-backend $([ "$START_DASHBOARD" = true ] && echo "convex-dashboard") $([ "$START_TRANSLATE" = true ] && echo "libretranslate")
-  else
-    $DC up -d convex-backend
-  fi
+  $DC "${PROFILES[@]}" up -d "${SERVICES[@]}"
 
   # Wait for Convex backend health
   echo -e "${CYAN}Waiting for Convex backend to be healthy...${NC}"
