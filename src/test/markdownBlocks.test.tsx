@@ -231,6 +231,29 @@ it('keeps words apart where media leave a heading or a link label', async () => 
   expect(container.querySelector('h3')?.textContent).toBe('Room two');
 });
 
+it('keeps words apart across adjacent media without alt text', async () => {
+  const container = await expectConsistentBrowserTree('## Room![](/one.jpg)![](/two.jpg)two\n\n[Listen![](/guide.mp3)![](/clip.webm)now](/guide)');
+  expect(container.querySelector('h2')?.textContent).toBe('Room two');
+  expect(container.querySelector('a')?.textContent).toBe('Listen now');
+});
+
+it('keeps an icon-only gallery button beside media in a heading without text', async () => {
+  const container = await expectConsistentBrowserTree('## ![Map](/map.jpg) [](audio:/guide.mp3)');
+  expect(container.querySelector('h1, h2, h3, h4, h5, h6')).toBeNull();
+  const button = container.querySelector('button.inline-flex')!;
+  expect(button).not.toBeNull();
+  expect(container.querySelector('img[alt="Map"]')!.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it('keeps a hard break in a link that falls back to its destination as label', async () => {
+  const container = await expectConsistentBrowserTree('[![](/cover.jpg)  \n![](/guide.mp3)](/guide)');
+  const link = container.querySelector('a')!;
+  expect(link.querySelector('img[src="/cover.jpg"]')).not.toBeNull();
+  expect(link.querySelector('br')).not.toBeNull();
+  expect(link).toHaveTextContent('/guide');
+  expect(container.querySelector('audio')?.closest('a')).toBeNull();
+});
+
 it('drops a heading left with only a line break', async () => {
   const container = await expectConsistentBrowserTree('![A](/a.jpg)  \n![B](/b.jpg)\n---');
   expect(container.querySelector('h1, h2, h3, h4, h5, h6')).toBeNull();

@@ -94,6 +94,8 @@ function edgeText(node: ElementContent | undefined, end: boolean): string {
  * Text standing in for a media block removed from running text. The block
  * separated the words around it, e.g. `See![Floor](/floor.jpg)now`, so keep
  * a space wherever the neighbouring text would otherwise run together.
+ * `before` is the output so far; pass no `after` when the next node is also
+ * removed, so a run of removed media gets its trailing space only once.
  */
 function standIn(text: string, before: ElementContent | undefined, after: ElementContent | undefined): ElementContent[] {
   const wordBefore = /\S$/.test(edgeText(before, true));
@@ -108,19 +110,25 @@ function standIn(text: string, before: ElementContent | undefined, after: Elemen
  * link keeps its full label. Removed nodes are collected in `moved`.
  */
 function detachFromLink(nodes: ElementContent[], inHeading: boolean, moved: ElementContent[]): ElementContent[] {
-  return nodes.flatMap((node, index): ElementContent[] => {
-    if (node.type !== 'element') return [node];
-    if (node.tagName === 'img' && (inHeading || isPlayer(node))) {
+  const leavesLink = (node: ElementContent | undefined): boolean => (
+    node?.type === 'element' && node.tagName === 'img' && (inHeading || isPlayer(node))
+  );
+  const kept: ElementContent[] = [];
+  nodes.forEach((node, index) => {
+    if (node.type !== 'element') {
+      kept.push(node);
+    } else if (leavesLink(node)) {
       moved.push(node);
       const alt = node.properties?.alt;
-      return standIn(typeof alt === 'string' ? alt : '', nodes[index - 1], nodes[index + 1]);
-    }
-    if (holdsLink(node)) {
+      const next = nodes[index + 1];
+      kept.push(...standIn(typeof alt === 'string' ? alt : '', kept[kept.length - 1], leavesLink(next) ? undefined : next));
+    } else if (holdsLink(node)) {
       moved.push(node);
-      return [];
+    } else {
+      kept.push({ ...node, children: detachFromLink(node.children, inHeading, moved) });
     }
-    return [{ ...node, children: detachFromLink(node.children, inHeading, moved) }];
   });
+  return kept;
 }
 
 /** Whether nodes give a link an accessible name: visible text or an image's alt text. */
@@ -133,13 +141,6 @@ function hasLabel(nodes: ElementContent[]): boolean {
   });
 }
 
-function imagesIn(nodes: ElementContent[]): ElementContent[] {
-  return nodes.flatMap((node) => {
-    if (node.type !== 'element') return [];
-    return node.tagName === 'img' ? [node] : imagesIn(node.children);
-  });
-}
-
 /** Keep one link with its label and place the detached content right after it. */
 function separateLink(link: Element, inHeading: boolean): ElementContent[] | undefined {
   const moved: ElementContent[] = [];
@@ -147,11 +148,11 @@ function separateLink(link: Element, inHeading: boolean): ElementContent[] | und
   if (!moved.length) return undefined;
   if (!hasLabel(children)) {
     // Without label text the link would have no accessible name; show its
-    // destination after any unlabelled images that stay linked. Without a
-    // usable destination, drop the link and keep its content in order.
+    // destination after what stays linked. Without a usable destination,
+    // drop the link and keep its content in order.
     const href = mediaUrlTransform(String(link.properties?.href ?? ''), 'href');
     if (!href) return link.children;
-    children = [...imagesIn(children), { type: 'text', value: href }];
+    children = [...children, { type: 'text', value: href }];
   }
   return [{ ...link, children }, ...moved];
 }
@@ -169,21 +170,25 @@ function splitParagraph(paragraph: Element): ElementContent[] | undefined {
   });
 }
 
-function lastNode(part: Part | undefined): ElementContent | undefined {
-  return part?.nodes[part.nodes.length - 1];
-}
-
 /** Headings hold phrasing content only, so media follow the heading text. */
 function liftFromHeading(heading: Element): ElementContent[] | undefined {
   const parts = heading.children.flatMap(splitMedia);
   if (!parts.some((part) => part.media)) return undefined;
-  const text = parts.flatMap((part, index) => (
-    part.media ? standIn('', lastNode(parts[index - 1]), parts[index + 1]?.nodes[0]) : part.nodes
-  ));
+  const text: ElementContent[] = [];
+  parts.forEach((part, index) => {
+    if (!part.media) {
+      text.push(...part.nodes);
+      return;
+    }
+    const next = parts[index + 1];
+    text.push(...standIn('', text[text.length - 1], next && !next.media ? next.nodes[0] : undefined));
+  });
   const media = parts.filter((part) => part.media).flatMap((part) => part.nodes);
-  // Leave out a heading that would have no name rather than render it empty
-  // or with only a line break.
-  return hasLabel(text) ? [{ ...heading, children: text }, ...media] : media;
+  if (hasLabel(text)) return [{ ...heading, children: text }, ...media];
+  // A heading without text would have no name. Render its content as a
+  // paragraph instead, in order, so line breaks and icon-only gallery
+  // buttons beside the media stay.
+  return splitParagraph({ ...heading, tagName: 'p' });
 }
 
 /** List items and table cells may contain media blocks, but not inside emphasis. */
