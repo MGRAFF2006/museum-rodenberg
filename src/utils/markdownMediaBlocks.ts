@@ -108,8 +108,15 @@ function standIn(text: string, before: ElementContent | undefined, after: Elemen
  * Remove what a link must not contain: nested links, interactive players and,
  * inside headings, any media block. Media leave their alt text behind so the
  * link keeps its full label. Removed nodes are collected in `moved`.
+ * `before` is the text preceding `nodes` when they start inside formatting
+ * such as `**…**`, so spacing also works across its opening edge.
  */
-function detachFromLink(nodes: ElementContent[], inHeading: boolean, moved: ElementContent[]): ElementContent[] {
+function detachFromLink(
+  nodes: ElementContent[],
+  inHeading: boolean,
+  moved: ElementContent[],
+  before?: ElementContent,
+): ElementContent[] {
   const leavesLink = (node: ElementContent | undefined): boolean => (
     node?.type === 'element' && node.tagName === 'img' && (inHeading || isPlayer(node))
   );
@@ -121,11 +128,12 @@ function detachFromLink(nodes: ElementContent[], inHeading: boolean, moved: Elem
       moved.push(node);
       const alt = node.properties?.alt;
       const next = nodes[index + 1];
-      kept.push(...standIn(typeof alt === 'string' ? alt : '', kept[kept.length - 1], leavesLink(next) ? undefined : next));
+      kept.push(...standIn(typeof alt === 'string' ? alt : '', kept[kept.length - 1] ?? before, leavesLink(next) ? undefined : next));
     } else if (holdsLink(node)) {
       moved.push(node);
     } else {
-      kept.push({ ...node, children: detachFromLink(node.children, inHeading, moved) });
+      const children = detachFromLink(node.children, inHeading, moved, kept[kept.length - 1] ?? before);
+      kept.push({ ...node, children });
     }
   });
   return kept;

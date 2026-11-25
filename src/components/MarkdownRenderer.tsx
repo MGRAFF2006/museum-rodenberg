@@ -48,7 +48,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             }
             
             return (
-              <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 underline">
+              <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 underline overflow-wrap-anywhere">
                 {children}
               </a>
             );

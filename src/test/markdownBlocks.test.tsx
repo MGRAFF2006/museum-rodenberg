@@ -237,6 +237,11 @@ it('keeps words apart across adjacent media without alt text', async () => {
   expect(container.querySelector('a')?.textContent).toBe('Listen now');
 });
 
+it('keeps words apart where removed media continue inside formatting', async () => {
+  const container = await expectConsistentBrowserTree('[Listen![](/guide.mp3)**![](/clip.webm)now**](/guide)');
+  expect(container.querySelector('a')?.textContent).toBe('Listen now');
+});
+
 it('keeps an icon-only gallery button beside media in a heading without text', async () => {
   const container = await expectConsistentBrowserTree('## ![Map](/map.jpg) [](audio:/guide.mp3)');
   expect(container.querySelector('h1, h2, h3, h4, h5, h6')).toBeNull();
