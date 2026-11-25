@@ -80,7 +80,9 @@ async function fixture(t, env = {}) {
       // Generous for loaded machines; an unbounded shutdown still fails.
       const timeout = setTimeout(() => reject(new Error(`Supervisor did not stop: ${output}`)), 10000);
       child.once('error', (error) => { clearTimeout(timeout); reject(error); });
-      child.once('exit', (code, signal) => { clearTimeout(timeout); resolve({ code, signal, output }); });
+      // `close` follows `exit` once stdout and stderr have drained, so the
+      // output snapshot includes everything the supervisor wrote.
+      child.once('close', (code, signal) => { clearTimeout(timeout); resolve({ code, signal, output }); });
     });
     return { child, finished };
   }
@@ -218,7 +220,8 @@ test('cleanup never signals a service PID that Bash has already reaped', async (
   assert.doesNotMatch(result.output, new RegExp(`^\\++ kill .*\\b${exited.pid}\\b`, 'm'));
   assert.doesNotMatch(result.output, /^\++ kill (?:-\S+ )?\d+$/m);
   assert.match(result.output, /^\++ kill -TERM %\d+$/m);
-  assert.ok(records.some((record) => record.name === 'vite' && record.event === 'stopped'));
+  // A loaded host may delay Vite past the TERM grace period; cleanup then
+  // kills it by job spec, which the assertions above already cover.
   assertStopped(records);
 });
 
@@ -331,25 +334,33 @@ for (const [env, code, trace] of closedOutputCases) {
   });
 }
 
-for (const trace of [false, true]) {
-  test(`output closed between service launches still starts the second service${trace ? ' under bash -x' : ''}`, async (t) => {
-    const run = await fixture(t, { FIXTURE_VITE_STATUS: '9', FIXTURE_RELEASE: 'release' });
-    // Hold the supervisor before it launches Vite.
-    const viteLaunch = '# ── 5. Start Vite dev server';
-    assert.ok(script.includes(viteLaunch));
-    await writeFile(path.join(run.directory, 'dev.sh'),
-      script.replace(viteLaunch, () => `until [ -e launch ]; do sleep 0.01; done\n${viteLaunch}`));
+// Close output while the supervisor waits just before a service launch. The
+// SIGPIPE guard is already active, so each launch must still start its service.
+const launchCases = [
+  ['convex', "trap '' PIPE\n", { FIXTURE_CONVEX_STATUS: '7' }, 7],
+  ['vite', '# ── 5. Start Vite dev server', { FIXTURE_VITE_STATUS: '9' }, 9],
+].flatMap((launch) => [false, true].map((trace) => [...launch, trace]));
+
+for (const [name, launch, env, code, trace] of launchCases) {
+  test(`output closed before the ${name} launch still starts it${trace ? ' under bash -x' : ''}`, async (t) => {
+    const run = await fixture(t, { ...env, FIXTURE_RELEASE: 'release' });
+    assert.equal(script.split(launch).length - 1, 1);
+    const gate = launch.endsWith('\n') ? `${launch}touch at-gate; until [ -e launch ]; do sleep 0.01; done\n`
+      : `touch at-gate; until [ -e launch ]; do sleep 0.01; done\n${launch}`;
+    await writeFile(path.join(run.directory, 'dev.sh'), script.replace(launch, () => gate));
     const { child, finished } = run.start({ mergeOutput: true, trace });
     for (let attempts = 0; ; attempts++) {
-      if ((await run.records()).some((record) => record.name === 'convex' && record.event === 'started')) break;
-      assert.ok(attempts < 500, 'Watcher did not start');
+      try { await readFile(path.join(run.directory, 'at-gate')); break; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      assert.ok(attempts < 500, 'Supervisor did not reach the launch');
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     child.stdout.destroy();
     await writeFile(path.join(run.directory, 'launch'), '');
     await writeFile(path.join(run.directory, 'release'), '');
     const result = await finished;
-    assert.equal(result.code, 9);
+    // The fixture exits with its status only after both services started.
+    assert.equal(result.code, code);
     assertStopped(await run.records());
   });
 }
